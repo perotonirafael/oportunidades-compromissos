@@ -1,4 +1,4 @@
-import { Upload, AlertCircle, TrendingUp, Target, Zap, DollarSign, Loader } from 'lucide-react';
+import { Upload, AlertCircle, TrendingUp, Target, Zap, DollarSign, Loader, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useCallback, useState } from 'react';
 import { useDataProcessor, Opportunity, Action } from '@/hooks/useDataProcessor';
@@ -115,46 +115,73 @@ export default function Home() {
     setError(null);
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Liberar event loop para permitir animações
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       const newOpportunities: Opportunity[] = [];
       const newActions: Action[] = [];
+      const MAX_RECORDS = 50000; // Limite para evitar stack overflow
 
       // Processar arquivo de Oportunidades
       if (oppFile) {
-        const arrayBuffer = await oppFile.arrayBuffer();
-        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        try {
+          const arrayBuffer = await oppFile.arrayBuffer();
+          const workbook = XLSX.read(arrayBuffer, { type: 'array' });
 
-        for (const sheetName of workbook.SheetNames) {
-          const worksheet = workbook.Sheets[sheetName];
-          const data = XLSX.utils.sheet_to_json(worksheet) as any[];
-          if (data.length > 0) {
-            newOpportunities.push(...data);
+          for (const sheetName of workbook.SheetNames) {
+            if (newOpportunities.length >= MAX_RECORDS) break;
+            
+            const worksheet = workbook.Sheets[sheetName];
+            const data = XLSX.utils.sheet_to_json(worksheet) as any[];
+            
+            if (data.length > 0) {
+              const remaining = MAX_RECORDS - newOpportunities.length;
+              newOpportunities.push(...data.slice(0, remaining));
+            }
           }
+        } catch (err) {
+          console.error('Erro ao processar arquivo de Oportunidades:', err);
+          setError(`Erro ao processar arquivo de Oportunidades: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
+          setIsLoading(false);
+          return;
         }
       }
 
       // Processar arquivo de Ações/Compromissos
       if (actFile) {
-        const arrayBuffer = await actFile.arrayBuffer();
-        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        try {
+          const arrayBuffer = await actFile.arrayBuffer();
+          const workbook = XLSX.read(arrayBuffer, { type: 'array' });
 
-        for (const sheetName of workbook.SheetNames) {
-          const worksheet = workbook.Sheets[sheetName];
-          const data = XLSX.utils.sheet_to_json(worksheet) as any[];
-          if (data.length > 0) {
-            newActions.push(...data);
+          for (const sheetName of workbook.SheetNames) {
+            if (newActions.length >= MAX_RECORDS) break;
+            
+            const worksheet = workbook.Sheets[sheetName];
+            const data = XLSX.utils.sheet_to_json(worksheet) as any[];
+            
+            if (data.length > 0) {
+              const remaining = MAX_RECORDS - newActions.length;
+              newActions.push(...data.slice(0, remaining));
+            }
           }
+        } catch (err) {
+          console.error('Erro ao processar arquivo de Ações:', err);
+          setError(`Erro ao processar arquivo de Ações: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
+          setIsLoading(false);
+          return;
         }
       }
 
       if (newOpportunities.length === 0 && newActions.length === 0) {
         setError('Nenhum dado válido encontrado nos arquivos.');
       } else {
+        // Liberar memória antes de atualizar estado
+        await new Promise(resolve => setTimeout(resolve, 50));
         setOpportunities(newOpportunities);
         setActions(newActions);
       }
     } catch (err) {
+      console.error('Erro geral ao processar arquivos:', err);
       setError(`Erro ao processar arquivo: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
     } finally {
       setIsLoading(false);

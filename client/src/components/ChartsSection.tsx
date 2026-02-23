@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import {
   BarChart,
   Bar,
@@ -26,60 +27,67 @@ export function ChartsSection({ data }: ChartsSectionProps) {
     return null;
   }
 
-  // Dados para gráfico de Etapa
-  const stageData = data.reduce((acc, record) => {
-    const stage = record['Etapa'] || 'Sem Etapa';
-    const existing = acc.find(item => item.name === stage);
-    if (existing) {
-      existing.count += 1;
-      existing.value += record['Valor Previsto'];
-    } else {
-      acc.push({ name: stage, count: 1, value: record['Valor Previsto'] });
-    }
-    return acc;
-  }, [] as Array<{ name: string; count: number; value: number }>);
+  // Memoizar cálculos de gráficos para evitar re-renders desnecessários
+  const chartData = useMemo(() => {
+    // Dados para gráfico de Etapa
+    const stageData = data.reduce((acc, record) => {
+      const stage = record['Etapa'] || 'Sem Etapa';
+      const existing = acc.find(item => item.name === stage);
+      if (existing) {
+        existing.count += 1;
+        existing.value += record['Valor Previsto'];
+      } else {
+        acc.push({ name: stage, count: 1, value: record['Valor Previsto'] });
+      }
+      return acc;
+    }, [] as Array<{ name: string; count: number; value: number }>);
 
-  // Dados para gráfico de Probabilidade
-  const probabilityData = data.reduce((acc, record) => {
-    const prob = record['Probabilidade'] || 'Sem Prob.';
-    const existing = acc.find(item => item.name === prob);
-    if (existing) {
-      existing.count += 1;
-    } else {
-      acc.push({ name: prob, count: 1 });
-    }
-    return acc;
-  }, [] as Array<{ name: string; count: number }>);
+    // Dados para gráfico de Probabilidade
+    const probabilityData = data.reduce((acc, record) => {
+      const prob = record['Probabilidade'] || 'Sem Prob.';
+      const existing = acc.find(item => item.name === prob);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        acc.push({ name: prob, count: 1 });
+      }
+      return acc;
+    }, [] as Array<{ name: string; count: number }>);
 
-  // Dados para gráfico de Usuários com Ações
-  const userActionData = data.reduce((acc, record) => {
-    const user = record['Usuário Ação'] || 'Sem Ação';
-    const existing = acc.find(item => item.name === user);
-    if (existing) {
-      existing.actions += record['Qtd. Ações'];
-      existing.count += 1;
-    } else {
-      acc.push({ name: user, actions: record['Qtd. Ações'], count: 1 });
-    }
-    return acc;
-  }, [] as Array<{ name: string; actions: number; count: number }>)
-    .sort((a, b) => b.actions - a.actions)
-    .slice(0, 8);
+    // Dados para gráfico de Usuários com Ações
+    const userActionData = data.reduce((acc, record) => {
+      const user = record['Usuário Ação'] || 'Sem Ação';
+      const existing = acc.find(item => item.name === user);
+      if (existing) {
+        existing.actions += record['Qtd. Ações'];
+        existing.count += 1;
+      } else {
+        acc.push({ name: user, actions: record['Qtd. Ações'], count: 1 });
+      }
+      return acc;
+    }, [] as Array<{ name: string; actions: number; count: number }>)
+      .sort((a, b) => b.actions - a.actions)
+      .slice(0, 8);
 
-  // Dados para gráfico de Valor por Mês
-  const monthValueData = data.reduce((acc, record) => {
-    const month = record['Mês Fech.'] || 'Sem Data';
-    const year = record['Ano Previsão'] || '';
-    const key = year ? `${month} ${year}` : month;
-    const existing = acc.find(item => item.name === key);
-    if (existing) {
-      existing.value += record['Valor Previsto'];
-    } else {
-      acc.push({ name: key, value: record['Valor Previsto'] });
-    }
-    return acc;
-  }, [] as Array<{ name: string; value: number }>)
-    .sort((a, b) => a.name.localeCompare(b.name));
+    // Dados para gráfico de Valor por Mês
+    const monthValueData = data.reduce((acc, record) => {
+      const month = record['Mês Fech.'] || 'Sem Data';
+      const year = record['Ano Previsão'] || '';
+      const key = year ? `${month} ${year}` : month;
+      const existing = acc.find(item => item.name === key);
+      if (existing) {
+        existing.value += record['Valor Previsto'];
+      } else {
+        acc.push({ name: key, value: record['Valor Previsto'] });
+      }
+      return acc;
+    }, [] as Array<{ name: string; value: number }>)
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    return { stageData, probabilityData, userActionData, monthValueData };
+  }, [data]);
+
+  const { stageData, probabilityData, userActionData, monthValueData } = chartData;
 
   return (
     <div className="mb-10">
