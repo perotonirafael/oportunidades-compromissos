@@ -22,6 +22,10 @@ interface ChartsSectionProps {
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
 export function ChartsSection({ data }: ChartsSectionProps) {
+  if (!data || data.length === 0) {
+    return null;
+  }
+
   // Dados para gráfico de Etapa
   const stageData = data.reduce((acc, record) => {
     const stage = record['Etapa'] || 'Sem Etapa';
@@ -77,20 +81,6 @@ export function ChartsSection({ data }: ChartsSectionProps) {
   }, [] as Array<{ name: string; value: number }>)
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const customTooltip = (props: any) => {
-    if (!props.active || !props.payload) return null;
-    return (
-      <div className="bg-white p-2 border border-gray-300 rounded shadow-lg text-xs">
-        <p className="font-semibold text-gray-900">{props.payload[0]?.name}</p>
-        {props.payload.map((entry: any, index: number) => (
-          <p key={index} style={{ color: entry.color }}>
-            {entry.name}: {typeof entry.value === 'number' ? entry.value.toLocaleString('pt-BR') : entry.value}
-          </p>
-        ))}
-      </div>
-    );
-  };
-
   return (
     <div className="mb-10">
       <h2 className="text-lg font-bold text-gray-900 mb-6 uppercase tracking-wide">
@@ -99,88 +89,93 @@ export function ChartsSection({ data }: ChartsSectionProps) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Gráfico 1: Oportunidades por Etapa */}
-        <div className="bg-white border border-gray-300 rounded-lg p-6 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 uppercase tracking-wide">
-            Oportunidades por Etapa
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={stageData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} angle={-45} textAnchor="end" height={80} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip content={customTooltip} />
-              <Bar dataKey="count" fill="#3b82f6" radius={[8, 8, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        {stageData.length > 0 && (
+          <div className="bg-white border border-gray-300 rounded-lg p-6 shadow-sm">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 uppercase tracking-wide">
+              Oportunidades por Etapa
+            </h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={stageData} margin={{ top: 20, right: 30, left: 0, bottom: 60 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} angle={-45} textAnchor="end" />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip />
+                <Bar dataKey="count" fill="#3b82f6" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
 
         {/* Gráfico 2: Distribuição por Probabilidade */}
-        <div className="bg-white border border-gray-300 rounded-lg p-6 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 uppercase tracking-wide">
-            Distribuição por Probabilidade
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={probabilityData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, value }) => `${name}: ${value}`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="count"
-              >
-                {probabilityData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip content={customTooltip} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+        {probabilityData.length > 0 && (
+          <div className="bg-white border border-gray-300 rounded-lg p-6 shadow-sm">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 uppercase tracking-wide">
+              Distribuição por Probabilidade
+            </h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={probabilityData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, value }) => `${name}: ${value}`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="count"
+                >
+                  {probabilityData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        )}
 
         {/* Gráfico 3: Ações por Usuário */}
-        <div className="bg-white border border-gray-300 rounded-lg p-6 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 uppercase tracking-wide">
-            Ações por Usuário (Top 8)
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={userActionData} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis type="number" tick={{ fontSize: 12 }} />
-              <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={120} />
-              <Tooltip content={customTooltip} />
-              <Bar dataKey="actions" fill="#10b981" radius={[0, 8, 8, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        {userActionData.length > 0 && (
+          <div className="bg-white border border-gray-300 rounded-lg p-6 shadow-sm">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 uppercase tracking-wide">
+              Ações por Usuário (Top 8)
+            </h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={userActionData} layout="vertical" margin={{ top: 5, right: 30, left: 150, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis type="number" tick={{ fontSize: 12 }} />
+                <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={140} />
+                <Tooltip />
+                <Bar dataKey="actions" fill="#10b981" radius={[0, 8, 8, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
 
         {/* Gráfico 4: Valor Previsto por Mês */}
-        <div className="bg-white border border-gray-300 rounded-lg p-6 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 uppercase tracking-wide">
-            Valor Previsto por Mês
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={monthValueData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} angle={-45} textAnchor="end" height={80} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip
-                formatter={(value) => `R$ ${(value as number).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-                labelFormatter={(label) => `${label}`}
-              />
-              <Line
-                type="monotone"
-                dataKey="value"
-                stroke="#f59e0b"
-                strokeWidth={2}
-                dot={{ fill: '#f59e0b', r: 5 }}
-                activeDot={{ r: 7 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+        {monthValueData.length > 0 && (
+          <div className="bg-white border border-gray-300 rounded-lg p-6 shadow-sm">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 uppercase tracking-wide">
+              Valor Previsto por Mês
+            </h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={monthValueData} margin={{ top: 20, right: 30, left: 0, bottom: 60 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} angle={-45} textAnchor="end" />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(value) => `R$ ${(value as number).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} />
+                <Line
+                  type="monotone"
+                  dataKey="value"
+                  stroke="#f59e0b"
+                  strokeWidth={2}
+                  dot={{ fill: '#f59e0b', r: 5 }}
+                  activeDot={{ r: 7 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
     </div>
   );
