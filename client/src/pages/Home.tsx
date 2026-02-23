@@ -5,6 +5,7 @@ import { useDataProcessor, Opportunity, Action } from '@/hooks/useDataProcessor'
 import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
 import { KPICard } from '@/components/KPICard';
 import { AnalyticsTable } from '@/components/AnalyticsTable';
+import { ChartsSection } from '@/components/ChartsSection';
 
 /**
  * Design Philosophy: Minimalismo Corporativo com Dados Destaque
@@ -220,8 +221,11 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Charts Section */}
+          <ChartsSection data={filteredData} />
+
           {/* Filters and Table */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 mb-8">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
             {/* Sidebar Filters */}
             <div className="lg:col-span-1">
               <div className="bg-white border border-gray-300 rounded-lg p-6 sticky top-28 shadow-sm">
@@ -356,3 +360,9 @@ const MONTH_NAMES = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
 ];
+
+// Nota: Componente ChartsSection renderiza gráficos Recharts com:
+// - Gráfico de barras: Oportunidades por Etapa
+// - Gráfico de pizza: Distribuição por Probabilidade
+// - Gráfico de barras horizontal: Ações por Usuário (Top 8)
+// - Gráfico de linhas: Valor Previsto por Mês
