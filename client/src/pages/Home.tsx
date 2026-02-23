@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react';
-import { Upload, AlertCircle, TrendingUp, Target, Zap, DollarSign } from 'lucide-react';
+import { Upload, AlertCircle, TrendingUp, Target, Zap, DollarSign, Loader } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { useCallback, useState } from 'react';
 import { useDataProcessor, Opportunity, Action } from '@/hooks/useDataProcessor';
 import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
 import { KPICard } from '@/components/KPICard';
@@ -35,11 +35,17 @@ const DEMO_ACTIONS: Action[] = [
 ];
 
 export default function Home() {
-  const [opportunities, setOpportunities] = useState<Opportunity[]>(DEMO_OPPORTUNITIES);
-  const [actions, setActions] = useState<Action[]>(DEMO_ACTIONS);
+  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [actions, setActions] = useState<Action[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tableSearchTerm, setTableSearchTerm] = useState('');
+  
+  // Estados para upload separado
+  const [oppFile, setOppFile] = useState<File | null>(null);
+  const [actFile, setActFile] = useState<File | null>(null);
+  const [oppFileName, setOppFileName] = useState<string>('');
+  const [actFileName, setActFileName] = useState<string>('');
 
   // Filtros
   const [selectedYears, setSelectedYears] = useState<string[]>([]);
@@ -77,50 +83,73 @@ export default function Home() {
   const loadDemoData = () => {
     setOpportunities(DEMO_OPPORTUNITIES);
     setActions(DEMO_ACTIONS);
+    setOppFile(null);
+    setActFile(null);
+    setOppFileName('');
+    setActFileName('');
   };
 
-  const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
+  const handleOppFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setOppFile(file);
+      setOppFileName(file.name);
+    }
+  };
+
+  const handleActFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setActFile(file);
+      setActFileName(file.name);
+    }
+  };
+
+  const handleLoadFiles = useCallback(async () => {
+    if (!oppFile && !actFile) {
+      setError('Selecione pelo menos um arquivo para carregar.');
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
 
     try {
-      // Usar setTimeout para liberar o event loop e permitir animações
       await new Promise(resolve => setTimeout(resolve, 50));
 
-      const fileArray = Array.from(files);
       const newOpportunities: Opportunity[] = [];
       const newActions: Action[] = [];
 
-      for (const file of fileArray) {
-        const arrayBuffer = await file.arrayBuffer();
+      // Processar arquivo de Oportunidades
+      if (oppFile) {
+        const arrayBuffer = await oppFile.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
 
-        // Processar cada sheet
         for (const sheetName of workbook.SheetNames) {
           const worksheet = workbook.Sheets[sheetName];
           const data = XLSX.utils.sheet_to_json(worksheet) as any[];
-
-          // Heurística: se tem 'Oportunidade ID' ou 'ID Oportunidade', é base de oportunidades
-          // Se tem 'Usuário Ação', é base de ações
           if (data.length > 0) {
-            const firstRow = data[0];
-            const hasOppId = 'Oportunidade ID' in firstRow || 'ID Oportunidade' in firstRow;
-            const hasActionUser = 'Usuário Ação' in firstRow;
+            newOpportunities.push(...data);
+          }
+        }
+      }
 
-            if (hasActionUser) {
-              newActions.push(...data);
-            } else if (hasOppId) {
-              newOpportunities.push(...data);
-            }
+      // Processar arquivo de Ações/Compromissos
+      if (actFile) {
+        const arrayBuffer = await actFile.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+
+        for (const sheetName of workbook.SheetNames) {
+          const worksheet = workbook.Sheets[sheetName];
+          const data = XLSX.utils.sheet_to_json(worksheet) as any[];
+          if (data.length > 0) {
+            newActions.push(...data);
           }
         }
       }
 
       if (newOpportunities.length === 0 && newActions.length === 0) {
-        setError('Nenhum dado válido encontrado nos arquivos. Certifique-se de que contêm as colunas esperadas.');
+        setError('Nenhum dado válido encontrado nos arquivos.');
       } else {
         setOpportunities(newOpportunities);
         setActions(newActions);
@@ -130,7 +159,7 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [oppFile, actFile]);
 
   const resetFilters = () => {
     setSelectedYears([]);
@@ -165,45 +194,110 @@ export default function Home() {
 
       {/* Upload Section */}
       {processedData.length === 0 && (
-        <div className="max-w-4xl mx-auto px-6 py-16">
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-16 text-center bg-gradient-to-br from-gray-50 to-white">
+        <div className="max-w-5xl mx-auto px-6 py-16">
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center bg-gradient-to-br from-gray-50 to-white">
             <div className="inline-block p-3 bg-gray-100 rounded-lg mb-6">
               <Upload className="text-gray-600" size={48} />
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              Carregue seus arquivos Excel
+              Carregue seus arquivos
             </h2>
             <p className="text-gray-600 mb-8 max-w-md mx-auto">
-              Selecione os arquivos com as bases de Oportunidades e Ações/Compromissos. O sistema processará os dados em tempo real no seu navegador.
+              Selecione os arquivos com as bases de Oportunidades e Ações/Compromissos separadamente. O sistema processará os dados em tempo real.
             </p>
-            <div className="flex gap-4 justify-center">
-              <label className="inline-block">
-                <input
-                  type="file"
-                  multiple
-                  accept=".xlsx,.xls,.csv"
-                  onChange={handleFileUpload}
-                  disabled={isLoading}
-                  className="hidden"
-                />
-                <span className="inline-block px-8 py-3 bg-gray-900 text-white rounded font-semibold hover:bg-gray-800 transition-colors cursor-pointer disabled:opacity-50 shadow-sm">
-                  {isLoading ? 'Processando...' : 'Selecionar Arquivos'}
-                </span>
-              </label>
+
+            {/* Upload Fields */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+              {/* Oportunidades */}
+              <div className="border-2 border-gray-200 rounded-lg p-8 bg-white hover:border-blue-400 transition-colors">
+                <div className="inline-block p-2 bg-blue-100 rounded-lg mb-4">
+                  <Upload className="text-blue-600" size={32} />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Oportunidades
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Arquivo com dados de oportunidades (ID Oportunidade, Conta, etc)
+                </p>
+                <label className="inline-block">
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleOppFileSelect}
+                    disabled={isLoading}
+                    className="hidden"
+                  />
+                  <span className="inline-block px-6 py-2 bg-blue-600 text-white rounded font-semibold hover:bg-blue-700 transition-colors cursor-pointer disabled:opacity-50">
+                    Selecionar Arquivo
+                  </span>
+                </label>
+                {oppFileName && (
+                  <p className="text-sm text-green-600 mt-3 font-medium">
+                    ✓ {oppFileName}
+                  </p>
+                )}
+              </div>
+
+              {/* Ações/Compromissos */}
+              <div className="border-2 border-gray-200 rounded-lg p-8 bg-white hover:border-green-400 transition-colors">
+                <div className="inline-block p-2 bg-green-100 rounded-lg mb-4">
+                  <Upload className="text-green-600" size={32} />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Ações/Compromissos
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Arquivo com dados de ações (Usuário Ação, Data Ação, etc)
+                </p>
+                <label className="inline-block">
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleActFileSelect}
+                    disabled={isLoading}
+                    className="hidden"
+                  />
+                  <span className="inline-block px-6 py-2 bg-green-600 text-white rounded font-semibold hover:bg-green-700 transition-colors cursor-pointer disabled:opacity-50">
+                    Selecionar Arquivo
+                  </span>
+                </label>
+                {actFileName && (
+                  <p className="text-sm text-green-600 mt-3 font-medium">
+                    ✓ {actFileName}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Load Button */}
+            <div className="flex gap-4 justify-center mb-6">
+              <button
+                onClick={handleLoadFiles}
+                disabled={isLoading || (!oppFile && !actFile)}
+                className="inline-flex items-center gap-2 px-8 py-3 bg-gray-900 text-white rounded font-semibold hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader className="animate-spin" size={20} />
+                    Carregando...
+                  </>
+                ) : (
+                  <>
+                    <Upload size={20} />
+                    Carregar Arquivos
+                  </>
+                )}
+              </button>
               <button
                 onClick={loadDemoData}
-                className="inline-block px-8 py-3 bg-blue-600 text-white rounded font-semibold hover:bg-blue-700 transition-colors shadow-sm"
+                disabled={isLoading}
+                className="inline-block px-8 py-3 bg-blue-600 text-white rounded font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 shadow-sm"
               >
-                Ver Demonstracao
+                Ver Demonstração
               </button>
             </div>
-              <button
-                onClick={loadDemoData}
-                className="inline-block px-8 py-3 bg-blue-600 text-white rounded font-semibold hover:bg-blue-700 transition-colors shadow-sm"
-              >
-                Ver Demonstracao
-              </button>
-            <p className="text-xs text-gray-500 mt-6">
+
+            <p className="text-xs text-gray-500">
               Formatos aceitos: .xlsx, .xls, .csv
             </p>
           </div>
@@ -288,18 +382,9 @@ export default function Home() {
                   />
                   <MultiSelectDropdown
                     label="Mês Previsão"
-                    options={filterOptions.months.map(m => MONTH_NAMES[parseInt(m) - 1])}
-                    selected={selectedMonths.map(m => {
-                      const idx = MONTH_NAMES.indexOf(m);
-                      return (idx + 1).toString();
-                    })}
-                    onChange={(selected) => {
-                      const monthNums = selected.map(m => {
-                        const idx = MONTH_NAMES.indexOf(m);
-                        return (idx + 1).toString();
-                      });
-                      setSelectedMonths(monthNums);
-                    }}
+                    options={filterOptions.months}
+                    selected={selectedMonths}
+                    onChange={setSelectedMonths}
                   />
                   <MultiSelectDropdown
                     label="Representante"
@@ -345,47 +430,46 @@ export default function Home() {
                   />
                 </div>
 
-                {/* Upload New File */}
-                <div className="mt-6 pt-6 border-t border-gray-300">
-                  <label className="block">
-                    <input
-                      type="file"
-                      multiple
-                      accept=".xlsx,.xls,.csv"
-                      onChange={handleFileUpload}
-                      disabled={isLoading}
-                      className="hidden"
-                    />
-                    <span className="block w-full px-3 py-2 bg-gray-100 text-gray-900 rounded text-sm font-medium hover:bg-gray-200 transition-colors cursor-pointer text-center disabled:opacity-50">
-                      {isLoading ? 'Processando...' : 'Carregar Novos Dados'}
-                    </span>
-                  </label>
-                </div>
+                <label className="block mt-6">
+                  <input
+                    type="file"
+                    multiple
+                    accept=".xlsx,.xls,.csv"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) {
+                        setOppFile(e.target.files[0]);
+                        setOppFileName(e.target.files[0].name);
+                      }
+                    }}
+                    className="hidden"
+                  />
+                  <span className="block px-4 py-2 bg-gray-100 text-gray-900 rounded text-center font-semibold hover:bg-gray-200 transition-colors cursor-pointer text-sm">
+                    Carregar Novos Dados
+                  </span>
+                </label>
               </div>
             </div>
 
             {/* Table Section */}
             <div className="lg:col-span-3">
-              <div className="mb-5">
-                <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
-                  Pesquisa Dinâmica
-                </label>
-                <input
-                  type="text"
-                  placeholder="Buscar por ID, Conta, Responsável, Usuário, Etapa, Mês..."
-                  value={tableSearchTerm}
-                  onChange={(e) => setTableSearchTerm(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-300"
+              <div className="bg-white border border-gray-300 rounded-lg p-6 shadow-sm">
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
+                  📋 Grelha de Dados Analíticos
+                </h3>
+                <div className="mb-4">
+                  <input
+                    type="text"
+                    placeholder="Buscar por ID, Conta, Responsável, Usuário, Etapa, Mês..."
+                    value={tableSearchTerm}
+                    onChange={(e) => setTableSearchTerm(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  />
+                </div>
+                <AnalyticsTable
+                  data={filteredData}
+                  searchTerm={tableSearchTerm}
                 />
               </div>
-              <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wide">
-                📋 Grelha de Dados Analíticos
-              </h3>
-
-              <AnalyticsTable
-                data={filteredData}
-                searchTerm={tableSearchTerm}
-              />
             </div>
           </div>
         </div>
@@ -393,14 +477,3 @@ export default function Home() {
     </div>
   );
 }
-
-const MONTH_NAMES = [
-  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-];
-
-// Nota: Componente ChartsSection renderiza gráficos Recharts com:
-// - Gráfico de barras: Oportunidades por Etapa
-// - Gráfico de pizza: Distribuição por Probabilidade
-// - Gráfico de barras horizontal: Ações por Usuário (Top 8)
-// - Gráfico de linhas: Valor Previsto por Mês
