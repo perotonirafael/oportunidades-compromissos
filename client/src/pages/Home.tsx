@@ -15,9 +15,28 @@ import { ChartsSection } from '@/components/ChartsSection';
  * - Sidebar esquerdo com filtros, área principal com KPIs e tabela
  */
 
+// Dados de teste para demonstração
+const DEMO_OPPORTUNITIES: Opportunity[] = [
+  { 'ID Oportunidade': 'OPP-001', 'Conta': 'Empresa A', 'Conta ID': 'ACC-001', 'Responsável': 'João Silva', 'Representante': 'Rep. Vendas 1', 'Etapa': 'Proposta', 'Probabilidade': '75%', 'Previsão de Fechamento': '15/03/2026', 'Valor Previsto': 150000 },
+  { 'ID Oportunidade': 'OPP-002', 'Conta': 'Empresa B', 'Conta ID': 'ACC-002', 'Responsável': 'Maria Santos', 'Representante': 'Rep. Vendas 2', 'Etapa': 'Negociação', 'Probabilidade': '50%', 'Previsão de Fechamento': '20/03/2026', 'Valor Previsto': 250000 },
+  { 'ID Oportunidade': 'OPP-003', 'Conta': 'Empresa C', 'Conta ID': 'ACC-003', 'Responsável': 'Pedro Costa', 'Representante': 'Rep. Vendas 1', 'Etapa': 'Qualificação', 'Probabilidade': '25%', 'Previsão de Fechamento': '10/04/2026', 'Valor Previsto': 100000 },
+  { 'ID Oportunidade': 'OPP-004', 'Conta': 'Empresa A', 'Conta ID': 'ACC-001', 'Responsável': 'João Silva', 'Representante': 'Rep. Vendas 1', 'Etapa': 'Fechamento', 'Probabilidade': '90%', 'Previsão de Fechamento': '28/02/2026', 'Valor Previsto': 300000 },
+  { 'ID Oportunidade': 'OPP-005', 'Conta': 'Empresa D', 'Conta ID': 'ACC-004', 'Responsável': 'Ana Lima', 'Representante': 'Rep. Vendas 3', 'Etapa': 'Proposta', 'Probabilidade': '60%', 'Previsão de Fechamento': '05/04/2026', 'Valor Previsto': 180000 },
+];
+
+const DEMO_ACTIONS: Action[] = [
+  { 'Oportunidade ID': 'OPP-001', 'Conta ID': 'ACC-001', 'Usuário Ação': 'João Silva', 'Data Ação': '20/02/2026' },
+  { 'Oportunidade ID': 'OPP-001', 'Conta ID': 'ACC-001', 'Usuário Ação': 'Maria Santos', 'Data Ação': '21/02/2026' },
+  { 'Oportunidade ID': 'OPP-002', 'Conta ID': 'ACC-002', 'Usuário Ação': 'Pedro Costa', 'Data Ação': '22/02/2026' },
+  { 'Oportunidade ID': 'OPP-002', 'Conta ID': 'ACC-002', 'Usuário Ação': 'João Silva', 'Data Ação': '23/02/2026' },
+  { 'Oportunidade ID': 'OPP-003', 'Conta ID': 'ACC-003', 'Usuário Ação': 'Ana Lima', 'Data Ação': '24/02/2026' },
+  { 'Oportunidade ID': 'OPP-004', 'Conta ID': 'ACC-001', 'Usuário Ação': 'Maria Santos', 'Data Ação': '25/02/2026' },
+  { 'Oportunidade ID': 'OPP-005', 'Conta ID': 'ACC-004', 'Usuário Ação': 'Pedro Costa', 'Data Ação': '26/02/2026' },
+];
+
 export default function Home() {
-  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
-  const [actions, setActions] = useState<Action[]>([]);
+  const [opportunities, setOpportunities] = useState<Opportunity[]>(DEMO_OPPORTUNITIES);
+  const [actions, setActions] = useState<Action[]>(DEMO_ACTIONS);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tableSearchTerm, setTableSearchTerm] = useState('');
@@ -54,6 +73,11 @@ export default function Home() {
 
     return true;
   });
+
+  const loadDemoData = () => {
+    setOpportunities(DEMO_OPPORTUNITIES);
+    setActions(DEMO_ACTIONS);
+  };
 
   const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -140,7 +164,7 @@ export default function Home() {
       </header>
 
       {/* Upload Section */}
-      {opportunities.length === 0 && actions.length === 0 && (
+      {processedData.length === 0 && (
         <div className="max-w-4xl mx-auto px-6 py-16">
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-16 text-center bg-gradient-to-br from-gray-50 to-white">
             <div className="inline-block p-3 bg-gray-100 rounded-lg mb-6">
@@ -152,19 +176,33 @@ export default function Home() {
             <p className="text-gray-600 mb-8 max-w-md mx-auto">
               Selecione os arquivos com as bases de Oportunidades e Ações/Compromissos. O sistema processará os dados em tempo real no seu navegador.
             </p>
-            <label className="inline-block">
-              <input
-                type="file"
-                multiple
-                accept=".xlsx,.xls,.csv"
-                onChange={handleFileUpload}
-                disabled={isLoading}
-                className="hidden"
-              />
-              <span className="inline-block px-8 py-3 bg-gray-900 text-white rounded font-semibold hover:bg-gray-800 transition-colors cursor-pointer disabled:opacity-50 shadow-sm">
-                {isLoading ? 'Processando...' : 'Selecionar Arquivos'}
-              </span>
-            </label>
+            <div className="flex gap-4 justify-center">
+              <label className="inline-block">
+                <input
+                  type="file"
+                  multiple
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleFileUpload}
+                  disabled={isLoading}
+                  className="hidden"
+                />
+                <span className="inline-block px-8 py-3 bg-gray-900 text-white rounded font-semibold hover:bg-gray-800 transition-colors cursor-pointer disabled:opacity-50 shadow-sm">
+                  {isLoading ? 'Processando...' : 'Selecionar Arquivos'}
+                </span>
+              </label>
+              <button
+                onClick={loadDemoData}
+                className="inline-block px-8 py-3 bg-blue-600 text-white rounded font-semibold hover:bg-blue-700 transition-colors shadow-sm"
+              >
+                Ver Demonstracao
+              </button>
+            </div>
+              <button
+                onClick={loadDemoData}
+                className="inline-block px-8 py-3 bg-blue-600 text-white rounded font-semibold hover:bg-blue-700 transition-colors shadow-sm"
+              >
+                Ver Demonstracao
+              </button>
             <p className="text-xs text-gray-500 mt-6">
               Formatos aceitos: .xlsx, .xls, .csv
             </p>
@@ -183,7 +221,7 @@ export default function Home() {
       )}
 
       {/* Main Dashboard */}
-      {opportunities.length > 0 && actions.length > 0 && (
+      {processedData.length > 0 && (
         <div className="max-w-7xl mx-auto px-6 py-8">
           {/* KPIs Section */}
           <div className="mb-10">
