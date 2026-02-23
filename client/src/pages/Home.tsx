@@ -1,11 +1,12 @@
 import { Upload, AlertCircle, TrendingUp, Target, Zap, DollarSign, Loader, AlertTriangle } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { useCallback, useState } from 'react';
 import { useDataProcessor, Opportunity, Action } from '@/hooks/useDataProcessor';
+import { useFileProcessor } from '@/hooks/useFileProcessor';
 import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
 import { KPICard } from '@/components/KPICard';
 import { AnalyticsTable } from '@/components/AnalyticsTable';
 import { ChartsSection } from '@/components/ChartsSection';
+import { ProgressBar } from '@/components/ProgressBar';
 
 /**
  * Design Philosophy: Minimalismo Corporativo com Dados Destaque
@@ -46,6 +47,9 @@ export default function Home() {
   const [actFile, setActFile] = useState<File | null>(null);
   const [oppFileName, setOppFileName] = useState<string>('');
   const [actFileName, setActFileName] = useState<string>('');
+
+  // Hook para processamento de arquivos
+  const { state: processingState, processFiles, resetState } = useFileProcessor();
 
   // Filtros
   const [selectedYears, setSelectedYears] = useState<string[]>([]);
@@ -111,82 +115,28 @@ export default function Home() {
       return;
     }
 
-    setIsLoading(true);
-    setError(null);
-
     try {
-      // Liberar event loop para permitir animações
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      const newOpportunities: Opportunity[] = [];
-      const newActions: Action[] = [];
-      const MAX_RECORDS = 50000; // Limite para evitar stack overflow
-
-      // Processar arquivo de Oportunidades
-      if (oppFile) {
-        try {
-          const arrayBuffer = await oppFile.arrayBuffer();
-          const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-
-          for (const sheetName of workbook.SheetNames) {
-            if (newOpportunities.length >= MAX_RECORDS) break;
-            
-            const worksheet = workbook.Sheets[sheetName];
-            const data = XLSX.utils.sheet_to_json(worksheet) as any[];
-            
-            if (data.length > 0) {
-              const remaining = MAX_RECORDS - newOpportunities.length;
-              newOpportunities.push(...data.slice(0, remaining));
-            }
-          }
-        } catch (err) {
-          console.error('Erro ao processar arquivo de Oportunidades:', err);
-          setError(`Erro ao processar arquivo de Oportunidades: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      // Processar arquivo de Ações/Compromissos
-      if (actFile) {
-        try {
-          const arrayBuffer = await actFile.arrayBuffer();
-          const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-
-          for (const sheetName of workbook.SheetNames) {
-            if (newActions.length >= MAX_RECORDS) break;
-            
-            const worksheet = workbook.Sheets[sheetName];
-            const data = XLSX.utils.sheet_to_json(worksheet) as any[];
-            
-            if (data.length > 0) {
-              const remaining = MAX_RECORDS - newActions.length;
-              newActions.push(...data.slice(0, remaining));
-            }
-          }
-        } catch (err) {
-          console.error('Erro ao processar arquivo de Ações:', err);
-          setError(`Erro ao processar arquivo de Ações: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      if (newOpportunities.length === 0 && newActions.length === 0) {
-        setError('Nenhum dado válido encontrado nos arquivos.');
-      } else {
-        // Liberar memória antes de atualizar estado
-        await new Promise(resolve => setTimeout(resolve, 50));
-        setOpportunities(newOpportunities);
-        setActions(newActions);
+      const result = await processFiles(oppFile, actFile);
+      
+      if (result) {
+        setOpportunities(result.opportunities as Opportunity[]);
+        setActions(result.actions as Action[]);
+        setError(null);
+        
+        // Limpar seleção de arquivos após sucesso
+        setOppFile(null);
+        setActFile(null);
+        setOppFileName('');
+        setActFileName('');
+        resetState();
+      } else if (processingState.error) {
+        setError(processingState.error);
       }
     } catch (err) {
-      console.error('Erro geral ao processar arquivos:', err);
+      console.error('Erro ao processar arquivos:', err);
       setError(`Erro ao processar arquivo: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
-    } finally {
-      setIsLoading(false);
     }
-  }, [oppFile, actFile]);
+  }, [oppFile, actFile, processFiles, processingState.error, resetState]);
 
   const resetFilters = () => {
     setSelectedYears([]);
@@ -203,6 +153,13 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-white">
+      {/* Progress Bar */}
+      <ProgressBar
+        progress={processingState.progress}
+        currentFile={processingState.currentFile}
+        isProcessing={processingState.isProcessing}
+      />
+
       {/* Header */}
       <header className="border-b border-gray-300 bg-white sticky top-0 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 py-6">
