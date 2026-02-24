@@ -12,7 +12,7 @@ function ProgressBarInner({ progress, currentFile, isVisible }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-      <div className="glass-card rounded-2xl p-8 w-full max-w-md mx-4 glow-blue">
+        <div className="glass-card rounded-2xl p-8 w-full max-w-md mx-4 glow-green">
         <div className="flex items-center gap-3 mb-6">
           <Loader className="animate-spin text-primary" size={24} />
           <div>
@@ -23,7 +23,7 @@ function ProgressBarInner({ progress, currentFile, isVisible }: Props) {
 
         <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
           <div
-            className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full transition-all duration-300"
+            className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-300"
             style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
           />
         </div>

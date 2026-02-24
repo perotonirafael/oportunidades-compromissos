@@ -51,7 +51,7 @@ export default function Home() {
   const filteredData = useMemo(() => {
     return processedData.filter((r: ProcessedRecord) => {
       if (selYears.length && !selYears.includes(r.anoPrevisao)) return false;
-      if (selMonths.length && !selMonths.includes(r.mesPrevisao)) return false;
+      if (selMonths.length && !selMonths.includes(r.mesFech)) return false;
       if (selReps.length && !selReps.includes(r.representante)) return false;
       if (selResp.length && !selResp.includes(r.responsavel)) return false;
       if (selUsers.length && !selUsers.includes(r.usuarioAcao)) return false;
@@ -198,10 +198,10 @@ export default function Home() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             {/* Oportunidades */}
-            <div className="glass-card rounded-xl p-6 border border-blue-500/20 hover:border-blue-500/40 transition-colors group">
+            <div className="glass-card rounded-xl p-6 border border-emerald-500/20 hover:border-emerald-500/40 transition-colors group">
               <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 rounded-lg bg-blue-500/10">
-                  <FileText className="text-blue-400" size={20} />
+                <div className="p-2 rounded-lg bg-emerald-500/10">
+                  <FileText className="text-emerald-400" size={20} />
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold">Oportunidades</h3>
@@ -210,9 +210,9 @@ export default function Home() {
               </div>
               <label className="block">
                 <input type="file" accept=".xlsx,.xls,.csv" onChange={handleOppFile} className="hidden" />
-                <span className="block w-full py-2.5 text-center text-sm font-medium rounded-lg border border-dashed border-blue-500/30 hover:border-blue-500/60 hover:bg-blue-500/5 transition-all cursor-pointer">
+                <span className="block w-full py-2.5 text-center text-sm font-medium rounded-lg border border-dashed border-emerald-500/30 hover:border-emerald-500/60 hover:bg-emerald-500/5 transition-all cursor-pointer">
                   {oppFileName ? (
-                    <span className="text-blue-400 flex items-center justify-center gap-1.5">
+                    <span className="text-emerald-400 flex items-center justify-center gap-1.5">
                       <FileText size={14} /> {oppFileName}
                     </span>
                   ) : (
@@ -223,10 +223,10 @@ export default function Home() {
             </div>
 
             {/* Compromissos */}
-            <div className="glass-card rounded-xl p-6 border border-emerald-500/20 hover:border-emerald-500/40 transition-colors group">
+            <div className="glass-card rounded-xl p-6 border border-teal-500/20 hover:border-teal-500/40 transition-colors group">
               <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 rounded-lg bg-emerald-500/10">
-                  <FileText className="text-emerald-400" size={20} />
+                <div className="p-2 rounded-lg bg-teal-500/10">
+                  <FileText className="text-teal-400" size={20} />
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold">Ações / Compromissos</h3>
@@ -235,9 +235,9 @@ export default function Home() {
               </div>
               <label className="block">
                 <input type="file" accept=".xlsx,.xls,.csv" onChange={handleActFile} className="hidden" />
-                <span className="block w-full py-2.5 text-center text-sm font-medium rounded-lg border border-dashed border-emerald-500/30 hover:border-emerald-500/60 hover:bg-emerald-500/5 transition-all cursor-pointer">
+                <span className="block w-full py-2.5 text-center text-sm font-medium rounded-lg border border-dashed border-teal-500/30 hover:border-teal-500/60 hover:bg-teal-500/5 transition-all cursor-pointer">
                   {actFileName ? (
-                    <span className="text-emerald-400 flex items-center justify-center gap-1.5">
+                    <span className="text-teal-400 flex items-center justify-center gap-1.5">
                       <FileText size={14} /> {actFileName}
                     </span>
                   ) : (

@@ -13,7 +13,6 @@ export interface ProcessedFileData {
   actions: any[];
 }
 
-const CHUNK_SIZE = 5000;
 const MAX_RECORDS = 200000;
 
 async function yieldToMain() {
@@ -33,19 +32,99 @@ async function readFileAsText(file: File): Promise<string> {
   }
 }
 
+/**
+ * RFC 4180 compliant CSV parser that handles:
+ * - Quoted fields containing the separator character
+ * - Quoted fields containing newlines
+ * - Escaped quotes ("" inside quoted fields)
+ */
+function parseCSVLine(line: string, sep: string): string[] {
+  const fields: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  let i = 0;
+
+  while (i < line.length) {
+    const char = line[i];
+
+    if (inQuotes) {
+      if (char === '"') {
+        // Check for escaped quote ""
+        if (i + 1 < line.length && line[i + 1] === '"') {
+          current += '"';
+          i += 2;
+        } else {
+          // End of quoted field
+          inQuotes = false;
+          i++;
+        }
+      } else {
+        current += char;
+        i++;
+      }
+    } else {
+      if (char === '"' && current === '') {
+        // Start of quoted field
+        inQuotes = true;
+        i++;
+      } else if (char === sep) {
+        fields.push(current.trim());
+        current = '';
+        i++;
+      } else {
+        current += char;
+        i++;
+      }
+    }
+  }
+  fields.push(current.trim());
+  return fields;
+}
+
 function parseCSV(text: string, sep: string): any[] {
-  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const lines = text.split(/\r?\n/);
   if (lines.length < 2) return [];
 
-  const headers = lines[0].split(sep).map(h => h.replace(/^"|"$/g, '').trim());
+  // Handle multi-line quoted fields: merge lines that are inside quotes
+  const mergedLines: string[] = [];
+  let buffer = '';
+  let openQuotes = false;
+
+  for (const line of lines) {
+    if (openQuotes) {
+      buffer += '\n' + line;
+      // Count quotes to determine if we're still inside
+      const quoteCount = (line.match(/"/g) || []).length;
+      if (quoteCount % 2 === 1) {
+        openQuotes = false;
+        mergedLines.push(buffer);
+        buffer = '';
+      }
+    } else {
+      const quoteCount = (line.match(/"/g) || []).length;
+      if (quoteCount % 2 === 1) {
+        // Odd number of quotes = field spans multiple lines
+        openQuotes = true;
+        buffer = line;
+      } else {
+        mergedLines.push(line);
+      }
+    }
+  }
+  if (buffer) mergedLines.push(buffer);
+
+  const validLines = mergedLines.filter(l => l.trim());
+  if (validLines.length < 2) return [];
+
+  const headers = parseCSVLine(validLines[0], sep);
   const records: any[] = [];
 
-  for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(sep).map(v => v.replace(/^"|"$/g, '').trim());
+  for (let i = 1; i < validLines.length; i++) {
+    const values = parseCSVLine(validLines[i], sep);
     if (values.length < 2) continue;
     const record: any = {};
     for (let j = 0; j < headers.length; j++) {
-      record[headers[j]] = values[j] || '';
+      record[headers[j]] = (j < values.length ? values[j] : '').replace(/^"|"$/g, '');
     }
     records.push(record);
   }
@@ -104,9 +183,9 @@ export function useFileProcessor() {
           const data = XLSX.utils.sheet_to_json(worksheet) as any[];
           if (!data.length) continue;
 
-          for (let i = 0; i < data.length && allData.length < MAX_RECORDS; i += CHUNK_SIZE) {
+          for (let i = 0; i < data.length && allData.length < MAX_RECORDS; i += 5000) {
             await yieldToMain();
-            const chunk = data.slice(i, i + CHUNK_SIZE);
+            const chunk = data.slice(i, i + 5000);
             allData.push(...chunk);
             const pct = 40 + Math.round((allData.length / Math.min(data.length, MAX_RECORDS)) * 55);
             setState(prev => ({ ...prev, progress: Math.min(95, pct) }));

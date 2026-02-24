@@ -9,11 +9,11 @@ interface Props {
 }
 
 const colorMap: Record<string, { bg: string; text: string; glow: string; border: string }> = {
-  blue: { bg: 'bg-blue-500/10', text: 'text-blue-400', glow: 'glow-blue', border: 'border-blue-500/20' },
+  blue: { bg: 'bg-teal-500/10', text: 'text-teal-400', glow: 'glow-blue', border: 'border-teal-500/20' },
   green: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', glow: 'glow-green', border: 'border-emerald-500/20' },
   amber: { bg: 'bg-amber-500/10', text: 'text-amber-400', glow: 'glow-amber', border: 'border-amber-500/20' },
   red: { bg: 'bg-red-500/10', text: 'text-red-400', glow: 'glow-red', border: 'border-red-500/20' },
-  purple: { bg: 'bg-purple-500/10', text: 'text-purple-400', glow: '', border: 'border-purple-500/20' },
+  purple: { bg: 'bg-emerald-600/10', text: 'text-emerald-300', glow: 'glow-green', border: 'border-emerald-600/20' },
 };
 
 function KPICardInner({ title, value, subtitle, icon, color = 'blue' }: Props) {

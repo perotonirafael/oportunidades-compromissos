@@ -43,7 +43,9 @@ function parseDate(dateStr: string): { month: string; year: string; monthNum: nu
   if (parts.length >= 3) {
     const mesClean = parseInt(parts[1].replace(/[^0-9]/g, ''));
     const anoClean = parts[2].replace(/[^0-9]/g, '');
-    if (mesClean >= 1 && mesClean <= 12 && anoClean.length === 4) {
+    const anoNum = parseInt(anoClean);
+    // Filtrar anos inválidos (< 2000 ou > 2100)
+    if (mesClean >= 1 && mesClean <= 12 && anoClean.length === 4 && anoNum >= 2000 && anoNum <= 2100) {
       return { month: MONTH_NAMES[mesClean], year: anoClean, monthNum: mesClean };
     }
   }
@@ -240,9 +242,13 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
       }
     }
 
-    // Forecast ponderado (pipeline aberto)
+    // Forecast ponderado (pipeline aberto) - com deduplicação
     let forecastPonderado = 0;
+    const forecastSeen = new Set<string>();
     for (const opp of opportunities) {
+      const id = trim(opp['Oportunidade ID']);
+      if (forecastSeen.has(id)) continue;
+      forecastSeen.add(id);
       const etapa = trim(opp['Etapa']);
       if (etapa !== 'Fechada e Ganha' && etapa !== 'Fechada e Ganha TR' && etapa !== 'Fechada e Perdida') {
         const val = parseValue(opp['Valor Previsto']);
@@ -290,7 +296,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
 
     for (const r of records) {
       if (r.anoPrevisao) filterSets.years.add(r.anoPrevisao);
-      if (r.mesPrevisao && r.mesPrevisao !== '0') filterSets.months.add(r.mesPrevisao);
+      if (r.mesFech && r.mesFech !== '') filterSets.months.add(r.mesFech);
       if (r.representante) filterSets.representantes.add(r.representante);
       if (r.responsavel) filterSets.responsaveis.add(r.responsavel);
       if (r.usuarioAcao) filterSets.usuarios.add(r.usuarioAcao);
@@ -332,7 +338,10 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
         .sort((a, b) => b.count - a.count),
       filterOptions: {
         years: Array.from(filterSets.years).sort(),
-        months: Array.from(filterSets.months).map(Number).sort((a, b) => a - b).map(String),
+        months: Array.from(filterSets.months).sort((a, b) => {
+          const order = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+          return order.indexOf(a) - order.indexOf(b);
+        }),
         representantes: Array.from(filterSets.representantes).sort(),
         responsaveis: Array.from(filterSets.responsaveis).sort(),
         usuarios: Array.from(filterSets.usuarios).sort(),

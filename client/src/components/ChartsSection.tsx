@@ -5,9 +5,10 @@ import {
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid,
 } from 'recharts';
 
+// Green-themed palette (Senior brand)
 const COLORS = [
-  '#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a78bfa',
-  '#fb923c', '#38bdf8', '#4ade80', '#facc15', '#f472b6',
+  '#34d399', '#10b981', '#059669', '#047857', '#065f46',
+  '#6ee7b7', '#a7f3d0', '#fbbf24', '#60a5fa', '#f87171',
 ];
 
 const formatCurrency = (v: number) => {
@@ -109,11 +110,11 @@ function ChartsSectionInner({ data, funnelData, motivosPerda }: Props) {
 
   const tooltipStyle = {
     contentStyle: {
-      background: 'rgba(23, 25, 35, 0.95)',
-      border: '1px solid rgba(100, 116, 139, 0.3)',
+      background: 'rgba(15, 23, 22, 0.95)',
+      border: '1px solid rgba(52, 211, 153, 0.25)',
       borderRadius: '8px',
       fontSize: '12px',
-      color: '#e2e8f0',
+      color: '#d1fae5',
     },
   };
 
@@ -129,8 +130,8 @@ function ChartsSectionInner({ data, funnelData, motivosPerda }: Props) {
           <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={pipelineByStage} layout="vertical" margin={{ left: 10, right: 20 }}>
-                <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                <YAxis type="category" dataKey="name" width={160} tick={{ fill: '#cbd5e1', fontSize: 11 }} />
+                <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6ee7b7', fontSize: 11 }} />
+                <YAxis type="category" dataKey="name" width={160} tick={{ fill: '#a7f3d0', fontSize: 11 }} />
                 <Tooltip {...tooltipStyle} formatter={(v: number) => [formatCurrency(v), 'Valor']} />
                 <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                   {pipelineByStage.map((_, i) => (
@@ -177,12 +178,12 @@ function ChartsSectionInner({ data, funnelData, motivosPerda }: Props) {
           <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={monthlyTimeline} margin={{ left: 10, right: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,0.15)" />
-                <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} interval="preserveStartEnd" />
-                <YAxis tickFormatter={formatCurrency} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(52,211,153,0.1)" />
+                <XAxis dataKey="name" tick={{ fill: '#6ee7b7', fontSize: 10 }} interval="preserveStartEnd" />
+                <YAxis tickFormatter={formatCurrency} tick={{ fill: '#6ee7b7', fontSize: 11 }} />
                 <Tooltip {...tooltipStyle} formatter={(v: number) => [formatCurrency(v)]} />
-                <Line type="monotone" dataKey="previsto" stroke="#60a5fa" strokeWidth={2} dot={false} name="Previsto" />
-                <Line type="monotone" dataKey="fechado" stroke="#34d399" strokeWidth={2} dot={false} name="Fechado" />
+                <Line type="monotone" dataKey="previsto" stroke="#34d399" strokeWidth={2} dot={false} name="Previsto" />
+                <Line type="monotone" dataKey="fechado" stroke="#fbbf24" strokeWidth={2} dot={false} name="Fechado" />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -195,8 +196,8 @@ function ChartsSectionInner({ data, funnelData, motivosPerda }: Props) {
           <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={topReps} layout="vertical" margin={{ left: 10, right: 20 }}>
-                <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                <YAxis type="category" dataKey="name" width={140} tick={{ fill: '#cbd5e1', fontSize: 10 }} />
+                <XAxis type="number" tick={{ fill: '#6ee7b7', fontSize: 11 }} />
+                <YAxis type="category" dataKey="name" width={140} tick={{ fill: '#a7f3d0', fontSize: 10 }} />
                 <Tooltip {...tooltipStyle} />
                 <Bar dataKey="ganhas" fill="#34d399" stackId="a" name="Ganhas" />
                 <Bar dataKey="perdidas" fill="#f87171" stackId="a" radius={[0, 4, 4, 0]} name="Perdidas" />
@@ -214,8 +215,8 @@ function ChartsSectionInner({ data, funnelData, motivosPerda }: Props) {
           <div style={{ height: 320 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={lossReasons} layout="vertical" margin={{ left: 20, right: 30 }}>
-                <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 11 }} allowDecimals={false} />
-                <YAxis type="category" dataKey="name" width={280} tick={{ fill: '#cbd5e1', fontSize: 11 }} />
+                <XAxis type="number" tick={{ fill: '#6ee7b7', fontSize: 11 }} allowDecimals={false} />
+                <YAxis type="category" dataKey="name" width={280} tick={{ fill: '#a7f3d0', fontSize: 11 }} />
                 <Tooltip
                   {...tooltipStyle}
                   formatter={(v: number) => [formatNum(v), 'Ocorrências']}
