@@ -195,7 +195,7 @@ export default function Home() {
               <BarChart3 className="text-white" size={22} />
             </div>
             <div>
-              <h1 className="text-lg font-bold tracking-tight text-white">Pipeline Analytics</h1>
+              <h1 className="text-lg font-bold tracking-tight text-white">Painel do Perotoni</h1>
               <p className="text-xs text-white/70">Funil de Vendas &middot; Oportunidades &amp; Compromissos</p>
             </div>
           </div>
