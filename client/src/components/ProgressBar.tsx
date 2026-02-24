@@ -1,49 +1,39 @@
+import { memo } from 'react';
 import { Loader } from 'lucide-react';
 
-interface ProgressBarProps {
-  progress: number; // 0-100
+interface Props {
+  progress: number;
   currentFile: string;
-  isProcessing: boolean;
+  isVisible: boolean;
 }
 
-export function ProgressBar({ progress, currentFile, isProcessing }: ProgressBarProps) {
-  if (!isProcessing) return null;
+function ProgressBarInner({ progress, currentFile, isVisible }: Props) {
+  if (!isVisible) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 shadow-xl">
-        <div className="flex items-center gap-3 mb-4">
-          <Loader className="animate-spin text-blue-600" size={24} />
-          <h3 className="text-lg font-semibold text-gray-900">Processando arquivo</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+      <div className="glass-card rounded-2xl p-8 w-full max-w-md mx-4 glow-blue">
+        <div className="flex items-center gap-3 mb-6">
+          <Loader className="animate-spin text-primary" size={24} />
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Processando dados</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">{currentFile}</p>
+          </div>
         </div>
 
-        <p className="text-sm text-gray-600 mb-4 truncate">
-          {currentFile}
-        </p>
-
-        {/* Barra de progresso */}
-        <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden mb-3">
+        <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
           <div
-            className="bg-gradient-to-r from-blue-500 to-blue-600 h-full transition-all duration-300 ease-out"
-            style={{ width: `${progress}%` }}
+            className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full transition-all duration-300"
+            style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
           />
         </div>
 
-        {/* Percentual */}
-        <div className="flex justify-between items-center">
-          <p className="text-sm font-medium text-gray-700">
-            {progress}%
-          </p>
-          <p className="text-xs text-gray-500">
-            {progress === 100 ? 'Concluído' : 'Processando...'}
-          </p>
-        </div>
-
-        {/* Dica */}
-        <p className="text-xs text-gray-500 mt-4 text-center">
-          Não feche esta janela durante o processamento
+        <p className="text-xs text-muted-foreground mt-3 text-center font-mono">
+          {Math.round(progress)}%
         </p>
       </div>
     </div>
   );
 }
+
+export const ProgressBar = memo(ProgressBarInner);

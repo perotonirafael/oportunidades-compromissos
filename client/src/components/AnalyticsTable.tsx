@@ -1,169 +1,212 @@
-import { useState, useMemo } from 'react';
-import { ChevronUp, ChevronDown } from 'lucide-react';
-import { ProcessedRecord } from '@/hooks/useDataProcessor';
+import { useState, useMemo, memo } from 'react';
+import { ArrowUpDown, ArrowUp, ArrowDown, Search, Download } from 'lucide-react';
+import type { ProcessedRecord } from '@/hooks/useDataProcessor';
 
-interface AnalyticsTableProps {
+interface Props {
   data: ProcessedRecord[];
-  searchTerm: string;
 }
 
-type SortField = keyof ProcessedRecord | null;
-type SortOrder = 'asc' | 'desc';
-
-const COLUMNS = [
-  { key: 'ID Oportunidade', label: 'ID Oportunidade', width: '12%' },
-  { key: 'Conta', label: 'Conta', width: '15%' },
-  { key: 'Responsável', label: 'Responsável', width: '12%' },
-  { key: 'Usuário Ação', label: 'Usuário Ação', width: '12%' },
-  { key: 'Etapa', label: 'Etapa', width: '10%' },
-  { key: 'Mês Fech.', label: 'Mês Fech.', width: '10%' },
-  { key: 'Probabilidade', label: 'Probabilidade', width: '10%' },
-  { key: 'Valor Previsto', label: 'Valor Previsto', width: '12%' },
-  { key: 'Qtd. Ações', label: 'Qtd. Ações', width: '7%' }
+const COLUMNS: { key: keyof ProcessedRecord; label: string }[] = [
+  { key: 'oppId', label: 'ID Op.' },
+  { key: 'conta', label: 'Conta' },
+  { key: 'representante', label: 'Representante' },
+  { key: 'responsavel', label: 'Responsável' },
+  { key: 'usuarioAcao', label: 'Usuário Ação' },
+  { key: 'etapa', label: 'Etapa' },
+  { key: 'probabilidade', label: 'Prob.' },
+  { key: 'mesFech', label: 'Mês Fech.' },
+  { key: 'anoPrevisao', label: 'Ano' },
+  { key: 'valorPrevisto', label: 'Valor Previsto' },
+  { key: 'qtdAcoes', label: 'Ações' },
+  { key: 'tipoOportunidade', label: 'Tipo' },
+  { key: 'origemOportunidade', label: 'Origem' },
 ];
 
-function parseValue(value: any): number | string {
-  if (typeof value === 'number') return value;
-  if (typeof value === 'string') {
-    const num = parseFloat(value);
-    return isNaN(num) ? value : num;
-  }
-  return value;
-}
+const PAGE_SIZE = 100;
 
-function compareValues(a: any, b: any, order: SortOrder): number {
-  const aVal = parseValue(a);
-  const bVal = parseValue(b);
+function AnalyticsTableInner({ data }: Props) {
+  const [sortKey, setSortKey] = useState<keyof ProcessedRecord | ''>('');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
 
-  if (typeof aVal === 'number' && typeof bVal === 'number') {
-    return order === 'asc' ? aVal - bVal : bVal - aVal;
-  }
+  const filtered = useMemo(() => {
+    if (!search) return data;
+    const term = search.toLowerCase();
+    return data.filter((r: ProcessedRecord) =>
+      r.conta.toLowerCase().includes(term) ||
+      r.representante.toLowerCase().includes(term) ||
+      r.responsavel.toLowerCase().includes(term) ||
+      r.usuarioAcao.toLowerCase().includes(term) ||
+      r.oppId.toLowerCase().includes(term) ||
+      r.etapa.toLowerCase().includes(term)
+    );
+  }, [data, search]);
 
-  const aStr = String(aVal).toLowerCase();
-  const bStr = String(bVal).toLowerCase();
-  
-  if (order === 'asc') {
-    return aStr.localeCompare(bStr, 'pt-BR');
-  } else {
-    return bStr.localeCompare(aStr, 'pt-BR');
-  }
-}
+  const sorted = useMemo(() => {
+    if (!sortKey) return filtered;
+    return [...filtered].sort((a: ProcessedRecord, b: ProcessedRecord) => {
+      const av = a[sortKey];
+      const bv = b[sortKey];
+      if (typeof av === 'number' && typeof bv === 'number') {
+        return sortDir === 'asc' ? av - bv : bv - av;
+      }
+      const sa = (av || '').toString();
+      const sb = (bv || '').toString();
+      return sortDir === 'asc' ? sa.localeCompare(sb) : sb.localeCompare(sa);
+    });
+  }, [filtered, sortKey, sortDir]);
 
-export function AnalyticsTable({ data, searchTerm }: AnalyticsTableProps) {
-  const [sortField, setSortField] = useState<SortField>(null);
-  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+  const paged = useMemo(() => {
+    const start = page * PAGE_SIZE;
+    return sorted.slice(start, start + PAGE_SIZE);
+  }, [sorted, page]);
 
-  const filteredAndSortedData = useMemo(() => {
-    let filtered = data;
+  const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
 
-    // Aplicar filtro de pesquisa
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = data.filter(row =>
-        String(row['ID Oportunidade']).toLowerCase().includes(term) ||
-        String(row['Conta']).toLowerCase().includes(term) ||
-        String(row['Responsável']).toLowerCase().includes(term) ||
-        String(row['Usuário Ação']).toLowerCase().includes(term) ||
-        String(row['Etapa']).toLowerCase().includes(term) ||
-        String(row['Mês Fech.']).toLowerCase().includes(term)
-      );
-    }
-
-    // Aplicar ordenação
-    if (sortField) {
-      filtered = [...filtered].sort((a, b) => {
-        const aVal = a[sortField];
-        const bVal = b[sortField];
-        return compareValues(aVal, bVal, sortOrder);
-      });
-    }
-
-    // Limitar a 100 linhas
-    return filtered.slice(0, 100);
-  }, [data, searchTerm, sortField, sortOrder]);
-
-  const handleSort = (field: string) => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+  const handleSort = (key: keyof ProcessedRecord) => {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     } else {
-      setSortField(field as SortField);
-      setSortOrder('asc');
+      setSortKey(key);
+      setSortDir('asc');
     }
   };
 
-  const formatValue = (key: string, value: any): string => {
-    if (key === 'Valor Previsto') {
-      const num = parseFloat(value?.toString() || '0');
-      return isNaN(num) ? '0' : `R$ ${num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    }
-    if (key === 'Probabilidade') {
-      const str = value?.toString() || '';
-      return str.includes('%') ? str : `${str}%`;
-    }
-    return value?.toString() || '';
+  const exportCSV = () => {
+    const headers = COLUMNS.map(c => c.label).join(';');
+    const rows = sorted.map((r: ProcessedRecord) =>
+      COLUMNS.map(c => {
+        const v = r[c.key];
+        return typeof v === 'number' ? v.toString() : `"${(v || '').toString().replace(/"/g, '""')}"`;
+      }).join(';')
+    );
+    const csv = [headers, ...rows].join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pipeline_analytics_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
+
+  const formatCurrency = (v: number) =>
+    v > 0 ? `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '-';
 
   return (
-    <div className="border border-gray-300 rounded overflow-hidden">
+    <div className="glass-card rounded-xl overflow-hidden">
+      <div className="p-4 border-b border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">
+            Tabela Analítica
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {sorted.length.toLocaleString('pt-BR')} registros {search ? '(filtrados)' : ''}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(0); }}
+              placeholder="Buscar..."
+              className="pl-8 pr-3 py-1.5 text-xs bg-secondary/50 border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary w-48"
+            />
+          </div>
+          <button
+            onClick={exportCSV}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
+          >
+            <Download size={14} /> Exportar CSV
+          </button>
+        </div>
+      </div>
+
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
+        <table className="w-full text-xs">
           <thead>
-            <tr className="bg-gray-900 text-white">
+            <tr className="border-b border-border bg-secondary/30">
               {COLUMNS.map(col => (
                 <th
                   key={col.key}
                   onClick={() => handleSort(col.key)}
-                  className="px-4 py-3 text-left font-semibold cursor-pointer hover:bg-gray-800 transition-colors"
-                  style={{ width: col.width }}
+                  className="px-3 py-2.5 text-left font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors whitespace-nowrap"
                 >
-                  <div className="flex items-center gap-2">
-                    <span>{col.label}</span>
-                    {sortField === col.key && (
-                      sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                  <span className="flex items-center gap-1">
+                    {col.label}
+                    {sortKey === col.key ? (
+                      sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                    ) : (
+                      <ArrowUpDown size={12} className="opacity-30" />
                     )}
-                  </div>
+                  </span>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {filteredAndSortedData.length === 0 ? (
-              <tr>
-                <td colSpan={COLUMNS.length} className="px-4 py-8 text-center text-gray-500">
-                  Nenhum resultado encontrado
+            {paged.map((r: ProcessedRecord, i: number) => (
+              <tr
+                key={`${r.oppId}-${r.usuarioAcao}-${i}`}
+                className="border-b border-border/50 hover:bg-secondary/20 transition-colors"
+              >
+                <td className="px-3 py-2 font-mono text-primary">{r.oppId}</td>
+                <td className="px-3 py-2 truncate max-w-[200px]">{r.conta}</td>
+                <td className="px-3 py-2 truncate">{r.representante}</td>
+                <td className="px-3 py-2 truncate">{r.responsavel}</td>
+                <td className="px-3 py-2 truncate">{r.usuarioAcao}</td>
+                <td className="px-3 py-2">
+                  <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium ${
+                    r.etapa.includes('Ganha') ? 'bg-emerald-500/15 text-emerald-400' :
+                    r.etapa.includes('Perdida') ? 'bg-red-500/15 text-red-400' :
+                    r.etapa.includes('Proposta') ? 'bg-amber-500/15 text-amber-400' :
+                    r.etapa.includes('Negociação') ? 'bg-blue-500/15 text-blue-400' :
+                    'bg-secondary text-muted-foreground'
+                  }`}>
+                    {r.etapa}
+                  </span>
                 </td>
+                <td className="px-3 py-2 font-mono">{r.probabilidade}</td>
+                <td className="px-3 py-2">{r.mesFech}</td>
+                <td className="px-3 py-2 font-mono">{r.anoPrevisao}</td>
+                <td className="px-3 py-2 font-mono text-right">{formatCurrency(r.valorPrevisto)}</td>
+                <td className="px-3 py-2 font-mono text-center">{r.qtdAcoes}</td>
+                <td className="px-3 py-2 truncate max-w-[200px]">{r.tipoOportunidade}</td>
+                <td className="px-3 py-2 truncate max-w-[200px]">{r.origemOportunidade}</td>
               </tr>
-            ) : (
-              filteredAndSortedData.map((row, idx) => (
-                <tr
-                  key={idx}
-                  className={`border-t border-gray-200 hover:bg-gray-50 transition-colors ${
-                    idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                  }`}
-                >
-                  {COLUMNS.map(col => (
-                    <td
-                      key={`${idx}-${col.key}`}
-                      className="px-4 py-3 text-gray-900"
-                      style={{ width: col.width }}
-                    >
-                      <span className="font-mono text-xs">
-                        {formatValue(col.key, row[col.key as keyof ProcessedRecord])}
-                      </span>
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
+            ))}
           </tbody>
         </table>
       </div>
-      
-      {filteredAndSortedData.length === 100 && (
-        <div className="px-4 py-2 bg-gray-100 text-xs text-gray-600 border-t border-gray-200">
-          Mostrando 100 de {data.length} registros
+
+      {totalPages > 1 && (
+        <div className="p-3 border-t border-border flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">
+            Página {page + 1} de {totalPages}
+          </p>
+          <div className="flex gap-1">
+            <button
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="px-3 py-1 text-xs rounded bg-secondary/50 text-foreground hover:bg-secondary disabled:opacity-30 transition-colors"
+            >
+              Anterior
+            </button>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+              className="px-3 py-1 text-xs rounded bg-secondary/50 text-foreground hover:bg-secondary disabled:opacity-30 transition-colors"
+            >
+              Próxima
+            </button>
+          </div>
         </div>
       )}
     </div>
   );
 }
+
+export const AnalyticsTable = memo(AnalyticsTableInner);
