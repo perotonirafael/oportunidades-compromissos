@@ -2,19 +2,18 @@ import { useMemo, memo } from 'react';
 import type { ProcessedRecord } from '@/hooks/useDataProcessor';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend,
+  Cell, LineChart, Line, CartesianGrid, Legend, LabelList,
+  FunnelChart, Funnel,
 } from 'recharts';
 
-// Vibrant colorful palette
 const COLORS = [
   '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6',
   '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1',
 ];
 
-const PIE_COLORS = [
-  '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6',
-  '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1',
-  '#84cc16', '#e11d48', '#0ea5e9', '#d946ef', '#22d3ee',
+const FUNNEL_COLORS = [
+  '#10b981', '#22c55e', '#84cc16', '#eab308', '#f59e0b',
+  '#f97316', '#ef4444', '#dc2626', '#b91c1c', '#991b1b',
 ];
 
 const formatCurrency = (v: number) => {
@@ -30,9 +29,24 @@ interface Props {
   data: ProcessedRecord[];
   funnelData: { etapa: string; count: number; value: number }[];
   motivosPerda: { motivo: string; count: number }[];
+  forecastFunnel: { etapa: string; count: number; value: number; avgProb: number }[];
+  etnTop10: { name: string; fullName: string; count: number; value: number }[];
+  onChartClick: (field: string, value: string) => void;
 }
 
-function ChartsSectionInner({ data, funnelData, motivosPerda }: Props) {
+const tooltipStyle = {
+  contentStyle: {
+    background: 'rgba(255, 255, 255, 0.97)',
+    border: '1px solid #e5e7eb',
+    borderRadius: '10px',
+    fontSize: '12px',
+    color: '#1f2937',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+  },
+};
+
+function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, etnTop10, onChartClick }: Props) {
+  // Pipeline por Etapa (abertas)
   const pipelineByStage = useMemo(() => {
     const map = new Map<string, { count: number; value: number }>();
     const seen = new Set<string>();
@@ -50,19 +64,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda }: Props) {
       .sort((a, b) => b.value - a.value);
   }, [data]);
 
-  const probDistribution = useMemo(() => {
-    const map = new Map<string, number>();
-    const seen = new Set<string>();
-    for (const r of data) {
-      if (!r.probabilidade || seen.has(r.oppId)) continue;
-      seen.add(r.oppId);
-      map.set(r.probabilidade, (map.get(r.probabilidade) || 0) + 1);
-    }
-    return Array.from(map.entries())
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => parseInt(a.name) - parseInt(b.name));
-  }, [data]);
-
+  // Timeline mensal
   const monthlyTimeline = useMemo(() => {
     const map = new Map<string, { previsto: number; fechado: number }>();
     const seen = new Set<string>();
@@ -85,27 +87,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda }: Props) {
       });
   }, [data]);
 
-  const topReps = useMemo(() => {
-    const map = new Map<string, { ganhas: number; perdidas: number; valor: number }>();
-    const seen = new Set<string>();
-    for (const r of data) {
-      if (!r.representante || seen.has(r.oppId)) continue;
-      seen.add(r.oppId);
-      const e = map.get(r.representante) || { ganhas: 0, perdidas: 0, valor: 0 };
-      if (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR') e.ganhas++;
-      else if (r.etapa === 'Fechada e Perdida') e.perdidas++;
-      e.valor += r.valorPrevisto;
-      map.set(r.representante, e);
-    }
-    return Array.from(map.entries())
-      .map(([name, d]) => ({
-        name: name.length > 18 ? name.slice(0, 18) + '…' : name,
-        ...d,
-      }))
-      .sort((a, b) => b.valor - a.valor)
-      .slice(0, 10);
-  }, [data]);
-
+  // Motivos de perda com rótulos
   const lossReasons = useMemo(() => {
     return motivosPerda.map(m => ({
       name: m.motivo.length > 40 ? m.motivo.slice(0, 40) + '…' : m.motivo,
@@ -114,79 +96,89 @@ function ChartsSectionInner({ data, funnelData, motivosPerda }: Props) {
     }));
   }, [motivosPerda]);
 
-  const tooltipStyle = {
-    contentStyle: {
-      background: 'rgba(255, 255, 255, 0.97)',
-      border: '1px solid #e5e7eb',
-      borderRadius: '10px',
-      fontSize: '12px',
-      color: '#1f2937',
-      boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-    },
-  };
-
   if (!data.length) return null;
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Pipeline por Etapa */}
+        {/* Pipeline por Etapa (Abertas) */}
         <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-          <h3 className="text-sm font-bold text-foreground mb-1">
-            Pipeline por Etapa
-          </h3>
-          <p className="text-xs text-muted-foreground mb-4">Oportunidades abertas por valor</p>
+          <h3 className="text-sm font-bold text-foreground mb-1">Pipeline por Etapa</h3>
+          <p className="text-xs text-muted-foreground mb-4">Oportunidades abertas por valor (clique para filtrar)</p>
           <div style={{ height: 300 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={pipelineByStage} layout="vertical" margin={{ left: 10, right: 20 }}>
+              <BarChart data={pipelineByStage} layout="vertical" margin={{ left: 10, right: 30 }}>
                 <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <YAxis type="category" dataKey="name" width={160} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <Tooltip {...tooltipStyle} formatter={(v: number) => [formatCurrency(v), 'Valor']} />
-                <Bar dataKey="value" radius={[0, 6, 6, 0]}>
+                <Bar dataKey="value" radius={[0, 6, 6, 0]} cursor="pointer" onClick={(d: any) => onChartClick('etapa', d.name)}>
                   {pipelineByStage.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
+                  <LabelList dataKey="count" position="right" fill="#374151" fontSize={11} formatter={(v: number) => `${v} ops`} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Distribuição por Probabilidade */}
+        {/* FUNIL DE FORECAST (Item 8) */}
         <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-          <h3 className="text-sm font-bold text-foreground mb-1">
-            Distribuição por Probabilidade
-          </h3>
-          <p className="text-xs text-muted-foreground mb-4">Oportunidades por faixa de probabilidade</p>
-          <div style={{ height: 280 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={probDistribution} cx="50%" cy="50%" innerRadius={55} outerRadius={110} paddingAngle={2} dataKey="value" strokeWidth={2} stroke="#fff">
-                  {probDistribution.map((_, i) => (
-                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip {...tooltipStyle} formatter={(v: number) => [formatNum(v), 'Ops.']} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 justify-center">
-            {probDistribution.slice(0, 10).map((item, i) => (
-              <span key={i} className="flex items-center gap-1 text-xs text-gray-600">
-                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
-                {item.name}
-              </span>
-            ))}
-          </div>
+          <h3 className="text-sm font-bold text-foreground mb-1">FUNIL DE FORECAST</h3>
+          <p className="text-xs text-muted-foreground mb-4">Oportunidades com probabilidade ≥75% por etapa, quantidade e valor (clique para filtrar)</p>
+          {forecastFunnel.length > 0 ? (
+            <>
+              <div style={{ height: 280 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={forecastFunnel} layout="vertical" margin={{ left: 10, right: 40 }}>
+                    <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
+                    <YAxis type="category" dataKey="etapa" width={160} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
+                    <Tooltip
+                      {...tooltipStyle}
+                      formatter={(v: number, name: string) => {
+                        if (name === 'value') return [formatCurrency(v), 'Valor Previsto'];
+                        return [v, name];
+                      }}
+                    />
+                    <Bar dataKey="value" radius={[0, 6, 6, 0]} cursor="pointer" onClick={(d: any) => onChartClick('etapa', d.etapa)}>
+                      {forecastFunnel.map((_, i) => (
+                        <Cell key={i} fill={FUNNEL_COLORS[i % FUNNEL_COLORS.length]} />
+                      ))}
+                      <LabelList
+                        dataKey="count"
+                        position="right"
+                        fill="#374151"
+                        fontSize={10}
+                        formatter={(v: number) => `${v} ops`}
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              {/* Legenda detalhada */}
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {forecastFunnel.map((item, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs">
+                    <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: FUNNEL_COLORS[i % FUNNEL_COLORS.length] }} />
+                    <span className="text-gray-700 truncate">{item.etapa}</span>
+                    <span className="ml-auto font-mono font-bold text-gray-900">{item.count} ops</span>
+                    <span className="font-mono text-emerald-700">{item.avgProb}%</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="h-[280px] flex items-center justify-center text-sm text-muted-foreground">
+              Nenhuma oportunidade com probabilidade ≥75%
+            </div>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Valor Previsto vs Fechado */}
         <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-          <h3 className="text-sm font-bold text-foreground mb-1">
-            Valor Previsto vs Fechado
-          </h3>
+          <h3 className="text-sm font-bold text-foreground mb-1">Valor Previsto vs Fechado</h3>
           <p className="text-xs text-muted-foreground mb-4">Evolução mensal (últimos 24 meses)</p>
           <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -203,52 +195,66 @@ function ChartsSectionInner({ data, funnelData, motivosPerda }: Props) {
           </div>
         </div>
 
-        {/* Top 10 Representantes */}
+        {/* ETN Top 10 (Item 10) */}
         <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-          <h3 className="text-sm font-bold text-foreground mb-1">
-            Top 10 Representantes
-          </h3>
-          <p className="text-xs text-muted-foreground mb-4">Ganhas vs Perdidas por representante</p>
-          <div style={{ height: 280 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={topReps} layout="vertical" margin={{ left: 10, right: 20 }}>
-                <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
-                <YAxis type="category" dataKey="name" width={140} tick={{ fill: '#374151', fontSize: 10 }} axisLine={{ stroke: '#e5e7eb' }} />
-                <Tooltip {...tooltipStyle} />
-                <Legend wrapperStyle={{ fontSize: '12px' }} />
-                <Bar dataKey="ganhas" fill="#10b981" stackId="a" name="Ganhas" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="perdidas" fill="#ef4444" stackId="a" radius={[0, 6, 6, 0]} name="Perdidas" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <h3 className="text-sm font-bold text-foreground mb-1">ETN Top 10</h3>
+          <p className="text-xs text-muted-foreground mb-4">Oportunidades e valor previsto por ETN (prob. ≥75%) - clique para filtrar</p>
+          {etnTop10.length > 0 ? (
+            <div style={{ height: 280 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={etnTop10} layout="vertical" margin={{ left: 10, right: 30 }}>
+                  <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
+                  <YAxis type="category" dataKey="name" width={150} tick={{ fill: '#374151', fontSize: 10 }} axisLine={{ stroke: '#e5e7eb' }} />
+                  <Tooltip
+                    {...tooltipStyle}
+                    formatter={(v: number, name: string) => {
+                      if (name === 'Valor') return [formatCurrency(v), 'Valor Previsto'];
+                      return [formatNum(v), name];
+                    }}
+                    labelFormatter={(label: string) => {
+                      const item = etnTop10.find(d => d.name === label);
+                      return item?.fullName || label;
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  <Bar dataKey="value" fill="#10b981" name="Valor" radius={[0, 6, 6, 0]} cursor="pointer" onClick={(d: any) => onChartClick('etn', d.fullName || d.name)}>
+                    <LabelList dataKey="count" position="right" fill="#374151" fontSize={10} formatter={(v: number) => `${v} ops`} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-[280px] flex items-center justify-center text-sm text-muted-foreground">
+              Nenhum ETN com oportunidades ≥75%
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Motivos de Perda */}
+      {/* Motivos de Perda (Item 9) */}
       {lossReasons.length > 0 && (
         <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-          <h3 className="text-sm font-bold text-foreground mb-1">
-            Top 10 Motivos de Perda
-          </h3>
-          <p className="text-xs text-muted-foreground mb-4">Principais causas de oportunidades perdidas</p>
+          <h3 className="text-sm font-bold text-foreground mb-1">Top 10 Motivos de Perda</h3>
+          <p className="text-xs text-muted-foreground mb-4">Principais causas de oportunidades perdidas (clique para filtrar tabela)</p>
           <div style={{ height: 320 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={lossReasons} layout="vertical" margin={{ left: 20, right: 30 }}>
+              <BarChart data={lossReasons} layout="vertical" margin={{ left: 20, right: 50 }}>
                 <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 11 }} allowDecimals={false} axisLine={{ stroke: '#e5e7eb' }} />
                 <YAxis type="category" dataKey="name" width={280} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <Tooltip
                   {...tooltipStyle}
-                  formatter={(v: number) => [formatNum(v), 'Ocorrências']}
+                  formatter={(v: number) => [formatNum(v), 'Oportunidades']}
                   labelFormatter={(label: string) => {
                     const item = lossReasons.find(l => l.name === label);
                     return item?.fullName || label;
                   }}
                 />
-                <Bar dataKey="value" radius={[0, 6, 6, 0]}>
+                <Bar dataKey="value" radius={[0, 6, 6, 0]} cursor="pointer" onClick={(d: any) => onChartClick('motivoPerda', d.fullName || d.name)}>
                   {lossReasons.map((_, i) => {
                     const colors = ['#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#8b5cf6'];
                     return <Cell key={i} fill={colors[i % colors.length]} />;
                   })}
+                  <LabelList dataKey="value" position="right" fill="#374151" fontSize={11} formatter={(v: number) => formatNum(v)} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>

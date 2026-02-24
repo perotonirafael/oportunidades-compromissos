@@ -11,9 +11,10 @@ const COLUMNS: { key: keyof ProcessedRecord; label: string }[] = [
   { key: 'conta', label: 'Conta' },
   { key: 'representante', label: 'Representante' },
   { key: 'responsavel', label: 'Responsável' },
-  { key: 'usuarioAcao', label: 'Usuário Ação' },
+  { key: 'etn', label: 'ETN' },
   { key: 'etapa', label: 'Etapa' },
   { key: 'probabilidade', label: 'Prob.' },
+  { key: 'agenda', label: 'Agenda' },
   { key: 'mesFech', label: 'Mês Fech.' },
   { key: 'anoPrevisao', label: 'Ano' },
   { key: 'valorPrevisto', label: 'Valor Previsto' },
@@ -34,7 +35,7 @@ function AnalyticsTableInner({ data }: Props) {
       r.conta.toLowerCase().includes(term) ||
       r.representante.toLowerCase().includes(term) ||
       r.responsavel.toLowerCase().includes(term) ||
-      r.usuarioAcao.toLowerCase().includes(term) ||
+      r.etn.toLowerCase().includes(term) ||
       r.oppId.toLowerCase().includes(term) ||
       r.etapa.toLowerCase().includes(term)
     );
@@ -147,14 +148,14 @@ function AnalyticsTableInner({ data }: Props) {
           <tbody>
             {paged.map((r: ProcessedRecord, i: number) => (
               <tr
-                key={`${r.oppId}-${r.usuarioAcao}-${i}`}
+                key={`${r.oppId}-${r.etn}-${i}`}
                 className="border-b border-gray-50 hover:bg-emerald-50/50 transition-colors"
               >
                 <td className="px-3 py-2 font-mono text-blue-600 font-medium">{r.oppId}</td>
                 <td className="px-3 py-2 truncate max-w-[200px] text-gray-700">{r.conta}</td>
                 <td className="px-3 py-2 truncate text-gray-700">{r.representante}</td>
                 <td className="px-3 py-2 truncate text-gray-700">{r.responsavel}</td>
-                <td className="px-3 py-2 truncate text-gray-700">{r.usuarioAcao}</td>
+                <td className="px-3 py-2 truncate text-gray-700">{r.etn}</td>
                 <td className="px-3 py-2">
                   <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
                     r.etapa.includes('Ganha') ? 'bg-emerald-100 text-emerald-700' :
@@ -167,6 +168,7 @@ function AnalyticsTableInner({ data }: Props) {
                   </span>
                 </td>
                 <td className="px-3 py-2 font-mono text-gray-600">{r.probabilidade}</td>
+                <td className="px-3 py-2 font-mono text-center text-gray-600">{r.agenda}</td>
                 <td className="px-3 py-2 text-gray-600">{r.mesFech}</td>
                 <td className="px-3 py-2 font-mono text-gray-600">{r.anoPrevisao}</td>
                 <td className="px-3 py-2 font-mono text-right font-medium text-gray-800">{formatCurrency(r.valorPrevisto)}</td>
