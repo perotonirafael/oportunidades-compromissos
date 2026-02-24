@@ -2,13 +2,19 @@ import { useMemo, memo } from 'react';
 import type { ProcessedRecord } from '@/hooks/useDataProcessor';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, CartesianGrid,
+  PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend,
 } from 'recharts';
 
-// Green-themed palette (Senior brand)
+// Vibrant colorful palette
 const COLORS = [
-  '#34d399', '#10b981', '#059669', '#047857', '#065f46',
-  '#6ee7b7', '#a7f3d0', '#fbbf24', '#60a5fa', '#f87171',
+  '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6',
+  '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1',
+];
+
+const PIE_COLORS = [
+  '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6',
+  '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1',
+  '#84cc16', '#e11d48', '#0ea5e9', '#d946ef', '#22d3ee',
 ];
 
 const formatCurrency = (v: number) => {
@@ -110,11 +116,12 @@ function ChartsSectionInner({ data, funnelData, motivosPerda }: Props) {
 
   const tooltipStyle = {
     contentStyle: {
-      background: 'rgba(15, 23, 22, 0.95)',
-      border: '1px solid rgba(52, 211, 153, 0.25)',
-      borderRadius: '8px',
+      background: 'rgba(255, 255, 255, 0.97)',
+      border: '1px solid #e5e7eb',
+      borderRadius: '10px',
       fontSize: '12px',
-      color: '#d1fae5',
+      color: '#1f2937',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
     },
   };
 
@@ -123,17 +130,19 @@ function ChartsSectionInner({ data, funnelData, motivosPerda }: Props) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="glass-card rounded-xl p-5">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
-            Pipeline por Etapa (Abertas)
+        {/* Pipeline por Etapa */}
+        <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
+          <h3 className="text-sm font-bold text-foreground mb-1">
+            Pipeline por Etapa
           </h3>
-          <div style={{ height: 280 }}>
+          <p className="text-xs text-muted-foreground mb-4">Oportunidades abertas por valor</p>
+          <div style={{ height: 300 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={pipelineByStage} layout="vertical" margin={{ left: 10, right: 20 }}>
-                <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6ee7b7', fontSize: 11 }} />
-                <YAxis type="category" dataKey="name" width={160} tick={{ fill: '#a7f3d0', fontSize: 11 }} />
+                <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
+                <YAxis type="category" dataKey="name" width={160} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <Tooltip {...tooltipStyle} formatter={(v: number) => [formatCurrency(v), 'Valor']} />
-                <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                <Bar dataKey="value" radius={[0, 6, 6, 0]}>
                   {pipelineByStage.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
@@ -143,26 +152,28 @@ function ChartsSectionInner({ data, funnelData, motivosPerda }: Props) {
           </div>
         </div>
 
-        <div className="glass-card rounded-xl p-5">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+        {/* Distribuição por Probabilidade */}
+        <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
+          <h3 className="text-sm font-bold text-foreground mb-1">
             Distribuição por Probabilidade
           </h3>
+          <p className="text-xs text-muted-foreground mb-4">Oportunidades por faixa de probabilidade</p>
           <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={probDistribution} cx="50%" cy="50%" innerRadius={60} outerRadius={110} paddingAngle={2} dataKey="value">
+                <Pie data={probDistribution} cx="50%" cy="50%" innerRadius={55} outerRadius={110} paddingAngle={2} dataKey="value" strokeWidth={2} stroke="#fff">
                   {probDistribution.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip {...tooltipStyle} formatter={(v: number) => [formatNum(v), 'Ops.']} />
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="flex flex-wrap gap-2 mt-2 justify-center">
-            {probDistribution.slice(0, 8).map((item, i) => (
-              <span key={i} className="flex items-center gap-1 text-xs text-muted-foreground">
-                <span className="w-2 h-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 justify-center">
+            {probDistribution.slice(0, 10).map((item, i) => (
+              <span key={i} className="flex items-center gap-1 text-xs text-gray-600">
+                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
                 {item.name}
               </span>
             ))}
@@ -171,52 +182,60 @@ function ChartsSectionInner({ data, funnelData, motivosPerda }: Props) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="glass-card rounded-xl p-5">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
-            Valor Previsto vs Fechado por Mês
+        {/* Valor Previsto vs Fechado */}
+        <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
+          <h3 className="text-sm font-bold text-foreground mb-1">
+            Valor Previsto vs Fechado
           </h3>
+          <p className="text-xs text-muted-foreground mb-4">Evolução mensal (últimos 24 meses)</p>
           <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={monthlyTimeline} margin={{ left: 10, right: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(52,211,153,0.1)" />
-                <XAxis dataKey="name" tick={{ fill: '#6ee7b7', fontSize: 10 }} interval="preserveStartEnd" />
-                <YAxis tickFormatter={formatCurrency} tick={{ fill: '#6ee7b7', fontSize: 11 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 10 }} interval="preserveStartEnd" axisLine={{ stroke: '#e5e7eb' }} />
+                <YAxis tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <Tooltip {...tooltipStyle} formatter={(v: number) => [formatCurrency(v)]} />
-                <Line type="monotone" dataKey="previsto" stroke="#34d399" strokeWidth={2} dot={false} name="Previsto" />
-                <Line type="monotone" dataKey="fechado" stroke="#fbbf24" strokeWidth={2} dot={false} name="Fechado" />
+                <Legend wrapperStyle={{ fontSize: '12px' }} />
+                <Line type="monotone" dataKey="previsto" stroke="#10b981" strokeWidth={2.5} dot={false} name="Previsto" />
+                <Line type="monotone" dataKey="fechado" stroke="#f59e0b" strokeWidth={2.5} dot={false} name="Fechado" />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="glass-card rounded-xl p-5">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
-            Top 10 Representantes (Ganhas vs Perdidas)
+        {/* Top 10 Representantes */}
+        <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
+          <h3 className="text-sm font-bold text-foreground mb-1">
+            Top 10 Representantes
           </h3>
+          <p className="text-xs text-muted-foreground mb-4">Ganhas vs Perdidas por representante</p>
           <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={topReps} layout="vertical" margin={{ left: 10, right: 20 }}>
-                <XAxis type="number" tick={{ fill: '#6ee7b7', fontSize: 11 }} />
-                <YAxis type="category" dataKey="name" width={140} tick={{ fill: '#a7f3d0', fontSize: 10 }} />
+                <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
+                <YAxis type="category" dataKey="name" width={140} tick={{ fill: '#374151', fontSize: 10 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <Tooltip {...tooltipStyle} />
-                <Bar dataKey="ganhas" fill="#34d399" stackId="a" name="Ganhas" />
-                <Bar dataKey="perdidas" fill="#f87171" stackId="a" radius={[0, 4, 4, 0]} name="Perdidas" />
+                <Legend wrapperStyle={{ fontSize: '12px' }} />
+                <Bar dataKey="ganhas" fill="#10b981" stackId="a" name="Ganhas" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="perdidas" fill="#ef4444" stackId="a" radius={[0, 6, 6, 0]} name="Perdidas" />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
       </div>
 
+      {/* Motivos de Perda */}
       {lossReasons.length > 0 && (
-        <div className="glass-card rounded-xl p-5">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+        <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
+          <h3 className="text-sm font-bold text-foreground mb-1">
             Top 10 Motivos de Perda
           </h3>
+          <p className="text-xs text-muted-foreground mb-4">Principais causas de oportunidades perdidas</p>
           <div style={{ height: 320 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={lossReasons} layout="vertical" margin={{ left: 20, right: 30 }}>
-                <XAxis type="number" tick={{ fill: '#6ee7b7', fontSize: 11 }} allowDecimals={false} />
-                <YAxis type="category" dataKey="name" width={280} tick={{ fill: '#a7f3d0', fontSize: 11 }} />
+                <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 11 }} allowDecimals={false} axisLine={{ stroke: '#e5e7eb' }} />
+                <YAxis type="category" dataKey="name" width={280} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <Tooltip
                   {...tooltipStyle}
                   formatter={(v: number) => [formatNum(v), 'Ocorrências']}
@@ -225,10 +244,11 @@ function ChartsSectionInner({ data, funnelData, motivosPerda }: Props) {
                     return item?.fullName || label;
                   }}
                 />
-                <Bar dataKey="value" fill="#f87171" radius={[0, 4, 4, 0]}>
-                  {lossReasons.map((_, i) => (
-                    <Cell key={i} fill={`rgba(248, 113, 113, ${1 - i * 0.08})`} />
-                  ))}
+                <Bar dataKey="value" radius={[0, 6, 6, 0]}>
+                  {lossReasons.map((_, i) => {
+                    const colors = ['#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#8b5cf6'];
+                    return <Cell key={i} fill={colors[i % colors.length]} />;
+                  })}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>

@@ -158,22 +158,22 @@ export default function Home() {
         isVisible={processingState.isProcessing}
       />
 
-      {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-border glass-card">
+      {/* Header - Green gradient */}
+      <header className="sticky top-0 z-40 bg-gradient-to-r from-emerald-600 via-green-600 to-teal-600 shadow-lg shadow-green-600/10">
         <div className="max-w-[1600px] mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <BarChart3 className="text-primary" size={22} />
+            <div className="p-2 rounded-lg bg-white/15 backdrop-blur-sm">
+              <BarChart3 className="text-white" size={22} />
             </div>
             <div>
-              <h1 className="text-lg font-bold tracking-tight">Pipeline Analytics</h1>
-              <p className="text-xs text-muted-foreground">Funil de Vendas &middot; Oportunidades &amp; Compromissos</p>
+              <h1 className="text-lg font-bold tracking-tight text-white">Pipeline Analytics</h1>
+              <p className="text-xs text-white/70">Funil de Vendas &middot; Oportunidades &amp; Compromissos</p>
             </div>
           </div>
           {hasData && (
             <button
               onClick={resetAll}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-secondary hover:bg-secondary/80 text-secondary-foreground transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-white/15 hover:bg-white/25 text-white backdrop-blur-sm transition-colors"
             >
               <RotateCcw size={14} /> Novo Upload
             </button>
@@ -185,10 +185,10 @@ export default function Home() {
       {!hasData && (
         <div className="max-w-4xl mx-auto px-6 py-20">
           <div className="text-center mb-12">
-            <div className="inline-flex p-4 rounded-2xl bg-primary/10 mb-6">
-              <Upload className="text-primary" size={40} />
+            <div className="inline-flex p-4 rounded-2xl bg-gradient-to-br from-emerald-100 to-teal-100 mb-6">
+              <Upload className="text-emerald-600" size={40} />
             </div>
-            <h2 className="text-3xl font-bold tracking-tight mb-3">
+            <h2 className="text-3xl font-bold tracking-tight text-foreground mb-3">
               Análise de Pipeline
             </h2>
             <p className="text-muted-foreground max-w-lg mx-auto">
@@ -198,50 +198,50 @@ export default function Home() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             {/* Oportunidades */}
-            <div className="glass-card rounded-xl p-6 border border-emerald-500/20 hover:border-emerald-500/40 transition-colors group">
+            <div className="bg-white rounded-xl p-6 border-2 border-emerald-200 hover:border-emerald-400 transition-all hover:shadow-lg hover:shadow-emerald-100 group">
               <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 rounded-lg bg-emerald-500/10">
-                  <FileText className="text-emerald-400" size={20} />
+                <div className="p-2.5 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 shadow-md shadow-emerald-200">
+                  <FileText className="text-white" size={20} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold">Oportunidades</h3>
-                  <p className="text-xs text-muted-foreground">Base 1 - Pipeline CRM</p>
+                  <h3 className="text-sm font-bold text-emerald-800">Oportunidades</h3>
+                  <p className="text-xs text-emerald-600/70">Base 1 - Pipeline CRM</p>
                 </div>
               </div>
               <label className="block">
                 <input type="file" accept=".xlsx,.xls,.csv" onChange={handleOppFile} className="hidden" />
-                <span className="block w-full py-2.5 text-center text-sm font-medium rounded-lg border border-dashed border-emerald-500/30 hover:border-emerald-500/60 hover:bg-emerald-500/5 transition-all cursor-pointer">
+                <span className="block w-full py-3 text-center text-sm font-medium rounded-lg border-2 border-dashed border-emerald-300 hover:border-emerald-500 hover:bg-emerald-50 transition-all cursor-pointer">
                   {oppFileName ? (
-                    <span className="text-emerald-400 flex items-center justify-center gap-1.5">
+                    <span className="text-emerald-700 flex items-center justify-center gap-1.5">
                       <FileText size={14} /> {oppFileName}
                     </span>
                   ) : (
-                    'Selecionar arquivo'
+                    <span className="text-emerald-500">Selecionar arquivo</span>
                   )}
                 </span>
               </label>
             </div>
 
             {/* Compromissos */}
-            <div className="glass-card rounded-xl p-6 border border-teal-500/20 hover:border-teal-500/40 transition-colors group">
+            <div className="bg-white rounded-xl p-6 border-2 border-blue-200 hover:border-blue-400 transition-all hover:shadow-lg hover:shadow-blue-100 group">
               <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 rounded-lg bg-teal-500/10">
-                  <FileText className="text-teal-400" size={20} />
+                <div className="p-2.5 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 shadow-md shadow-blue-200">
+                  <FileText className="text-white" size={20} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold">Ações / Compromissos</h3>
-                  <p className="text-xs text-muted-foreground">Base 2 - Engajamento</p>
+                  <h3 className="text-sm font-bold text-blue-800">Ações / Compromissos</h3>
+                  <p className="text-xs text-blue-600/70">Base 2 - Engajamento</p>
                 </div>
               </div>
               <label className="block">
                 <input type="file" accept=".xlsx,.xls,.csv" onChange={handleActFile} className="hidden" />
-                <span className="block w-full py-2.5 text-center text-sm font-medium rounded-lg border border-dashed border-teal-500/30 hover:border-teal-500/60 hover:bg-teal-500/5 transition-all cursor-pointer">
+                <span className="block w-full py-3 text-center text-sm font-medium rounded-lg border-2 border-dashed border-blue-300 hover:border-blue-500 hover:bg-blue-50 transition-all cursor-pointer">
                   {actFileName ? (
-                    <span className="text-teal-400 flex items-center justify-center gap-1.5">
+                    <span className="text-blue-700 flex items-center justify-center gap-1.5">
                       <FileText size={14} /> {actFileName}
                     </span>
                   ) : (
-                    'Selecionar arquivo'
+                    <span className="text-blue-500">Selecionar arquivo</span>
                   )}
                 </span>
               </label>
@@ -252,7 +252,7 @@ export default function Home() {
             <button
               onClick={handleLoad}
               disabled={processingState.isProcessing || (!oppFile && !actFile)}
-              className="flex items-center gap-2 px-8 py-3 text-sm font-semibold rounded-xl bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-lg shadow-primary/20"
+              className="flex items-center gap-2 px-10 py-3.5 text-sm font-bold rounded-xl bg-gradient-to-r from-emerald-500 via-green-500 to-teal-500 text-white hover:from-emerald-600 hover:via-green-600 hover:to-teal-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-lg shadow-green-300/40 hover:shadow-green-400/50"
             >
               {processingState.isProcessing ? (
                 <><Loader className="animate-spin" size={18} /> Processando...</>
@@ -267,11 +267,11 @@ export default function Home() {
           </p>
 
           {error && (
-            <div className="mt-6 p-4 rounded-xl bg-destructive/10 border border-destructive/20 flex gap-3">
-              <AlertCircle className="text-destructive flex-shrink-0 mt-0.5" size={18} />
+            <div className="mt-6 p-4 rounded-xl bg-red-50 border border-red-200 flex gap-3">
+              <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={18} />
               <div>
-                <p className="text-sm font-medium text-destructive">Erro ao processar</p>
-                <p className="text-xs text-destructive/80 mt-1">{error}</p>
+                <p className="text-sm font-medium text-red-700">Erro ao processar</p>
+                <p className="text-xs text-red-600 mt-1">{error}</p>
               </div>
             </div>
           )}
@@ -294,10 +294,10 @@ export default function Home() {
           </div>
 
           {/* Filters Bar */}
-          <div className="glass-card rounded-xl p-4 mb-6">
+          <div className="bg-white rounded-xl p-4 mb-6 border border-border shadow-sm">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Filtros</h3>
-              <button onClick={resetFilters} className="text-xs text-primary hover:underline">Limpar todos</button>
+              <button onClick={resetFilters} className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:underline transition-colors">Limpar todos</button>
             </div>
             <div className="flex flex-wrap gap-2">
               <MultiSelectDropdown label="Ano" options={filterOptions.years} selected={selYears} onChange={setSelYears} />
