@@ -68,7 +68,7 @@ export default function Home() {
   const filteredData = processedData.filter(record => {
     if (selectedYears.length > 0 && !selectedYears.includes(record['Ano Previsão'])) return false;
     if (selectedMonths.length > 0 && !selectedMonths.includes(record['Mês Previsão'])) return false;
-    if (selectedRepresentatives.length > 0 && !selectedRepresentatives.includes(record['Responsável'])) return false;
+    if (selectedRepresentatives.length > 0 && !selectedRepresentatives.includes(record['Representante'])) return false;
     if (selectedResponsible.length > 0 && !selectedResponsible.includes(record['Responsável'])) return false;
     if (selectedActionUsers.length > 0 && !selectedActionUsers.includes(record['Usuário Ação'])) return false;
     if (selectedStages.length > 0 && !selectedStages.includes(record['Etapa'])) return false;

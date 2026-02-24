@@ -19,12 +19,15 @@ export interface Action {
   'Oportunidade ID'?: string;
   'Conta ID'?: string;
   'Usuário Ação'?: string;
+  'Responsavel'?: string;
+  'Usuário'?: string;
   'Data Ação'?: string;
 }
 
 export interface ProcessedRecord {
   'ID Oportunidade': string;
   'Conta': string;
+  'Representante': string;
   'Responsável': string;
   'Usuário Ação': string;
   'Etapa': string;
@@ -47,7 +50,6 @@ const MONTH_NAMES = [
 function extractMonthYear(dateStr: string): { month: string; year: string; monthNum: number } {
   if (!dateStr) return { month: '', year: '', monthNum: 0 };
   
-  // Tenta diferentes formatos: DD/MM/YYYY, YYYY-MM-DD, etc.
   let date: Date | null = null;
   
   if (dateStr.includes('/')) {
@@ -69,31 +71,39 @@ function extractMonthYear(dateStr: string): { month: string; year: string; month
   };
 }
 
-function findMatchingOpportunity(
+function normalizeProbability(probStr: string | number | undefined): string {
+  if (!probStr) return '';
+  const str = probStr.toString().trim();
+  const cleaned = str.replace(/[^0-9]/g, '');
+  const num = parseInt(cleaned);
+  return isNaN(num) ? '' : `${num}%`;
+}
+
+function findMatchingOpportunities(
   action: Action,
   opportunities: Opportunity[]
-): Opportunity | null {
+): Opportunity[] {
   const oppId = action['Oportunidade ID'];
   const accountId = action['Conta ID'];
   
   // Primeiro tenta match por Oportunidade ID
   if (oppId) {
-    const match = opportunities.find(opp => 
+    const matches = opportunities.filter(opp => 
       opp['ID Oportunidade']?.toString() === oppId?.toString() ||
       opp['Oportunidade ID']?.toString() === oppId?.toString()
     );
-    if (match) return match;
+    if (matches.length > 0) return matches;
   }
   
   // Fallback para Conta ID
   if (accountId) {
-    const match = opportunities.find(opp => 
+    const matches = opportunities.filter(opp => 
       opp['Conta ID']?.toString() === accountId?.toString()
     );
-    if (match) return match;
+    if (matches.length > 0) return matches;
   }
   
-  return null;
+  return [];
 }
 
 export function useDataProcessor(
@@ -127,70 +137,95 @@ export function useDataProcessor(
     const processedData: ProcessedRecord[] = [];
     const uniqueOpportunityIds = new Set<string>();
     const uniqueOpportunityValues = new Map<string, number>();
-    const actionUsersByOpp = new Map<string, Set<string>>();
-    const accountsByOpp = new Map<string, string>();
-    
-    // Mapa para rastrear quais contas têm ações
+    const actionCountByOppUser = new Map<string, number>(); // Key: "oppId|usuário"
     const accountsWithActions = new Set<string>();
 
-    // Primeiro passe: processar ações e criar registros
+    // Mapa para rastrear ações por oportunidade e usuário
+    const actionsByOppUser = new Map<string, Action[]>();
+
+    // Primeiro passe: agrupar ações por oportunidade e usuário
     for (const action of actions) {
-      const opp = findMatchingOpportunity(action, opportunities);
+      const matchingOpps = findMatchingOpportunities(action, opportunities);
       
-      if (!opp) continue;
+      if (matchingOpps.length === 0) continue;
 
-      const oppId = opp['ID Oportunidade'] || opp['Oportunidade ID'] || 'Unknown';
-      const accountId = opp['Conta ID'] || '';
-      const account = opp['Conta'] || '';
-      
-      accountsWithActions.add(account);
-      
-      const { month, year, monthNum } = extractMonthYear(
-        opp['Previsão de Fechamento']?.toString() || ''
-      );
+      for (const opp of matchingOpps) {
+        const oppId = opp['ID Oportunidade'] || opp['Oportunidade ID'] || 'Unknown';
+        const userAction = action['Usuário Ação'] || action['Responsavel'] || action['Usuário'] || 'Sem Ação';
+        const key = `${oppId}|${userAction}`;
 
-      const userAction = action['Usuário Ação'] || 'Sem Ação';
-      
-      // Rastrear usuários por oportunidade
-      if (!actionUsersByOpp.has(oppId)) {
-        actionUsersByOpp.set(oppId, new Set());
+        if (!actionsByOppUser.has(key)) {
+          actionsByOppUser.set(key, []);
+        }
+        actionsByOppUser.get(key)!.push(action);
       }
-      actionUsersByOpp.get(oppId)!.add(userAction);
-      
-      accountsByOpp.set(oppId, account);
-      
-      // Rastrear valor único por oportunidade
-      if (!uniqueOpportunityValues.has(oppId)) {
-        const value = parseFloat(opp['Valor Previsto']?.toString() || '0') || 0;
-        uniqueOpportunityValues.set(oppId, value);
-      }
-
-      const record: ProcessedRecord = {
-        'ID Oportunidade': oppId,
-        'Conta': account,
-        'Responsável': opp['Responsável'] || opp['Representante'] || '',
-        'Usuário Ação': userAction,
-        'Etapa': opp['Etapa'] || '',
-        'Probabilidade': opp['Probabilidade']?.toString() || '',
-        'Ano Previsão': year,
-        'Mês Previsão': monthNum.toString(),
-        'Mês Fech.': month,
-        'Valor Previsto': parseFloat(opp['Valor Previsto']?.toString() || '0') || 0,
-        'Qtd. Ações': actionUsersByOpp.get(oppId)?.size || 0,
-        _opportunityId: oppId,
-        _accountId: accountId,
-        _uniqueOpportunityId: oppId
-      };
-
-      processedData.push(record);
     }
 
-    // Adicionar oportunidades sem ações
+    // Segundo passe: criar registros desdobrados (1:N) para cada usuário
+    for (const action of actions) {
+      const matchingOpps = findMatchingOpportunities(action, opportunities);
+      
+      if (matchingOpps.length === 0) continue;
+
+      for (const opp of matchingOpps) {
+        const oppId = opp['ID Oportunidade'] || opp['Oportunidade ID'] || 'Unknown';
+        const accountId = opp['Conta ID'] || '';
+        const account = opp['Conta'] || '';
+        const userAction = action['Usuário Ação'] || action['Responsavel'] || action['Usuário'] || 'Sem Ação';
+        
+        // Registrar que esta conta tem ações
+        accountsWithActions.add(account);
+        
+        // Registrar valor único por oportunidade (deduplicação)
+        if (!uniqueOpportunityValues.has(oppId)) {
+          const value = parseFloat(opp['Valor Previsto']?.toString() || '0') || 0;
+          uniqueOpportunityValues.set(oppId, value);
+          uniqueOpportunityIds.add(oppId);
+        }
+
+        const { month, year, monthNum } = extractMonthYear(
+          opp['Previsão de Fechamento']?.toString() || ''
+        );
+
+        // Contar ações por oportunidade e usuário
+        const key = `${oppId}|${userAction}`;
+        const actionCount = actionsByOppUser.get(key)?.length || 0;
+        actionCountByOppUser.set(key, actionCount);
+
+        // Categorizar quantidade de ações
+        let qtdAcoesCategory = '0';
+        if (actionCount === 1) qtdAcoesCategory = '1';
+        else if (actionCount === 2) qtdAcoesCategory = '2';
+        else if (actionCount >= 3) qtdAcoesCategory = '3+';
+
+        const record: ProcessedRecord = {
+          'ID Oportunidade': oppId,
+          'Conta': account,
+          'Representante': opp['Representante']?.toString().trim() || '',
+          'Responsável': opp['Responsável']?.toString().trim() || '',
+          'Usuário Ação': userAction,
+          'Etapa': opp['Etapa']?.toString().trim() || '',
+          'Probabilidade': normalizeProbability(opp['Probabilidade']),
+          'Ano Previsão': year,
+          'Mês Previsão': monthNum.toString(),
+          'Mês Fech.': month,
+          'Valor Previsto': parseFloat(opp['Valor Previsto']?.toString() || '0') || 0,
+          'Qtd. Ações': actionCount,
+          _opportunityId: oppId,
+          _accountId: accountId,
+          _uniqueOpportunityId: oppId
+        };
+
+        processedData.push(record);
+      }
+    }
+
+    // Terceiro passe: adicionar oportunidades sem ações
     for (const opp of opportunities) {
       const oppId = opp['ID Oportunidade'] || opp['Oportunidade ID'] || 'Unknown';
       
       // Se já foi processada, pula
-      if (actionUsersByOpp.has(oppId)) continue;
+      if (uniqueOpportunityIds.has(oppId)) continue;
 
       const { month, year, monthNum } = extractMonthYear(
         opp['Previsão de Fechamento']?.toString() || ''
@@ -199,19 +234,23 @@ export function useDataProcessor(
       const account = opp['Conta'] || '';
       const accountId = opp['Conta ID'] || '';
 
-      uniqueOpportunityValues.set(oppId, parseFloat(opp['Valor Previsto']?.toString() || '0') || 0);
+      // Registrar valor único
+      const value = parseFloat(opp['Valor Previsto']?.toString() || '0') || 0;
+      uniqueOpportunityValues.set(oppId, value);
+      uniqueOpportunityIds.add(oppId);
 
       const record: ProcessedRecord = {
         'ID Oportunidade': oppId,
         'Conta': account,
-        'Responsável': opp['Responsável'] || opp['Representante'] || '',
+        'Representante': opp['Representante']?.toString().trim() || '',
+        'Responsável': opp['Responsável']?.toString().trim() || '',
         'Usuário Ação': 'Sem Ação',
-        'Etapa': opp['Etapa'] || '',
-        'Probabilidade': opp['Probabilidade']?.toString() || '',
+        'Etapa': opp['Etapa']?.toString().trim() || '',
+        'Probabilidade': normalizeProbability(opp['Probabilidade']),
         'Ano Previsão': year,
         'Mês Previsão': monthNum.toString(),
         'Mês Fech.': month,
-        'Valor Previsto': parseFloat(opp['Valor Previsto']?.toString() || '0') || 0,
+        'Valor Previsto': value,
         'Qtd. Ações': 0,
         _opportunityId: oppId,
         _accountId: accountId,
@@ -221,14 +260,20 @@ export function useDataProcessor(
       processedData.push(record);
     }
 
-    // Calcular KPIs
-    const uniqueOps = uniqueOpportunityValues.size;
+    // Calcular KPIs com deduplicação financeira
+    const uniqueOps = uniqueOpportunityIds.size;
     const totalActions = actions.length;
     const totalValue = Array.from(uniqueOpportunityValues.values()).reduce((a, b) => a + b, 0);
-    const hotOps = processedData.filter(r => {
-      const prob = parseFloat(r['Probabilidade']?.toString() || '0');
-      return prob >= 75;
-    }).length;
+    
+    // Hot Ops: oportunidades com probabilidade >= 75%
+    const hotOpsSet = new Set<string>();
+    for (const record of processedData) {
+      const probNum = parseInt(record['Probabilidade'].replace('%', ''));
+      if (probNum >= 75) {
+        hotOpsSet.add(record['_uniqueOpportunityId']);
+      }
+    }
+    const hotOps = hotOpsSet.size;
 
     // Extrair opções de filtro
     const yearsSet = new Set<string>();
@@ -243,6 +288,7 @@ export function useDataProcessor(
     for (const record of processedData) {
       if (record['Ano Previsão']) yearsSet.add(record['Ano Previsão']);
       if (record['Mês Previsão']) monthsSet.add(record['Mês Previsão']);
+      if (record['Representante']) representativesSet.add(record['Representante']);
       if (record['Responsável']) responsibleSet.add(record['Responsável']);
       if (record['Usuário Ação']) actionUsersSet.add(record['Usuário Ação']);
       if (record['Etapa']) stagesSet.add(record['Etapa']);
@@ -253,12 +299,6 @@ export function useDataProcessor(
       else if (actionCount === 1) actionCountsSet.add('1');
       else if (actionCount === 2) actionCountsSet.add('2');
       else actionCountsSet.add('3+');
-    }
-
-    // Extrair representantes da base original
-    for (const opp of opportunities) {
-      const rep = opp['Representante'] || '';
-      if (rep) representativesSet.add(rep);
     }
 
     return {
