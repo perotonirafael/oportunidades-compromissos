@@ -39,6 +39,9 @@ export default function Home() {
 
   // Estado para clique nos gráficos filtrar tabela
   const [chartFilter, setChartFilter] = useState<{ field: string; value: string } | null>(null);
+  
+  // Estado para filtro ETN nas Agendas Faltantes
+  const [selETNMissing, setSelETNMissing] = useState<string[]>([]);
 
   const result = useDataProcessor(opportunities, actions);
 
@@ -85,11 +88,18 @@ export default function Home() {
         case 'probabilidade': return r.probabilidade === chartFilter.value;
         case 'motivoPerda': return r.motivoPerda === chartFilter.value || r.motivoFechamento === chartFilter.value;
         case 'etn': return r.etn === chartFilter.value;
+        case 'etnMissing': return r.etn === chartFilter.value;
         case 'representante': return r.representante === chartFilter.value;
         default: return true;
       }
     });
   }, [filteredData, chartFilter]);
+  
+  // Dados das Agendas Faltantes (com filtro de clique nos gráficos)
+  const missingAgendasFiltered = useMemo(() => {
+    if (!chartFilter || chartFilter.field !== 'etnMissing') return missingAgendas;
+    return missingAgendas.filter(r => r.etn === chartFilter.value);
+  }, [missingAgendas, chartFilter]);
 
   // KPIs filtrados (deduplicados)
   const filteredKpis = useMemo(() => {
@@ -388,9 +398,25 @@ export default function Home() {
 
               {/* Gráfico de Agendas Faltantes por ETN */}
               <div className="bg-white rounded-xl p-5 border border-border shadow-sm mb-4">
-                <h3 className="text-sm font-bold text-foreground mb-1">Agendas Faltantes por ETN</h3>
-                <p className="text-xs text-muted-foreground mb-4">ETNs com mais oportunidades sem compromisso registrado</p>
-                <MissingAgendaChart data={missingAgendas} />
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-foreground mb-1">Agendas Faltantes por ETN</h3>
+                    <p className="text-xs text-muted-foreground">Clique na barra para filtrar a tabela abaixo</p>
+                  </div>
+                  <div className="w-56">
+                    <MultiSelectDropdown
+                      label="Filtrar ETN"
+                      options={filterOptions.etns}
+                      selected={selETNMissing}
+                      onChange={setSelETNMissing}
+                    />
+                  </div>
+                </div>
+                <MissingAgendaChart 
+                  data={missingAgendas} 
+                  onBarClick={(etn) => setChartFilter({ field: 'etnMissing', value: etn })}
+                  selectedETN={selETNMissing}
+                />
               </div>
 
               {/* Grid de Agendas Faltantes */}
@@ -412,7 +438,7 @@ export default function Home() {
                       </tr>
                     </thead>
                     <tbody>
-                      {missingAgendas.slice(0, 200).map((r, i) => (
+                      {missingAgendasFiltered.slice(0, 200).map((r, i) => (
                         <tr key={i} className={`border-b border-gray-100 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} hover:bg-amber-50/50 transition-colors`}>
                           <td className="px-3 py-2 font-mono text-gray-700">{r.oppId}</td>
                           <td className="px-3 py-2 text-gray-800 font-medium">{r.conta}</td>
@@ -435,9 +461,9 @@ export default function Home() {
                     </tbody>
                   </table>
                 </div>
-                {missingAgendas.length > 200 && (
+                {missingAgendasFiltered.length > 200 && (
                   <div className="px-4 py-2 bg-amber-50 text-xs text-amber-700 text-center border-t border-amber-200">
-                    Exibindo 200 de {missingAgendas.length} registros
+                    Exibindo 200 de {missingAgendasFiltered.length} registros
                   </div>
                 )}
               </div>
@@ -454,17 +480,18 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
 
-function MissingAgendaChart({ data }: { data: MissingAgendaRecord[] }) {
+function MissingAgendaChart({ data, onBarClick, selectedETN }: { data: MissingAgendaRecord[]; onBarClick: (etn: string) => void; selectedETN: string[] }) {
   const chartData = useMemo(() => {
+    const filtered = selectedETN.length > 0 ? data.filter(r => selectedETN.includes(r.etn)) : data;
     const map = new Map<string, number>();
-    for (const r of data) {
+    for (const r of filtered) {
       map.set(r.etn, (map.get(r.etn) || 0) + 1);
     }
     return Array.from(map.entries())
       .map(([name, count]) => ({ name: name.length > 20 ? name.slice(0, 20) + '…' : name, count, fullName: name }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 15);
-  }, [data]);
+  }, [data, selectedETN]);
 
   const colors = ['#f59e0b', '#f97316', '#ef4444', '#ec4899', '#8b5cf6', '#6366f1', '#3b82f6', '#06b6d4', '#14b8a6', '#10b981', '#84cc16', '#eab308', '#d946ef', '#0ea5e9', '#22d3ee'];
 
@@ -482,9 +509,9 @@ function MissingAgendaChart({ data }: { data: MissingAgendaRecord[] }) {
               return item?.fullName || label;
             }}
           />
-          <Bar dataKey="count" radius={[0, 6, 6, 0]}>
+          <Bar dataKey="count" radius={[0, 6, 6, 0]} onClick={(data: any) => onBarClick(data.fullName)}>
             {chartData.map((_, i) => (
-              <Cell key={i} fill={colors[i % colors.length]} />
+              <Cell key={i} fill={colors[i % colors.length]} style={{ cursor: 'pointer' }} />
             ))}
           </Bar>
         </BarChart>
