@@ -30,7 +30,7 @@ function MultiSelectDropdownInner({ label, options, selected, onChange }: Props)
   };
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative w-[140px] flex-shrink-0">
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg border border-border bg-secondary/50 hover:bg-secondary transition-colors text-foreground"
@@ -51,7 +51,7 @@ function MultiSelectDropdownInner({ label, options, selected, onChange }: Props)
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-full bg-card border border-border rounded-lg shadow-xl overflow-hidden">
+        <div className="absolute z-50 mt-1 w-[240px] bg-card border border-border rounded-lg shadow-xl overflow-hidden">
           <div className="p-2 border-b border-border">
             <div className="relative">
               <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />

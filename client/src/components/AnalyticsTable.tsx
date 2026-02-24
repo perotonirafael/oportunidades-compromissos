@@ -17,9 +17,6 @@ const COLUMNS: { key: keyof ProcessedRecord; label: string }[] = [
   { key: 'mesFech', label: 'Mês Fech.' },
   { key: 'anoPrevisao', label: 'Ano' },
   { key: 'valorPrevisto', label: 'Valor Previsto' },
-  { key: 'qtdAcoes', label: 'Ações' },
-  { key: 'tipoOportunidade', label: 'Tipo' },
-  { key: 'origemOportunidade', label: 'Origem' },
 ];
 
 const PAGE_SIZE = 100;
@@ -173,9 +170,6 @@ function AnalyticsTableInner({ data }: Props) {
                 <td className="px-3 py-2">{r.mesFech}</td>
                 <td className="px-3 py-2 font-mono">{r.anoPrevisao}</td>
                 <td className="px-3 py-2 font-mono text-right">{formatCurrency(r.valorPrevisto)}</td>
-                <td className="px-3 py-2 font-mono text-center">{r.qtdAcoes}</td>
-                <td className="px-3 py-2 truncate max-w-[200px]">{r.tipoOportunidade}</td>
-                <td className="px-3 py-2 truncate max-w-[200px]">{r.origemOportunidade}</td>
               </tr>
             ))}
           </tbody>

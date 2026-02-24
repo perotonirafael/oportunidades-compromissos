@@ -299,7 +299,7 @@ export default function Home() {
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Filtros</h3>
               <button onClick={resetFilters} className="text-xs text-primary hover:underline">Limpar todos</button>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-11 gap-2">
+            <div className="flex flex-wrap gap-2">
               <MultiSelectDropdown label="Ano" options={filterOptions.years} selected={selYears} onChange={setSelYears} />
               <MultiSelectDropdown label="Mês" options={filterOptions.months} selected={selMonths} onChange={setSelMonths} />
               <MultiSelectDropdown label="Representante" options={filterOptions.representantes} selected={selReps} onChange={setSelReps} />
