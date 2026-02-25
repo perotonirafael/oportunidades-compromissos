@@ -32,6 +32,7 @@ interface Props {
   forecastFunnel: { etapa: string; count: number; value: number; avgProb: number }[];
   etnTop10: { name: string; fullName: string; count: number; value: number }[];
   onChartClick: (field: string, value: string) => void;
+  onETNClick?: (etn: string) => void;
 }
 
 const tooltipStyle = {
@@ -45,7 +46,7 @@ const tooltipStyle = {
   },
 };
 
-function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, etnTop10, onChartClick }: Props) {
+function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, etnTop10, onChartClick, onETNClick }: Props) {
   // Pipeline por Etapa (abertas)
   const pipelineByStage = useMemo(() => {
     const map = new Map<string, { count: number; value: number }>();
@@ -217,7 +218,10 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                     }}
                   />
                   <Legend wrapperStyle={{ fontSize: '12px' }} />
-                  <Bar dataKey="value" fill="#10b981" name="Valor" radius={[0, 6, 6, 0]} cursor="pointer" onClick={(d: any) => onChartClick('etn', d.fullName || d.name)}>
+                  <Bar dataKey="value" fill="#10b981" name="Valor" radius={[0, 6, 6, 0]} cursor="pointer" onClick={(d: any) => {
+                    if (onETNClick) onETNClick(d.fullName || d.name);
+                    onChartClick('etn', d.fullName || d.name);
+                  }}>
                     <LabelList dataKey="value" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
                   </Bar>
                 </BarChart>
