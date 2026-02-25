@@ -95,11 +95,52 @@ export default function Home() {
     });
   }, [filteredData, chartFilter]);
   
-  // Dados das Agendas Faltantes (com filtro de clique nos gráficos)
+  // Dados das Agendas Faltantes (com filtro de clique nos gráficos E filtro ETN)
   const missingAgendasFiltered = useMemo(() => {
-    if (!chartFilter || chartFilter.field !== 'etnMissing') return missingAgendas;
-    return missingAgendas.filter(r => r.etn === chartFilter.value);
-  }, [missingAgendas, chartFilter]);
+    let filtered = missingAgendas;
+    // Filtro ETN do dropdown
+    if (selETNMissing.length > 0) {
+      filtered = filtered.filter(r => selETNMissing.includes(r.etn));
+    }
+    // Filtro de clique no gráfico
+    if (chartFilter && chartFilter.field === 'etnMissing') {
+      filtered = filtered.filter(r => r.etn === chartFilter.value);
+    }
+    return filtered;
+  }, [missingAgendas, chartFilter, selETNMissing]);
+
+  // ETN Top 10 filtrado
+  const etnTop10Filtered = useMemo(() => {
+    const map = new Map<string, { count: number; value: number }>();
+    const seen = new Set<string>();
+    for (const r of filteredData) {
+      if (r.probNum < 75) continue;
+      if (seen.has(r.oppId)) continue;
+      seen.add(r.oppId);
+      const e = map.get(r.etn) || { count: 0, value: 0 };
+      e.count++;
+      e.value += r.valorPrevisto;
+      map.set(r.etn, e);
+    }
+    return Array.from(map.entries())
+      .map(([name, d]) => ({ name: name.length > 20 ? name.slice(0, 20) + '...' : name, fullName: name, ...d }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+  }, [filteredData]);
+
+  // Motivos de Perda filtrados
+  const motivosPerdaFiltered = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of filteredData) {
+      if (r.etapa !== 'Fechada e Perdida') continue;
+      const motivo = r.motivoPerda || 'Sem motivo';
+      map.set(motivo, (map.get(motivo) || 0) + r.valorPrevisto);
+    }
+    return Array.from(map.entries())
+      .map(([motivo, value]) => ({ motivo, count: value }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  }, [filteredData]);
 
   // KPIs filtrados (deduplicados)
   const filteredKpis = useMemo(() => {
@@ -367,9 +408,9 @@ export default function Home() {
           <ChartsSection
             data={filteredData}
             funnelData={funnelData}
-            motivosPerda={motivosPerda}
+            motivosPerda={motivosPerdaFiltered}
             forecastFunnel={forecastFunnel}
-            etnTop10={etnTop10}
+            etnTop10={etnTop10Filtered}
             onChartClick={handleChartClick}
           />
 

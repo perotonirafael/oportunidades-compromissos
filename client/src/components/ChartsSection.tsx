@@ -145,11 +145,11 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                         <Cell key={i} fill={FUNNEL_COLORS[i % FUNNEL_COLORS.length]} />
                       ))}
                       <LabelList
-                        dataKey="count"
+                        dataKey="value"
                         position="right"
                         fill="#374151"
                         fontSize={10}
-                        formatter={(v: number) => `${v} ops`}
+                        formatter={(v: number) => formatCurrency(v)}
                       />
                     </Bar>
                   </BarChart>
@@ -161,8 +161,8 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                   <div key={i} className="flex items-center gap-2 text-xs">
                     <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: FUNNEL_COLORS[i % FUNNEL_COLORS.length] }} />
                     <span className="text-gray-700 truncate">{item.etapa}</span>
-                    <span className="ml-auto font-mono font-bold text-gray-900">{item.count} ops</span>
-                    <span className="font-mono text-emerald-700">{item.avgProb}%</span>
+                    <span className="ml-auto font-mono font-bold text-emerald-700">{formatCurrency(item.value)}</span>
+                    <span className="font-mono text-gray-600">{item.avgProb}%</span>
                   </div>
                 ))}
               </div>
@@ -218,7 +218,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                   />
                   <Legend wrapperStyle={{ fontSize: '12px' }} />
                   <Bar dataKey="value" fill="#10b981" name="Valor" radius={[0, 6, 6, 0]} cursor="pointer" onClick={(d: any) => onChartClick('etn', d.fullName || d.name)}>
-                    <LabelList dataKey="count" position="right" fill="#374151" fontSize={10} formatter={(v: number) => `${v} ops`} />
+                    <LabelList dataKey="value" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -243,7 +243,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                 <YAxis type="category" dataKey="name" width={280} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <Tooltip
                   {...tooltipStyle}
-                  formatter={(v: number) => [formatNum(v), 'Oportunidades']}
+                  formatter={(v: number) => [formatCurrency(v), 'Valor Previsto']}
                   labelFormatter={(label: string) => {
                     const item = lossReasons.find(l => l.name === label);
                     return item?.fullName || label;
@@ -254,7 +254,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                     const colors = ['#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#8b5cf6'];
                     return <Cell key={i} fill={colors[i % colors.length]} />;
                   })}
-                  <LabelList dataKey="value" position="right" fill="#374151" fontSize={11} formatter={(v: number) => formatNum(v)} />
+                  <LabelList dataKey="value" position="right" fill="#374151" fontSize={11} formatter={(v: number) => formatCurrency(v)} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
