@@ -3,7 +3,6 @@ import type { ProcessedRecord } from '@/hooks/useDataProcessor';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   Cell, LineChart, Line, CartesianGrid, Legend, LabelList,
-  FunnelChart, Funnel,
 } from 'recharts';
 
 const COLORS = [
@@ -46,6 +45,31 @@ const tooltipStyle = {
   },
 };
 
+// Componente de rodapé com intervalo de datas (Item 9)
+function DateRangeFooter({ data }: { data: ProcessedRecord[] }) {
+  const range = useMemo(() => {
+    let minYM = Infinity, maxYM = 0;
+    let minLabel = '', maxLabel = '';
+    const mNames = ['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    for (const r of data) {
+      if (!r.anoPrevisao || !r.mesPrevisaoNum) continue;
+      const y = parseInt(r.anoPrevisao);
+      const m = r.mesPrevisaoNum;
+      const ym = y * 100 + m;
+      if (ym < minYM) { minYM = ym; minLabel = `${mNames[m]}/${y}`; }
+      if (ym > maxYM) { maxYM = ym; maxLabel = `${mNames[m]}/${y}`; }
+    }
+    if (minYM === Infinity) return 'Sem dados de período';
+    return `${minLabel} — ${maxLabel}`;
+  }, [data]);
+
+  return (
+    <p className="text-[10px] text-gray-400 text-center mt-2 pt-1 border-t border-gray-100">
+      Período dos filtros aplicados: {range}
+    </p>
+  );
+}
+
 function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, etnTop10, onChartClick, onETNClick }: Props) {
   // Pipeline por Etapa (abertas)
   const pipelineByStage = useMemo(() => {
@@ -70,10 +94,10 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
     const map = new Map<string, { previsto: number; fechado: number }>();
     const seen = new Set<string>();
     for (const r of data) {
-      if (!r.anoPrevisao || !r.mesPrevisao || r.mesPrevisao === '0') continue;
+      if (!r.anoPrevisao || !r.mesPrevisaoNum || r.mesPrevisaoNum === 0) continue;
       if (seen.has(r.oppId)) continue;
       seen.add(r.oppId);
-      const key = `${r.anoPrevisao}-${r.mesPrevisao.padStart(2, '0')}`;
+      const key = `${r.anoPrevisao}-${r.mesPrevisaoNum.toString().padStart(2, '0')}`;
       const e = map.get(key) || { previsto: 0, fechado: 0 };
       e.previsto += r.valorPrevisto;
       e.fechado += r.valorFechado;
@@ -121,9 +145,10 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
               </BarChart>
             </ResponsiveContainer>
           </div>
+          <DateRangeFooter data={data} />
         </div>
 
-        {/* FUNIL DE FORECAST (Item 8) */}
+        {/* FUNIL DE FORECAST */}
         <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
           <h3 className="text-sm font-bold text-foreground mb-1">FUNIL DE FORECAST</h3>
           <p className="text-xs text-muted-foreground mb-4">Oportunidades com probabilidade ≥75% por etapa, quantidade e valor (clique para filtrar)</p>
@@ -173,6 +198,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
               Nenhuma oportunidade com probabilidade ≥75%
             </div>
           )}
+          <DateRangeFooter data={data} />
         </div>
       </div>
 
@@ -194,12 +220,13 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
               </LineChart>
             </ResponsiveContainer>
           </div>
+          <DateRangeFooter data={data} />
         </div>
 
-        {/* ETN Top 10 (Item 10) */}
+        {/* ETN Top 10 */}
         <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
           <h3 className="text-sm font-bold text-foreground mb-1">ETN Top 10</h3>
-          <p className="text-xs text-muted-foreground mb-4">Oportunidades e valor previsto por ETN (prob. ≥75%) - clique para filtrar</p>
+          <p className="text-xs text-muted-foreground mb-4">Oportunidades e valor previsto por ETN (prob. ≥75%) - clique para ver detalhes</p>
           {etnTop10.length > 0 ? (
             <div style={{ height: 280 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -232,10 +259,11 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
               Nenhum ETN com oportunidades ≥75%
             </div>
           )}
+          <DateRangeFooter data={data} />
         </div>
       </div>
 
-      {/* Motivos de Perda (Item 9) */}
+      {/* Motivos de Perda */}
       {lossReasons.length > 0 && (
         <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
           <h3 className="text-sm font-bold text-foreground mb-1">Top 10 Motivos de Perda</h3>
@@ -263,6 +291,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
               </BarChart>
             </ResponsiveContainer>
           </div>
+          <DateRangeFooter data={data} />
         </div>
       )}
     </div>

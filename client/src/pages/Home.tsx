@@ -1,7 +1,7 @@
 import {
   Upload, AlertCircle, TrendingUp, Target, Zap, DollarSign,
   Loader, BarChart3, Trophy, XCircle, FileText, RotateCcw,
-  Calendar, AlertTriangle,
+  Calendar, AlertTriangle, Search,
 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useDataProcessor, type Opportunity, type Action, type ProcessedRecord, type MissingAgendaRecord } from '@/hooks/useDataProcessor';
@@ -84,6 +84,9 @@ export default function Home() {
   
   // Estado para filtro ETN nas Agendas Faltantes
   const [selETNMissing, setSelETNMissing] = useState<string[]>([]);
+  // Item 10: Pesquisa e filtros na grid de agendas faltantes
+  const [missingSearch, setMissingSearch] = useState('');
+  const [missingFilterEtapa, setMissingFilterEtapa] = useState('');
 
   // Estado para modal de detalhe do ETN
   const [selectedETNDetail, setSelectedETNDetail] = useState<string | null>(null);
@@ -147,8 +150,22 @@ export default function Home() {
     if (chartFilter && chartFilter.field === 'etnMissing') {
       filtered = filtered.filter(r => r.etn === chartFilter.value);
     }
+    // Item 10: Filtro por etapa
+    if (missingFilterEtapa) {
+      filtered = filtered.filter(r => r.etapa === missingFilterEtapa);
+    }
+    // Item 10: Pesquisa textual
+    if (missingSearch) {
+      const term = missingSearch.toLowerCase();
+      filtered = filtered.filter(r =>
+        r.oppId.toLowerCase().includes(term) ||
+        r.conta.toLowerCase().includes(term) ||
+        r.etn.toLowerCase().includes(term) ||
+        r.etapa.toLowerCase().includes(term)
+      );
+    }
     return filtered;
-  }, [missingAgendas, chartFilter, selETNMissing]);
+  }, [missingAgendas, chartFilter, selETNMissing, missingFilterEtapa, missingSearch]);
 
   // ETN Top 10 filtrado
   const etnTop10Filtered = useMemo(() => {
@@ -191,15 +208,25 @@ export default function Home() {
     const seenPerdidas = new Set<string>();
     let totalAgendas = 0;
     let totalForecast = 0;
+    let ganhasValor = 0;
+    let perdidasValor = 0;
 
     for (const r of filteredData) {
       if (!seenOps.has(r.oppId)) {
         seenOps.add(r.oppId);
-        if (r.etapa === 'Fechada e Ganha') seenGanhas.add(r.oppId);
-        if (r.etapa === 'Fechada e Perdida') seenPerdidas.add(r.oppId);
+        if (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR') {
+          seenGanhas.add(r.oppId);
+          ganhasValor += r.valorFechado; // Item 4: Usar Valor Fechado
+        }
+        if (r.etapa === 'Fechada e Perdida') {
+          seenPerdidas.add(r.oppId);
+          perdidasValor += r.valorPrevisto;
+        }
       }
       totalAgendas += r.agenda;
-      if (r.probNum >= 75) totalForecast += r.valorPrevisto;
+      if (r.probNum >= 75 && r.etapa !== 'Fechada e Ganha' && r.etapa !== 'Fechada e Ganha TR' && r.etapa !== 'Fechada e Perdida') {
+        totalForecast += r.valorPrevisto;
+      }
     }
 
     const winRate = seenGanhas.size + seenPerdidas.size > 0 ? ((seenGanhas.size / (seenGanhas.size + seenPerdidas.size)) * 100).toFixed(1) : '0';
@@ -210,6 +237,8 @@ export default function Home() {
       winRate,
       totalAgendas,
       totalForecast,
+      ganhasValor,
+      perdidasValor,
     };
   }, [kpis, filteredData]);
 
@@ -369,7 +398,7 @@ export default function Home() {
         ) : (
           <div className="space-y-6">
             {/* KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               <KPICard
                 title="OPORTUNIDADES"
                 value={filteredKPIs?.totalOps ?? 0}
@@ -383,13 +412,27 @@ export default function Home() {
                 color="green"
               />
               <KPICard
-                title="OPORTUNIDADES FECHAMENTO (≥75%)"
+                title="FECHADA E GANHA"
+                value={`${filteredKPIs?.ganhas ?? 0}`}
+                subtitle={`R$ ${((filteredKPIs?.ganhasValor ?? 0) / 1000).toFixed(0)}K`}
+                icon={<Trophy size={20} />}
+                color="green"
+              />
+              <KPICard
+                title="FECHADA E PERDIDA"
+                value={`${filteredKPIs?.perdidas ?? 0}`}
+                subtitle={`R$ ${((filteredKPIs?.perdidasValor ?? 0) / 1000).toFixed(0)}K`}
+                icon={<XCircle size={20} />}
+                color="red"
+              />
+              <KPICard
+                title="WIN RATE"
                 value={`${filteredKPIs?.winRate ?? '0'}%`}
                 icon={<TrendingUp size={20} />}
                 color="amber"
               />
               <KPICard
-                title="FORECAST FECHAMENTO (≥75%)"
+                title="FORECAST (≥75%)"
                 value={`R$ ${((filteredKPIs?.totalForecast ?? 0) / 1e6).toFixed(1)}M`}
                 icon={<DollarSign size={20} />}
                 color="purple"
@@ -506,6 +549,38 @@ export default function Home() {
 
                 {/* Grid de Agendas Faltantes */}
                 <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
+                  {/* Item 10: Barra de pesquisa e filtros */}
+                  <div className="p-4 border-b border-gray-200 flex flex-wrap items-center gap-3">
+                    <div className="relative">
+                      <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Pesquisar ID, conta, ETN..."
+                        value={missingSearch}
+                        onChange={(e) => setMissingSearch(e.target.value)}
+                        className="pl-8 pr-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none w-56"
+                      />
+                    </div>
+                    <select
+                      value={missingFilterEtapa}
+                      onChange={(e) => setMissingFilterEtapa(e.target.value)}
+                      className="text-xs border border-gray-300 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-amber-500 outline-none"
+                    >
+                      <option value="">Todas Etapas</option>
+                      {Array.from(new Set(missingAgendas.map(r => r.etapa))).sort().map(e => (
+                        <option key={e} value={e}>{e}</option>
+                      ))}
+                    </select>
+                    <span className="ml-auto text-xs text-gray-500">{missingAgendasFiltered.length} de {missingAgendas.length} registros</span>
+                    {(missingSearch || missingFilterEtapa) && (
+                      <button
+                        onClick={() => { setMissingSearch(''); setMissingFilterEtapa(''); }}
+                        className="text-xs font-semibold text-red-600 hover:text-red-800 underline"
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
@@ -547,6 +622,20 @@ export default function Home() {
                       Exibindo 200 de {missingAgendasFiltered.length} registros
                     </div>
                   )}
+                  {/* Item 9: Rodapé com intervalo de datas */}
+                  <div className="px-4 py-1.5 bg-gray-50 text-[10px] text-gray-400 text-center border-t border-gray-100">
+                    Período dos filtros aplicados: {(() => {
+                      const mNames = ['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+                      let minYM = Infinity, maxYM = 0, minL = '', maxL = '';
+                      for (const r of filteredData) {
+                        if (!r.anoPrevisao || !r.mesPrevisaoNum) continue;
+                        const ym = parseInt(r.anoPrevisao) * 100 + r.mesPrevisaoNum;
+                        if (ym < minYM) { minYM = ym; minL = `${mNames[r.mesPrevisaoNum]}/${r.anoPrevisao}`; }
+                        if (ym > maxYM) { maxYM = ym; maxL = `${mNames[r.mesPrevisaoNum]}/${r.anoPrevisao}`; }
+                      }
+                      return minYM === Infinity ? 'Sem dados' : `${minL} — ${maxL}`;
+                    })()}
+                  </div>
                 </div>
               </div>
             )}

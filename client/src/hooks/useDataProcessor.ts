@@ -9,16 +9,17 @@ export interface ProcessedRecord {
   contaId: string;
   representante: string;
   responsavel: string;
-  etn: string; // Renomeado de usuarioAcao → ETN
+  etn: string;
   etapa: string;
   probabilidade: string;
   probNum: number;
   anoPrevisao: string;
-  mesPrevisao: string;
+  mesPrevisao: string; // Agora armazena nome do mês (Janeiro, Fevereiro...)
+  mesPrevisaoNum: number; // Número do mês para ordenação
   mesFech: string;
   valorPrevisto: number;
   valorFechado: number;
-  agenda: number; // Renomeado de qtdAcoes → Agenda
+  agenda: number;
   tipoOportunidade: string;
   subtipoOportunidade: string;
   origemOportunidade: string;
@@ -85,11 +86,17 @@ function trim(val: any): string {
   return val ? val.toString().trim() : '';
 }
 
+// Extrair número sequencial do ID da oportunidade (ex: "OPP001" → 1, "12345" → 12345)
+function extractSequential(oppId: string): number {
+  const nums = oppId.replace(/[^0-9]/g, '');
+  return nums ? parseInt(nums) : 0;
+}
+
 export function useDataProcessor(opportunities: Opportunity[], actions: Action[]) {
   const combinedData = useMemo(() => {
     if (!opportunities.length && !actions.length) return null;
 
-    // INDEX: Ações agrupadas APENAS por Oportunidade ID (Item 12: remover fallback por Conta ID)
+    // INDEX: Ações agrupadas APENAS por Oportunidade ID
     const actionsByOppId = new Map<string, Action[]>();
     for (const act of actions) {
       const oppId = trim(act['Oportunidade ID']);
@@ -100,7 +107,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
     }
 
     // INDEX: Para Agendas Faltantes - mapear ETN → Conta ID → Oportunidades com compromissos
-    const etnContaOppMap = new Map<string, Map<string, Set<string>>>(); // etn → contaId → Set<oppId>
+    const etnContaOppMap = new Map<string, Map<string, Set<string>>>();
 
     // PROCESSAMENTO: Desdobramento 1:N
     const records: ProcessedRecord[] = [];
@@ -114,11 +121,9 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
       const valorPrevisto = parseValue(opp['Valor Previsto']);
       const valorFechado = parseValue(opp['Valor Fechado']);
 
-      // Encontrar ações vinculadas APENAS por Oportunidade ID
       const linkedActions = actionsByOppId.get(oppId) || [];
 
       if (linkedActions.length > 0) {
-        // Agrupar por ETN (usuário)
         const byUser = new Map<string, Action[]>();
         for (const act of linkedActions) {
           const user = trim(act['Usuario']) || trim(act['Responsavel']) || trim(act['Usuário Ação']) || 'Sem Agenda';
@@ -126,9 +131,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
           byUser.get(user)!.push(act);
         }
 
-        // Desdobrar: 1 linha por ETN
         for (const [user, userActions] of Array.from(byUser.entries())) {
-          // Registrar no mapa ETN → Conta → Opp (para Agendas Faltantes)
           if (contaId && user !== 'Sem Agenda') {
             if (!etnContaOppMap.has(user)) etnContaOppMap.set(user, new Map());
             const contaMap = etnContaOppMap.get(user)!;
@@ -136,7 +139,6 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
             contaMap.get(contaId)!.add(oppId);
           }
 
-          // Categoria mais frequente
           const catCount = new Map<string, number>();
           const actCount = new Map<string, number>();
           for (const a of userActions) {
@@ -157,7 +159,8 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
             probabilidade: prob.str,
             probNum: prob.num,
             anoPrevisao: year,
-            mesPrevisao: monthNum.toString(),
+            mesPrevisao: month, // CORRIGIDO: agora armazena nome do mês
+            mesPrevisaoNum: monthNum,
             mesFech: month,
             valorPrevisto, valorFechado,
             agenda: userActions.length,
@@ -175,7 +178,6 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
           });
         }
       } else {
-        // Oportunidade sem ações
         records.push({
           oppId, conta, contaId,
           representante: trim(opp['Representante']),
@@ -185,7 +187,8 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
           probabilidade: prob.str,
           probNum: prob.num,
           anoPrevisao: year,
-          mesPrevisao: monthNum.toString(),
+          mesPrevisao: month, // CORRIGIDO: agora armazena nome do mês
+          mesPrevisaoNum: monthNum,
           mesFech: month,
           valorPrevisto, valorFechado,
           agenda: 0,
@@ -204,16 +207,17 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
       }
     }
 
-    // AGENDAS FALTANTES (Item 14):
+    // AGENDAS FALTANTES (CORRIGIDO Item 2):
     // Para cada ETN que atuou em oportunidade de um cliente,
     // verificar se há outra oportunidade do mesmo cliente SEM compromisso desse ETN
+    // NOVA LÓGICA: Usar campo sequencial - considerar apenas oportunidades com ID sequencial
+    // MAIOR que a oportunidade original onde o compromisso foi registrado
     const missingAgendas: MissingAgendaRecord[] = [];
     const oppById = new Map<string, Opportunity>();
     for (const opp of opportunities) {
       oppById.set(trim(opp['Oportunidade ID']), opp);
     }
 
-    // Agrupar oportunidades por Conta ID
     const oppsByContaId = new Map<string, Opportunity[]>();
     for (const opp of opportunities) {
       const cid = trim(opp['Conta ID']);
@@ -225,21 +229,32 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
 
     for (const [etn, contaMap] of Array.from(etnContaOppMap.entries())) {
       for (const [contaId, oppIdsWithAction] of Array.from(contaMap.entries())) {
+        // Encontrar o maior sequencial entre as oportunidades com compromisso
+        let maxSeqWithAction = 0;
+        let bestPrevOppId = '';
+        for (const oid of Array.from(oppIdsWithAction)) {
+          const seq = extractSequential(oid);
+          if (seq > maxSeqWithAction) {
+            maxSeqWithAction = seq;
+            bestPrevOppId = oid;
+          }
+        }
+
         const allOppsForConta = oppsByContaId.get(contaId) || [];
         for (const opp of allOppsForConta) {
           const thisOppId = trim(opp['Oportunidade ID']);
-          // Se este ETN NÃO tem compromisso nesta oportunidade
-          if (!oppIdsWithAction.has(thisOppId)) {
+          const thisSeq = extractSequential(thisOppId);
+
+          // NOVA LÓGICA: Só considerar oportunidades com sequencial MAIOR que a original
+          if (!oppIdsWithAction.has(thisOppId) && thisSeq > maxSeqWithAction) {
             const etapa = trim(opp['Etapa']);
-            // Só considerar oportunidades abertas (não fechadas)
+            // Só considerar oportunidades abertas
             if (etapa !== 'Fechada e Ganha' && etapa !== 'Fechada e Ganha TR' && etapa !== 'Fechada e Perdida') {
               const { month, year } = parseDate(trim(opp['Previsão de Fechamento']));
               const prob = cleanProb(opp['Prob.']);
-              // Encontrar a oportunidade anterior com compromisso
-              const prevOppId = Array.from(oppIdsWithAction)[0];
-              const prevOpp = oppById.get(prevOppId);
+              const prevOpp = oppById.get(bestPrevOppId);
               const prevEtapa = prevOpp ? trim(prevOpp['Etapa']) : '';
-              const prevActions = actionsByOppId.get(prevOppId) || [];
+              const prevActions = actionsByOppId.get(bestPrevOppId) || [];
               const prevAgendaCount = prevActions.filter(a => {
                 const u = trim(a['Usuario']) || trim(a['Responsavel']) || trim(a['Usuário Ação']);
                 return u === etn;
@@ -255,7 +270,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
                 valorPrevisto: parseValue(opp['Valor Previsto']),
                 mesFech: month,
                 anoPrevisao: year,
-                oppAnteriorId: prevOppId,
+                oppAnteriorId: bestPrevOppId,
                 oppAnteriorEtapa: prevEtapa,
                 agendaAnterior: prevAgendaCount,
               });
@@ -273,7 +288,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
     let ganhasCount = 0;
     let perdidasCount = 0;
     let abertasCount = 0;
-    let ganhasValor = 0;
+    let ganhasValor = 0; // Item 4: Usar valorFechado para ganhas
     let perdidasValor = 0;
     let abertasValor = 0;
 
@@ -289,7 +304,8 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
       if (prob.num >= 75) hotOpsIds.add(id);
       const etapa = trim(opp['Etapa']);
       if (etapa === 'Fechada e Ganha' || etapa === 'Fechada e Ganha TR') {
-        ganhasCount++; ganhasValor += val;
+        ganhasCount++;
+        ganhasValor += valFech; // Item 4: Usar Valor Fechado para ganhas
       } else if (etapa === 'Fechada e Perdida') {
         perdidasCount++; perdidasValor += val;
       } else {
@@ -297,7 +313,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
       }
     }
 
-    // FORECAST FECHAMENTO ≥75% (Item 7): Valor previsto de oportunidades abertas com prob ≥ 75%
+    // FORECAST FECHAMENTO ≥75%
     let forecastFechamento75 = 0;
     const forecastSeen = new Set<string>();
     for (const opp of opportunities) {
@@ -313,7 +329,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
       }
     }
 
-    // Motivos de perda (baseado em oportunidades únicas)
+    // Motivos de perda
     const motivosPerda = new Map<string, number>();
     const motivosSeen = new Set<string>();
     for (const opp of opportunities) {
@@ -342,7 +358,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
       funnelData.set(etapa, existing);
     }
 
-    // Funil de Forecast (Item 8): Oportunidades com prob ≥ 75%, agrupadas por etapa
+    // Funil de Forecast
     const forecastFunnel = new Map<string, { count: number; value: number; avgProb: number; totalProb: number }>();
     const forecastFunnelSeen = new Set<string>();
     for (const opp of opportunities) {
@@ -361,14 +377,13 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
         forecastFunnel.set(etapa, existing);
       }
     }
-    // Calcular média de probabilidade
     for (const [, data] of Array.from(forecastFunnel.entries())) {
       data.avgProb = data.count > 0 ? data.totalProb / data.count : 0;
     }
 
-    // ETN Top 10 (Item 10): Comparar qtd oportunidades e valor previsto por ETN (prob ≥ 75%)
+    // ETN Top 10
     const etnData = new Map<string, { count: number; value: number }>();
-    const etnSeen = new Map<string, Set<string>>(); // etn → Set<oppId>
+    const etnSeen = new Map<string, Set<string>>();
     for (const r of records) {
       if (r.etn === 'Sem Agenda') continue;
       if (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR' || r.etapa === 'Fechada e Perdida') continue;
@@ -382,7 +397,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
       etnData.set(r.etn, e);
     }
 
-    // Opções de filtro
+    // Opções de filtro - CORRIGIDO: meses agora usam nome do mês
     const filterSets = {
       years: new Set<string>(),
       months: new Set<string>(),
@@ -400,7 +415,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
 
     for (const r of records) {
       if (r.anoPrevisao) filterSets.years.add(r.anoPrevisao);
-      if (r.mesFech && r.mesFech !== '') filterSets.months.add(r.mesFech);
+      if (r.mesPrevisao && r.mesPrevisao !== '') filterSets.months.add(r.mesPrevisao);
       if (r.representante) filterSets.representantes.add(r.representante);
       if (r.responsavel) filterSets.responsaveis.add(r.responsavel);
       if (r.etn) filterSets.etns.add(r.etn);
