@@ -12,6 +12,7 @@ import { AnalyticsTable } from '@/components/AnalyticsTable';
 import { ChartsSection } from '@/components/ChartsSection';
 import { ProgressBar } from '@/components/ProgressBar';
 import { ETNDetailModal } from '@/components/ETNDetailModal';
+import { ETNComparativeAnalysis } from '@/components/ETNComparativeAnalysis';
 import { DEMO_DATA } from '@/lib/demoData';
 
 export default function Home() {
@@ -652,6 +653,13 @@ export default function Home() {
           </div>
         )}
 
+        {/* Análise Comparativa de ETNs */}
+        {opportunities.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-2xl font-bold text-foreground mb-6">Análise Comparativa de ETNs</h2>
+            <ETNComparativeAnalysis data={filteredData} actions={actions} />
+          </div>
+        )}
         {/* Modal de Detalhe do ETN */}
         {selectedETNDetail && (
           <ETNDetailModal
