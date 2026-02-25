@@ -2,6 +2,7 @@ import type { ProcessedRecord } from '@/hooks/useDataProcessor';
 
 export const DEMO_DATA: ProcessedRecord[] = [
   // ETN: João Silva - 5 oportunidades
+  // Empresa A tem 2 oportunidades: OPP001 (com agenda) e OPP013 (sem agenda, sequencial maior)
   {
     oppId: 'OPP001',
     conta: 'Empresa A',
@@ -57,7 +58,7 @@ export const DEMO_DATA: ProcessedRecord[] = [
     cidade: 'Rio de Janeiro',
     estado: 'RJ',
     cnaeSegmento: 'Consultoria',
-    categoriaCompromisso: 'Reunião',
+    categoriaCompromisso: 'Visita',
     atividadeCompromisso: 'Negociação',
   },
   {
@@ -115,7 +116,7 @@ export const DEMO_DATA: ProcessedRecord[] = [
     cidade: 'Brasília',
     estado: 'DF',
     cnaeSegmento: 'Governo',
-    categoriaCompromisso: 'Reunião',
+    categoriaCompromisso: 'Ligação',
     atividadeCompromisso: 'Descoberta',
   },
   {
@@ -149,6 +150,7 @@ export const DEMO_DATA: ProcessedRecord[] = [
   },
 
   // ETN: Marina Costa - 4 oportunidades
+  // Empresa F tem 2 oportunidades: OPP006 (com agenda) e OPP014 (sem agenda, sequencial maior)
   {
     oppId: 'OPP006',
     conta: 'Empresa F',
@@ -204,7 +206,7 @@ export const DEMO_DATA: ProcessedRecord[] = [
     cidade: 'Porto Alegre',
     estado: 'RS',
     cnaeSegmento: 'Logística',
-    categoriaCompromisso: 'Reunião',
+    categoriaCompromisso: 'Visita',
     atividadeCompromisso: 'Negociação',
   },
   {
@@ -262,11 +264,12 @@ export const DEMO_DATA: ProcessedRecord[] = [
     cidade: 'Manaus',
     estado: 'AM',
     cnaeSegmento: 'Tecnologia',
-    categoriaCompromisso: 'Reunião',
+    categoriaCompromisso: 'Ligação',
     atividadeCompromisso: 'Descoberta',
   },
 
   // ETN: Rafael Mendes - 3 oportunidades
+  // Empresa J tem 2 oportunidades: OPP010 (com agenda) e OPP015 (sem agenda, sequencial maior)
   {
     oppId: 'OPP010',
     conta: 'Empresa J',
@@ -322,7 +325,7 @@ export const DEMO_DATA: ProcessedRecord[] = [
     cidade: 'Brasília',
     estado: 'DF',
     cnaeSegmento: 'Governo',
-    categoriaCompromisso: 'Reunião',
+    categoriaCompromisso: 'Visita',
     atividadeCompromisso: 'Negociação',
   },
   {
@@ -353,5 +356,97 @@ export const DEMO_DATA: ProcessedRecord[] = [
     cnaeSegmento: 'Educação',
     categoriaCompromisso: 'Reunião',
     atividadeCompromisso: 'Descoberta',
+  },
+
+  // Oportunidades SEM agenda (para cenário de agendas faltantes)
+  // Empresa A - nova oportunidade após OPP001 (João Silva atuou em OPP001)
+  {
+    oppId: 'OPP013',
+    conta: 'Empresa A',
+    contaId: 'CONTA001',
+    representante: 'Maria Santos',
+    responsavel: 'Carlos',
+    etn: 'Sem Agenda',
+    etapa: 'Qualificação',
+    probabilidade: '30%',
+    probNum: 30,
+    anoPrevisao: '2026',
+    mesPrevisao: 'Março',
+    mesPrevisaoNum: 3,
+    mesFech: 'Março',
+    valorPrevisto: 120000,
+    valorFechado: 0,
+    agenda: 0,
+    tipoOportunidade: 'Venda',
+    subtipoOportunidade: 'Produto',
+    origemOportunidade: 'Inbound',
+    motivoFechamento: '',
+    motivoPerda: '',
+    concorrentes: 'Nenhum',
+    cidade: 'São Paulo',
+    estado: 'SP',
+    cnaeSegmento: 'Tecnologia',
+    categoriaCompromisso: '',
+    atividadeCompromisso: '',
+  },
+  // Empresa F - nova oportunidade após OPP006 (Marina Costa atuou em OPP006)
+  {
+    oppId: 'OPP014',
+    conta: 'Empresa F',
+    contaId: 'CONTA006',
+    representante: 'Marina Costa',
+    responsavel: 'Diego',
+    etn: 'Sem Agenda',
+    etapa: 'Negociação',
+    probabilidade: '70%',
+    probNum: 70,
+    anoPrevisao: '2026',
+    mesPrevisao: 'Março',
+    mesPrevisaoNum: 3,
+    mesFech: 'Março',
+    valorPrevisto: 160000,
+    valorFechado: 0,
+    agenda: 0,
+    tipoOportunidade: 'Venda',
+    subtipoOportunidade: 'Serviço',
+    origemOportunidade: 'Inbound',
+    motivoFechamento: '',
+    motivoPerda: '',
+    concorrentes: 'Nenhum',
+    cidade: 'Curitiba',
+    estado: 'PR',
+    cnaeSegmento: 'Manufatura',
+    categoriaCompromisso: '',
+    atividadeCompromisso: '',
+  },
+  // Empresa J - nova oportunidade após OPP010 (Rafael Mendes atuou em OPP010)
+  {
+    oppId: 'OPP015',
+    conta: 'Empresa J',
+    contaId: 'CONTA010',
+    representante: 'Rafael Mendes',
+    responsavel: 'Juliana',
+    etn: 'Sem Agenda',
+    etapa: 'Prospecção',
+    probabilidade: '20%',
+    probNum: 20,
+    anoPrevisao: '2026',
+    mesPrevisao: 'Abril',
+    mesPrevisaoNum: 4,
+    mesFech: 'Abril',
+    valorPrevisto: 90000,
+    valorFechado: 0,
+    agenda: 0,
+    tipoOportunidade: 'Venda',
+    subtipoOportunidade: 'Produto',
+    origemOportunidade: 'Outbound',
+    motivoFechamento: '',
+    motivoPerda: '',
+    concorrentes: 'Nenhum',
+    cidade: 'Recife',
+    estado: 'PE',
+    cnaeSegmento: 'Consultoria',
+    categoriaCompromisso: '',
+    atividadeCompromisso: '',
   },
 ];

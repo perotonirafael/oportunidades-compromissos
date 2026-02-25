@@ -215,8 +215,8 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                 <YAxis tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <Tooltip {...tooltipStyle} formatter={(v: number) => [formatCurrency(v)]} />
                 <Legend wrapperStyle={{ fontSize: '12px' }} />
-                <Line type="monotone" dataKey="previsto" stroke="#10b981" strokeWidth={2.5} dot={false} name="Previsto" />
-                <Line type="monotone" dataKey="fechado" stroke="#f59e0b" strokeWidth={2.5} dot={false} name="Fechado" />
+                <Line type="monotone" dataKey="previsto" stroke="#f59e0b" strokeWidth={2.5} dot={false} name="Previsto" />
+                <Line type="monotone" dataKey="fechado" stroke="#10b981" strokeWidth={2.5} dot={false} name="Fechado" />
               </LineChart>
             </ResponsiveContainer>
           </div>

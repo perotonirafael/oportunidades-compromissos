@@ -56,13 +56,23 @@ export default function Home() {
         'Estado': d.estado,
         'CNAE Segmento': d.cnaeSegmento,
       })));
-      setActions(DEMO_DATA.map(d => ({
-        'Oportunidade ID': d.oppId,
-        'Usuario': d.etn,
-        'Qtd. Ações': d.agenda,
-        'Categoria Compromisso': d.categoriaCompromisso,
-        'Atividade Compromisso': d.atividadeCompromisso,
-      })));
+      // Gerar ações individuais (1 registro por agenda) com datas e categorias
+      const demoActions: any[] = [];
+      for (const d of DEMO_DATA) {
+        if (d.etn === 'Sem Agenda' || d.agenda === 0) continue;
+        for (let i = 0; i < d.agenda; i++) {
+          const day = Math.min(28, i + 5);
+          const mesNum = d.mesPrevisaoNum.toString().padStart(2, '0');
+          demoActions.push({
+            'Oportunidade ID': d.oppId,
+            'Usuario': d.etn,
+            'Categoria': d.categoriaCompromisso || 'Reunião',
+            'Atividade': d.atividadeCompromisso || 'Geral',
+            'Data': `${day.toString().padStart(2, '0')}/${mesNum}/${d.anoPrevisao}`,
+          });
+        }
+      }
+      setActions(demoActions);
     }, 500);
   }, []);
 
@@ -647,6 +657,7 @@ export default function Home() {
           <ETNDetailModal
             etn={selectedETNDetail}
             data={processedData}
+            actions={actions}
             onClose={() => setSelectedETNDetail(null)}
           />
         )}
