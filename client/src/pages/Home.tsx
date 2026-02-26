@@ -3,7 +3,7 @@ import {
   Loader, BarChart3, Trophy, XCircle, FileText, RotateCcw,
   Calendar, AlertTriangle, Search,
 } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useTransition } from 'react';
 import { useDataProcessor, type Opportunity, type Action, type ProcessedRecord, type MissingAgendaRecord } from '@/hooks/useDataProcessor';
 import { useFileProcessor } from '@/hooks/useFileProcessor';
 import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
@@ -257,14 +257,19 @@ export default function Home() {
     setChartFilter({ field, value });
   }, []);
 
+  const [isPending, startTransition] = useTransition();
+
   const handleLoad = useCallback(async () => {
     if (!oppFile && !actFile) return;
     setError(null);
     try {
       const result = await processFiles(oppFile, actFile);
       if (result) {
-        setOpportunities(result.opportunities);
-        setActions(result.actions);
+        // Usar startTransition para não bloquear a UI durante processamento de dados
+        startTransition(() => {
+          setOpportunities(result.opportunities);
+          setActions(result.actions);
+        });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao processar arquivos');
@@ -374,10 +379,10 @@ export default function Home() {
             <div className="flex justify-center gap-4">
               <button
                 onClick={handleLoad}
-                disabled={processingState.isProcessing || (!oppFile && !actFile)}
+                disabled={processingState.isProcessing || isPending || (!oppFile && !actFile)}
                 className="flex items-center gap-2 px-8 py-3 text-sm font-bold rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-lg shadow-emerald-200 hover:shadow-xl hover:shadow-emerald-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:scale-[1.02]"
               >
-                {processingState.isProcessing ? (
+                {processingState.isProcessing || isPending ? (
                   <><Loader className="animate-spin" size={18} /> Processando...</>
                 ) : (
                   <><Upload size={18} /> Carregar e Analisar</>
