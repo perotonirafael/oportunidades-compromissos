@@ -1,9 +1,9 @@
 import {
   Upload, AlertCircle, TrendingUp, Target, Zap, DollarSign,
   Loader, BarChart3, Trophy, XCircle, FileText, RotateCcw,
-  Calendar, AlertTriangle, Search,
+  Calendar, AlertTriangle, Search, Database, Trash2, Clock,
 } from 'lucide-react';
-import { useCallback, useMemo, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { useDataProcessor, type Opportunity, type Action, type ProcessedRecord, type MissingAgendaRecord } from '@/hooks/useDataProcessor';
 import { useFileProcessor } from '@/hooks/useFileProcessor';
 import { useWorkerDataProcessor } from '@/hooks/useWorkerDataProcessor';
@@ -15,6 +15,7 @@ import { ProgressBar } from '@/components/ProgressBar';
 import { ETNDetailModal } from '@/components/ETNDetailModal';
 import { ETNComparativeAnalysis } from '@/components/ETNComparativeAnalysis';
 import { DEMO_DATA } from '@/lib/demoData';
+import { saveToCache, loadFromCache, clearCache, getCacheInfo } from '@/hooks/useDataCache';
 
 export default function Home() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
@@ -115,6 +116,22 @@ export default function Home() {
 
   // Estado para modal de detalhe do ETN
   const [selectedETNDetail, setSelectedETNDetail] = useState<string | null>(null);
+
+  // Cache de dados
+  const [cacheInfo, setCacheInfo] = useState<{
+    exists: boolean;
+    timestamp?: number;
+    oppFileName?: string;
+    actFileName?: string;
+    oppCount?: number;
+    actCount?: number;
+  } | null>(null);
+  const [isLoadingCache, setIsLoadingCache] = useState(false);
+
+  // Verificar cache ao montar
+  useEffect(() => {
+    getCacheInfo().then(info => setCacheInfo(info));
+  }, []);
 
   // useDataProcessor APENAS para dados leves (demo) - NÃO para arquivos reais
   const normalResult = useDataProcessor(lightOpportunities, lightActions);
@@ -287,6 +304,26 @@ export default function Home() {
       // Enviar arquivos DIRETAMENTE ao Web Worker (parsing + processamento fora da thread principal)
       const workerRes = await processFilesWithWorker(oppFile, actFile);
       setWorkerResult(workerRes);
+      // Salvar no cache
+      try {
+        await saveToCache(
+          workerRes,
+          oppFile?.name || '',
+          actFile?.name || '',
+          workerRes?.records?.length || 0,
+          workerRes?.kpis?.totalAgendas || 0
+        );
+        setCacheInfo({
+          exists: true,
+          timestamp: Date.now(),
+          oppFileName: oppFile?.name || '',
+          actFileName: actFile?.name || '',
+          oppCount: workerRes?.records?.length || 0,
+          actCount: workerRes?.kpis?.totalAgendas || 0,
+        });
+      } catch (cacheErr) {
+        console.warn('Erro ao salvar cache:', cacheErr);
+      }
     } catch (err) {
       console.error('Erro no Web Worker:', err);
       setError(err instanceof Error ? err.message : 'Erro ao processar arquivos');
@@ -308,6 +345,33 @@ export default function Home() {
       setActFileName(file.name);
     }
   };
+
+  // Carregar dados do cache
+  const handleLoadCache = useCallback(async () => {
+    setIsLoadingCache(true);
+    setError(null);
+    setUseWorkerOnly(true);
+    setLightOpportunities([]);
+    setLightActions([]);
+    try {
+      const cached = await loadFromCache();
+      if (cached && cached.result) {
+        setWorkerResult(cached.result);
+      } else {
+        setError('Cache não encontrado ou corrompido. Faça upload dos arquivos novamente.');
+      }
+    } catch (err) {
+      setError('Erro ao carregar cache. Faça upload dos arquivos novamente.');
+    } finally {
+      setIsLoadingCache(false);
+    }
+  }, []);
+
+  // Limpar cache
+  const handleClearCache = useCallback(async () => {
+    await clearCache();
+    setCacheInfo({ exists: false });
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50">
@@ -441,6 +505,51 @@ export default function Home() {
             <p className="text-center text-xs text-muted-foreground mt-4">
               Suporta .xlsx, .xls e .csv (separador ; ou ,) &middot; Até 200K registros
             </p>
+
+            {/* Card de Cache */}
+            {cacheInfo?.exists && (
+              <div className="mt-6 bg-white rounded-xl p-5 border-2 border-emerald-200 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-lg bg-gradient-to-br from-emerald-100 to-green-100">
+                      <Database className="text-emerald-600" size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-emerald-800">Dados em Cache</h3>
+                      <p className="text-xs text-emerald-600/70">
+                        {cacheInfo.oppFileName && <span>{cacheInfo.oppFileName}</span>}
+                        {cacheInfo.actFileName && <span> + {cacheInfo.actFileName}</span>}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                        <Clock size={10} />
+                        {cacheInfo.timestamp ? new Date(cacheInfo.timestamp).toLocaleString('pt-BR') : ''}
+                        {cacheInfo.oppCount ? ` · ${cacheInfo.oppCount.toLocaleString('pt-BR')} registros` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleLoadCache}
+                      disabled={isLoadingCache}
+                      className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-md hover:shadow-lg disabled:opacity-50 transition-all hover:scale-[1.02]"
+                    >
+                      {isLoadingCache ? (
+                        <><Loader className="animate-spin" size={14} /> Carregando...</>
+                      ) : (
+                        <><Database size={14} /> Carregar do Cache</>
+                      )}
+                    </button>
+                    <button
+                      onClick={handleClearCache}
+                      className="flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-all"
+                      title="Limpar cache"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {error && (
               <div className="mt-6 p-4 rounded-xl bg-red-50 border border-red-200 flex gap-3">
