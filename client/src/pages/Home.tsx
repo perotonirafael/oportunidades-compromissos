@@ -6,6 +6,7 @@ import {
 import { useCallback, useMemo, useState, useTransition } from 'react';
 import { useDataProcessor, type Opportunity, type Action, type ProcessedRecord, type MissingAgendaRecord } from '@/hooks/useDataProcessor';
 import { useFileProcessor } from '@/hooks/useFileProcessor';
+import { useWorkerDataProcessor } from '@/hooks/useWorkerDataProcessor';
 import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
 import { KPICard } from '@/components/KPICard';
 import { AnalyticsTable } from '@/components/AnalyticsTable';
@@ -26,6 +27,8 @@ export default function Home() {
   const [actFileName, setActFileName] = useState('');
 
   const { state: processingState, processFiles, resetState } = useFileProcessor();
+  const { processData: processDataWithWorker, isProcessing: isWorkerProcessing } = useWorkerDataProcessor();
+  const [workerResult, setWorkerResult] = useState<any>(null);
 
   // Função para carregar dados de demonstração
   const handleLoadDemo = useCallback(() => {
@@ -102,7 +105,9 @@ export default function Home() {
   // Estado para modal de detalhe do ETN
   const [selectedETNDetail, setSelectedETNDetail] = useState<string | null>(null);
 
-  const result = useDataProcessor(opportunities, actions);
+  // Usar resultado do Web Worker se disponível, caso contrário usar hook normal
+  const normalResult = useDataProcessor(opportunities, actions);
+  const result = workerResult || normalResult;
 
   const processedData = result?.records ?? [];
   const missingAgendas = result?.missingAgendas ?? [];
@@ -155,20 +160,20 @@ export default function Home() {
     let filtered = missingAgendas;
     // Filtro ETN do dropdown
     if (selETNMissing.length > 0) {
-      filtered = filtered.filter(r => selETNMissing.includes(r.etn));
+      filtered = filtered.filter((r: any) => selETNMissing.includes(r.etn));
     }
     // Filtro de clique no gráfico
     if (chartFilter && chartFilter.field === 'etnMissing') {
-      filtered = filtered.filter(r => r.etn === chartFilter.value);
+      filtered = filtered.filter((r: any) => r.etn === chartFilter.value);
     }
     // Item 10: Filtro por etapa
     if (missingFilterEtapa) {
-      filtered = filtered.filter(r => r.etapa === missingFilterEtapa);
+      filtered = filtered.filter((r: any) => r.etapa === missingFilterEtapa);
     }
     // Item 10: Pesquisa textual
     if (missingSearch) {
       const term = missingSearch.toLowerCase();
-      filtered = filtered.filter(r =>
+      filtered = filtered.filter((r: any) =>
         r.oppId.toLowerCase().includes(term) ||
         r.conta.toLowerCase().includes(term) ||
         r.etn.toLowerCase().includes(term) ||
@@ -265,16 +270,21 @@ export default function Home() {
     try {
       const result = await processFiles(oppFile, actFile);
       if (result) {
-        // Usar startTransition para não bloquear a UI durante processamento de dados
-        startTransition(() => {
-          setOpportunities(result.opportunities);
-          setActions(result.actions);
-        });
+        setOpportunities(result.opportunities);
+        setActions(result.actions);
+        // Processar dados com Web Worker
+        try {
+          const workerRes = await processDataWithWorker(result.opportunities, result.actions);
+          setWorkerResult(workerRes);
+        } catch (workerErr) {
+          console.error('Erro no Web Worker:', workerErr);
+          // Fallback para processamento normal se worker falhar
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao processar arquivos');
     }
-  }, [oppFile, actFile, processFiles]);
+  }, [oppFile, actFile, processFiles, processDataWithWorker]);
 
   const handleOppFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -379,10 +389,10 @@ export default function Home() {
             <div className="flex justify-center gap-4">
               <button
                 onClick={handleLoad}
-                disabled={processingState.isProcessing || isPending || (!oppFile && !actFile)}
+                disabled={processingState.isProcessing || isPending || isWorkerProcessing || (!oppFile && !actFile)}
                 className="flex items-center gap-2 px-8 py-3 text-sm font-bold rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-lg shadow-emerald-200 hover:shadow-xl hover:shadow-emerald-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:scale-[1.02]"
               >
-                {processingState.isProcessing || isPending ? (
+                {processingState.isProcessing || isPending || isWorkerProcessing ? (
                   <><Loader className="animate-spin" size={18} /> Processando...</>
                 ) : (
                   <><Upload size={18} /> Carregar e Analisar</>
@@ -583,7 +593,7 @@ export default function Home() {
                       className="text-xs border border-gray-300 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-amber-500 outline-none"
                     >
                       <option value="">Todas Etapas</option>
-                      {Array.from(new Set(missingAgendas.map(r => r.etapa))).sort().map(e => (
+                      {Array.from(new Set(missingAgendas.map((r: any) => r.etapa))).sort().map((e: any) => (
                         <option key={e} value={e}>{e}</option>
                       ))}
                     </select>
@@ -611,7 +621,7 @@ export default function Home() {
                         </tr>
                       </thead>
                       <tbody>
-                        {missingAgendasFiltered.slice(0, 200).map((r, idx) => (
+                        {missingAgendasFiltered.slice(0, 200).map((r: any, idx: number) => (
                           <tr key={idx} className="border-b hover:bg-amber-50/50">
                             <td className="px-3 py-2 font-semibold text-amber-900">{r.oppId}</td>
                             <td className="px-3 py-2 text-gray-700">{r.conta}</td>
