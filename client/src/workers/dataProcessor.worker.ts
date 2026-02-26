@@ -305,6 +305,7 @@ function processData(opportunities: any[], actions: any[]) {
             valorPrevisto: parseValue(opp['Valor Previsto']),
             mesFech: mFech,
             anoPrevisao: yFech,
+            dataCriacao: trim(opp['Data']) || trim(opp['Data de Criação']) || trim(opp['Data Criação']) || '',
             oppAnteriorId: bestPrevOppId,
             oppAnteriorEtapa: trim(oppById.get(bestPrevOppId)?.['Etapa'] || ''),
             agendaAnterior: (actionsByOppId.get(bestPrevOppId) || []).length,

@@ -54,7 +54,7 @@ const formatCurrency = (v: number) => {
 
 const MONTH_ORDER = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
-type SortField = 'oppId' | 'conta' | 'etapa' | 'probabilidade' | 'valorPrevisto' | 'valorFechado' | 'agenda' | 'mesFech';
+type SortField = 'oppId' | 'conta' | 'representante' | 'etapa' | 'probabilidade' | 'valorPrevisto' | 'valorFechado' | 'agenda' | 'mesFech';
 type SortDir = 'asc' | 'desc';
 
 function trim(val: any): string {
@@ -312,6 +312,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
       switch (sortField) {
         case 'oppId': cmp = a.oppId.localeCompare(b.oppId); break;
         case 'conta': cmp = a.conta.localeCompare(b.conta); break;
+        case 'representante': cmp = (a.representante || '').localeCompare(b.representante || ''); break;
         case 'etapa': cmp = a.etapa.localeCompare(b.etapa); break;
         case 'probabilidade': cmp = a.probNum - b.probNum; break;
         case 'valorPrevisto': cmp = a.valorPrevisto - b.valorPrevisto; break;
@@ -441,7 +442,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
           </div>
 
           {/* KPIs */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             <div onClick={() => handleKPIClick('total')} className={`cursor-pointer transition-all ${activeKPIFilter === 'total' ? 'ring-2 ring-blue-500 rounded-xl' : ''}`}>
               <KPICard title="Total de Oportunidades" value={kpis.totalOps.toString()} icon={<Target size={18} />} color="blue" />
             </div>
@@ -453,7 +454,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
             </div>
             <KPICard title="Win Rate" value={`${kpis.winRate}%`} icon={<TrendingUp size={18} />} color="amber" />
             <KPICard title="Total de Agendas" value={kpis.totalAgendas.toString()} icon={<Calendar size={18} />} color="purple" />
-            <KPICard title="Valor Médio/Op." value={formatCurrency(kpis.valorMedio)} icon={<DollarSign size={18} />} color="blue" />
+
           </div>
 
           {/* Filtro ativo */}
@@ -546,12 +547,16 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
                   <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                   <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} />
                   <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#6b7280' }} allowDecimals={false} />
-                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#6b7280' }} allowDecimals={false} />
                   <Tooltip contentStyle={{ background: 'rgba(255,255,255,0.97)', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '12px' }} />
                   <Legend wrapperStyle={{ fontSize: '11px' }} />
                   <Bar yAxisId="left" dataKey="agendas" fill="#3b82f6" name="Agendas no Mês" radius={[4, 4, 0, 0]} cursor="pointer"
-                    onClick={(d: any) => handleChartClick('compromissoMes', `${d.fullMonth}|${d.year}`)} />
-                  <Line yAxisId="right" type="monotone" dataKey="acumulado" stroke="#10b981" strokeWidth={2.5} dot={{ fill: '#10b981', r: 3 }} name="Acumulado" />
+                    onClick={(d: any) => handleChartClick('compromissoMes', `${d.fullMonth}|${d.year}`)}>
+                    {compromissosTimelineWithAccum.map((entry, i) => {
+                      const isActive = chartFilter?.type === 'compromissoMes' && chartFilter?.value === `${entry.fullMonth}|${entry.year}`;
+                      return <Cell key={i} fill={COLORS[i % COLORS.length]} opacity={chartFilter?.type === 'compromissoMes' && !isActive ? 0.3 : 1} />;
+                    })}
+                    <LabelList dataKey="agendas" position="top" fill="#374151" fontSize={10} />
+                  </Bar>
                 </LineChart>
               </ResponsiveContainer>
               <p className="text-[10px] text-gray-400 text-center mt-2">Período: {dateRange}</p>
@@ -574,12 +579,12 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
                         return [v, 'Qtd. Ganhas'];
                       }}
                     />
-                    <Legend wrapperStyle={{ fontSize: '11px' }} />
-                    <Bar dataKey="valor" fill="#10b981" radius={[6, 6, 0, 0]} name="Valor Fechado" cursor="pointer"
+                  <Legend wrapperStyle={{ fontSize: '11px' }} />
+                  <Bar dataKey="valor" fill="#10b981" radius={[6, 6, 0, 0]} name="Valor Fechado" cursor="pointer"
                       onClick={(d: any) => handleChartClick('fechamentoMes', `${d.fullMonth}|${d.year}`)}>
                       {fechamentoGanhasMensal.map((entry, i) => {
                         const isActive = chartFilter?.type === 'fechamentoMes' && chartFilter?.value === `${entry.fullMonth}|${entry.year}`;
-                        return <Cell key={i} fill="#10b981" opacity={chartFilter?.type === 'fechamentoMes' && !isActive ? 0.3 : 1} />;
+                        return <Cell key={i} fill={COLORS[i % COLORS.length]} opacity={chartFilter?.type === 'fechamentoMes' && !isActive ? 0.3 : 1} />;
                       })}
                       <LabelList dataKey="valor" position="top" fill="#374151" fontSize={9} formatter={(v: number) => formatCurrency(v)} />
                     </Bar>
@@ -633,6 +638,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
                     {([
                       { field: 'oppId' as SortField, label: 'ID Op.', align: 'left' },
                       { field: 'conta' as SortField, label: 'Conta', align: 'left' },
+                      { field: 'representante' as SortField, label: 'Representante', align: 'left' },
                       { field: 'etapa' as SortField, label: 'Etapa', align: 'left' },
                       { field: 'probabilidade' as SortField, label: 'Prob.', align: 'left' },
                       { field: 'valorPrevisto' as SortField, label: 'Valor Previsto', align: 'right' },
@@ -656,6 +662,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
                     <tr key={idx} className="border-b border-gray-100 hover:bg-gray-100/50 transition-colors">
                       <td className="px-3 py-2 font-semibold text-gray-800">{op.oppId}</td>
                       <td className="px-3 py-2 text-gray-700 max-w-[200px] truncate">{op.conta}</td>
+                      <td className="px-3 py-2 text-gray-700 max-w-[150px] truncate">{op.representante || '—'}</td>
                       <td className="px-3 py-2">
                         <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
                           op.etapa === 'Fechada e Ganha' || op.etapa === 'Fechada e Ganha TR' ? 'bg-green-100 text-green-800' :

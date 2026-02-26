@@ -1,7 +1,7 @@
 import {
   Upload, AlertCircle, TrendingUp, Target, Zap, DollarSign,
   Loader, BarChart3, Trophy, XCircle, FileText, RotateCcw,
-  Calendar, AlertTriangle, Search, Database, Trash2, Clock,
+  Calendar, AlertTriangle, Search, Database, Trash2, Clock, ChevronDown,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { useDataProcessor, type Opportunity, type Action, type ProcessedRecord, type MissingAgendaRecord } from '@/hooks/useDataProcessor';
@@ -112,7 +112,8 @@ export default function Home() {
   const [selETNMissing, setSelETNMissing] = useState<string[]>([]);
   // Item 10: Pesquisa e filtros na grid de agendas faltantes
   const [missingSearch, setMissingSearch] = useState('');
-  const [missingFilterEtapa, setMissingFilterEtapa] = useState('');
+  const [missingFilterEtapas, setMissingFilterEtapas] = useState<string[]>([]);
+  const [showEtapaDropdown, setShowEtapaDropdown] = useState(false);
 
   // Estado para modal de detalhe do ETN
   const [selectedETNDetail, setSelectedETNDetail] = useState<string | null>(null);
@@ -184,8 +185,9 @@ export default function Home() {
   }, [filteredData, chartFilter]);
   
   // Dados das Agendas Faltantes (com filtro de clique nos gráficos E filtro ETN)
+  // Item 5: Remover nomes OLD
   const missingAgendasFiltered = useMemo(() => {
-    let filtered = missingAgendas;
+    let filtered = missingAgendas.filter((r: any) => !r.etn.trim().toUpperCase().endsWith('OLD'));
     // Filtro ETN do dropdown
     if (selETNMissing.length > 0) {
       filtered = filtered.filter((r: any) => selETNMissing.includes(r.etn));
@@ -194,11 +196,11 @@ export default function Home() {
     if (chartFilter && chartFilter.field === 'etnMissing') {
       filtered = filtered.filter((r: any) => r.etn === chartFilter.value);
     }
-    // Item 10: Filtro por etapa
-    if (missingFilterEtapa) {
-      filtered = filtered.filter((r: any) => r.etapa === missingFilterEtapa);
+    // Item 5: Filtro por múltiplas etapas
+    if (missingFilterEtapas.length > 0) {
+      filtered = filtered.filter((r: any) => missingFilterEtapas.includes(r.etapa));
     }
-    // Item 10: Pesquisa textual
+    // Pesquisa textual
     if (missingSearch) {
       const term = missingSearch.toLowerCase();
       filtered = filtered.filter((r: any) =>
@@ -209,7 +211,7 @@ export default function Home() {
       );
     }
     return filtered;
-  }, [missingAgendas, chartFilter, selETNMissing, missingFilterEtapa, missingSearch]);
+  }, [missingAgendas, chartFilter, selETNMissing, missingFilterEtapas, missingSearch]);
 
   // ETN Top 10 filtrado
   const etnTop10Filtered = useMemo(() => {
@@ -728,20 +730,46 @@ export default function Home() {
                         className="pl-8 pr-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none w-56"
                       />
                     </div>
-                    <select
-                      value={missingFilterEtapa}
-                      onChange={(e) => setMissingFilterEtapa(e.target.value)}
-                      className="text-xs border border-gray-300 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-amber-500 outline-none"
-                    >
-                      <option value="">Todas Etapas</option>
-                      {Array.from(new Set(missingAgendas.map((r: any) => r.etapa))).sort().map((e: any) => (
-                        <option key={e} value={e}>{e}</option>
-                      ))}
-                    </select>
-                    <span className="ml-auto text-xs text-gray-500">{missingAgendasFiltered.length} de {missingAgendas.length} registros</span>
-                    {(missingSearch || missingFilterEtapa) && (
+                    <div className="relative">
                       <button
-                        onClick={() => { setMissingSearch(''); setMissingFilterEtapa(''); }}
+                        onClick={() => setShowEtapaDropdown(!showEtapaDropdown)}
+                        className="text-xs border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-amber-500 outline-none min-w-[180px] flex items-center justify-between gap-2 bg-white hover:bg-gray-50"
+                      >
+                        <span className="truncate">
+                          {missingFilterEtapas.length === 0 ? 'Filtrar Etapas' : `${missingFilterEtapas.length} etapa(s)`}
+                        </span>
+                        <ChevronDown size={12} className={`transition-transform ${showEtapaDropdown ? 'rotate-180' : ''}`} />
+                      </button>
+                      {showEtapaDropdown && (
+                        <div className="absolute z-50 top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-[280px] overflow-y-auto min-w-[260px]">
+                          <div className="p-2 border-b border-gray-100 flex justify-between items-center">
+                            <span className="text-[10px] font-semibold text-gray-500">Selecione as etapas</span>
+                            {missingFilterEtapas.length > 0 && (
+                              <button onClick={() => setMissingFilterEtapas([])} className="text-[10px] text-red-500 hover:text-red-700 font-semibold">Limpar</button>
+                            )}
+                          </div>
+                          {Array.from(new Set(missingAgendas.map((r: any) => r.etapa))).sort().map((etapa: any) => (
+                            <label key={etapa} className="flex items-center gap-2 px-3 py-1.5 hover:bg-amber-50 cursor-pointer text-xs text-gray-700">
+                              <input
+                                type="checkbox"
+                                checked={missingFilterEtapas.includes(etapa)}
+                                onChange={() => {
+                                  setMissingFilterEtapas(prev =>
+                                    prev.includes(etapa) ? prev.filter(e => e !== etapa) : [...prev, etapa]
+                                  );
+                                }}
+                                className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                              />
+                              {etapa}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <span className="ml-auto text-xs text-gray-500">{missingAgendasFiltered.length} de {missingAgendas.length} registros</span>
+                    {(missingSearch || missingFilterEtapas.length > 0) && (
+                      <button
+                        onClick={() => { setMissingSearch(''); setMissingFilterEtapas([]); }}
                         className="text-xs font-semibold text-red-600 hover:text-red-800 underline"
                       >
                         Limpar
@@ -758,7 +786,7 @@ export default function Home() {
                           <th className="text-left px-3 py-2.5 font-bold text-amber-900">Etapa</th>
                           <th className="text-left px-3 py-2.5 font-bold text-amber-900">Prob.</th>
                           <th className="text-right px-3 py-2.5 font-bold text-amber-900">Valor Previsto</th>
-                          <th className="text-left px-3 py-2.5 font-bold text-amber-900">Mês Fech.</th>
+                          <th className="text-left px-3 py-2.5 font-bold text-amber-900">Data Criação</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -778,7 +806,7 @@ export default function Home() {
                             </td>
                             <td className="px-3 py-2 text-gray-700">{r.probabilidade}</td>
                             <td className="px-3 py-2 text-right font-semibold text-amber-900">R$ {(r.valorPrevisto / 1000).toFixed(0)}K</td>
-                            <td className="px-3 py-2 text-gray-700">{r.mesFech}</td>
+                            <td className="px-3 py-2 text-gray-700">{r.dataCriacao || '-'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -837,7 +865,9 @@ import {
 
 function MissingAgendaChart({ data, onBarClick, selectedETN }: { data: MissingAgendaRecord[]; onBarClick: (etn: string) => void; selectedETN: string[] }) {
   const chartData = useMemo(() => {
-    const filtered = selectedETN.length > 0 ? data.filter(r => selectedETN.includes(r.etn)) : data;
+    let filtered = selectedETN.length > 0 ? data.filter(r => selectedETN.includes(r.etn)) : data;
+    // Item 5: Remover nomes OLD do gráfico
+    filtered = filtered.filter(r => !r.etn.trim().toUpperCase().endsWith('OLD'));
     const map = new Map<string, number>();
     for (const r of filtered) {
       map.set(r.etn, (map.get(r.etn) || 0) + 1);

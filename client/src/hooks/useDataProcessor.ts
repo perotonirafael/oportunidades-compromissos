@@ -44,6 +44,7 @@ export interface MissingAgendaRecord {
   valorPrevisto: number;
   mesFech: string;
   anoPrevisao: string;
+  dataCriacao: string;
   oppAnteriorId: string;
   oppAnteriorEtapa: string;
   agendaAnterior: number;
@@ -257,6 +258,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
               valorPrevisto: parseValue(opp['Valor Previsto']),
               mesFech: mFech,
               anoPrevisao: yFech,
+              dataCriacao: trim(opp['Data']) || trim(opp['Data de Criação']) || trim(opp['Data Criação']) || '',
               oppAnteriorId: bestPrevOppId,
               oppAnteriorEtapa: trim(oppById.get(bestPrevOppId)?.[' Etapa'] || ''),
               agendaAnterior: (actionsByOppId.get(bestPrevOppId) || []).length,
