@@ -26,18 +26,26 @@ export default function Home() {
   const [oppFileName, setOppFileName] = useState('');
   const [actFileName, setActFileName] = useState('');
 
-  const { state: processingState, processFiles, resetState } = useFileProcessor();
-  const { processData: processDataWithWorker, isProcessing: isWorkerProcessing } = useWorkerDataProcessor();
+  const { state: processingState, processFiles: processFilesLegacy, resetState } = useFileProcessor();
+  const { processData: processDataWithWorker, processFiles: processFilesWithWorker, isProcessing: isWorkerProcessing, progress: workerProgress } = useWorkerDataProcessor();
   const [workerResult, setWorkerResult] = useState<any>(null);
+  const [useWorkerOnly, setUseWorkerOnly] = useState(false);
+  // Dados leves para o useDataProcessor (apenas demo)
+  const [lightOpportunities, setLightOpportunities] = useState<Opportunity[]>([]);
+  const [lightActions, setLightActions] = useState<Action[]>([]);
 
   // Função para carregar dados de demonstração
   const handleLoadDemo = useCallback(() => {
     setOpportunities([]);
     setActions([]);
+    setLightOpportunities([]);
+    setLightActions([]);
+    setWorkerResult(null);
+    setUseWorkerOnly(false);
     setError(null);
     // Simular processamento com dados demo
     setTimeout(() => {
-      setOpportunities(DEMO_DATA.map(d => ({
+      const demoOppsData = DEMO_DATA.map(d => ({
         'Oportunidade ID': d.oppId,
         'Conta': d.conta,
         'Conta ID': d.contaId,
@@ -59,7 +67,9 @@ export default function Home() {
         'Cidade': d.cidade,
         'Estado': d.estado,
         'CNAE Segmento': d.cnaeSegmento,
-      })));
+      }));
+      setOpportunities(demoOppsData);
+      setLightOpportunities(demoOppsData);
       // Gerar ações individuais (1 registro por agenda) com datas e categorias
       const demoActions: any[] = [];
       for (const d of DEMO_DATA) {
@@ -77,6 +87,7 @@ export default function Home() {
         }
       }
       setActions(demoActions);
+      setLightActions(demoActions);
     }, 500);
   }, []);
 
@@ -105,8 +116,8 @@ export default function Home() {
   // Estado para modal de detalhe do ETN
   const [selectedETNDetail, setSelectedETNDetail] = useState<string | null>(null);
 
-  // Usar resultado do Web Worker se disponível, caso contrário usar hook normal
-  const normalResult = useDataProcessor(opportunities, actions);
+  // useDataProcessor APENAS para dados leves (demo) - NÃO para arquivos reais
+  const normalResult = useDataProcessor(lightOpportunities, lightActions);
   const result = workerResult || normalResult;
 
   const processedData = result?.records ?? [];
@@ -267,24 +278,20 @@ export default function Home() {
   const handleLoad = useCallback(async () => {
     if (!oppFile && !actFile) return;
     setError(null);
+    setUseWorkerOnly(true);
+    setWorkerResult(null);
+    // Limpar dados leves para não disparar useDataProcessor
+    setLightOpportunities([]);
+    setLightActions([]);
     try {
-      const result = await processFiles(oppFile, actFile);
-      if (result) {
-        setOpportunities(result.opportunities);
-        setActions(result.actions);
-        // Processar dados com Web Worker
-        try {
-          const workerRes = await processDataWithWorker(result.opportunities, result.actions);
-          setWorkerResult(workerRes);
-        } catch (workerErr) {
-          console.error('Erro no Web Worker:', workerErr);
-          // Fallback para processamento normal se worker falhar
-        }
-      }
+      // Enviar arquivos DIRETAMENTE ao Web Worker (parsing + processamento fora da thread principal)
+      const workerRes = await processFilesWithWorker(oppFile, actFile);
+      setWorkerResult(workerRes);
     } catch (err) {
+      console.error('Erro no Web Worker:', err);
       setError(err instanceof Error ? err.message : 'Erro ao processar arquivos');
     }
-  }, [oppFile, actFile, processFiles, processDataWithWorker]);
+  }, [oppFile, actFile, processFilesWithWorker]);
 
   const handleOppFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -321,7 +328,32 @@ export default function Home() {
 
       <div className="container py-8">
         {/* Upload Section */}
-        {processedData.length === 0 ? (
+        {isWorkerProcessing ? (
+          <div className="max-w-md mx-auto text-center py-20">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-green-100 to-emerald-100 mb-6 animate-pulse">
+              <Loader className="text-green-600 animate-spin" size={36} />
+            </div>
+            <h2 className="text-2xl font-bold text-foreground mb-2">
+              {workerProgress?.stage === 'reading' ? 'Lendo arquivos...' :
+               workerProgress?.stage === 'parsing' ? 'Parseando dados...' :
+               workerProgress?.stage === 'processing' ? 'Processando dados...' :
+               workerProgress?.stage === 'done' ? 'Finalizando...' :
+               'Processando dados...'}
+            </h2>
+            <p className="text-muted-foreground mb-4">
+              {workerProgress?.message || 'Analisando oportunidades e compromissos em segundo plano.'}
+            </p>
+            <div className="w-full bg-green-100 rounded-full h-3">
+              <div
+                className="bg-gradient-to-r from-green-500 to-emerald-600 h-3 rounded-full transition-all duration-500"
+                style={{ width: `${workerProgress?.progress || 10}%` }}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              {workerProgress?.progress ? `${workerProgress.progress}%` : ''} — Processamento em segundo plano, a interface permanece responsiva.
+            </p>
+          </div>
+        ) : processedData.length === 0 ? (
           <div className="max-w-2xl mx-auto space-y-6">
             <div className="text-center mb-8">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-green-100 to-emerald-100 mb-4">
