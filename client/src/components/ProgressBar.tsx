@@ -5,10 +5,19 @@ interface Props {
   progress: number;
   currentFile: string;
   isVisible: boolean;
+  stage?: string;
 }
 
-function ProgressBarInner({ progress, currentFile, isVisible }: Props) {
+function ProgressBarInner({ progress, currentFile, isVisible, stage }: Props) {
   if (!isVisible) return null;
+
+  const getStageLabel = () => {
+    if (stage === 'loading') return 'Carregando arquivo...';
+    if (stage === 'parsing') return 'Analisando dados...';
+    if (stage === 'processing') return 'Processando registros...';
+    if (stage === 'aggregating') return 'Agregando resultados...';
+    return 'Processando dados';
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-sm">
@@ -18,8 +27,8 @@ function ProgressBarInner({ progress, currentFile, isVisible }: Props) {
             <Loader className="animate-spin text-emerald-600" size={24} />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-gray-800">Processando dados</h3>
-            <p className="text-xs text-gray-500 mt-0.5">{currentFile}</p>
+            <h3 className="text-sm font-bold text-gray-800">{getStageLabel()}</h3>
+            <p className="text-xs text-gray-500 mt-0.5 truncate">{currentFile}</p>
           </div>
         </div>
 

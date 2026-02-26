@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useCallback } from 'react';
 
 export interface Opportunity { [key: string]: any; }
 export interface Action { [key: string]: any; }
@@ -208,10 +209,6 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
     }
 
     // AGENDAS FALTANTES (CORRIGIDO Item 2):
-    // Para cada ETN que atuou em oportunidade de um cliente,
-    // verificar se há outra oportunidade do mesmo cliente SEM compromisso desse ETN
-    // NOVA LÓGICA: Usar campo sequencial - considerar apenas oportunidades com ID sequencial
-    // MAIOR que a oportunidade original onde o compromisso foi registrado
     const missingAgendas: MissingAgendaRecord[] = [];
     const oppById = new Map<string, Opportunity>();
     for (const opp of opportunities) {
@@ -248,236 +245,161 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
           // NOVA LÓGICA: Só considerar oportunidades com sequencial MAIOR que a original
           if (!oppIdsWithAction.has(thisOppId) && thisSeq > maxSeqWithAction) {
             const etapa = trim(opp['Etapa']);
-            // Só considerar oportunidades abertas
-            if (etapa !== 'Fechada e Ganha' && etapa !== 'Fechada e Ganha TR' && etapa !== 'Fechada e Perdida') {
-              const { month, year } = parseDate(trim(opp['Previsão de Fechamento']));
-              const prob = cleanProb(opp['Prob.']);
-              const prevOpp = oppById.get(bestPrevOppId);
-              const prevEtapa = prevOpp ? trim(prevOpp['Etapa']) : '';
-              const prevActions = actionsByOppId.get(bestPrevOppId) || [];
-              const prevAgendaCount = prevActions.filter(a => {
-                const u = trim(a['Usuario']) || trim(a['Responsavel']) || trim(a['Usuário Ação']);
-                return u === etn;
-              }).length;
-
-              missingAgendas.push({
-                oppId: thisOppId,
-                conta: trim(opp['Conta']),
-                contaId,
-                etn,
-                etapa,
-                probabilidade: prob.str,
-                valorPrevisto: parseValue(opp['Valor Previsto']),
-                mesFech: month,
-                anoPrevisao: year,
-                oppAnteriorId: bestPrevOppId,
-                oppAnteriorEtapa: prevEtapa,
-                agendaAnterior: prevAgendaCount,
-              });
-            }
+            const { month: mFech, year: yFech } = parseDate(trim(opp['Previsão de Fechamento']));
+            const prob = cleanProb(opp['Prob.']);
+            missingAgendas.push({
+              oppId: thisOppId,
+              conta: trim(opp['Conta']),
+              contaId,
+              etn,
+              etapa,
+              probabilidade: prob.str,
+              valorPrevisto: parseValue(opp['Valor Previsto']),
+              mesFech: mFech,
+              anoPrevisao: yFech,
+              oppAnteriorId: bestPrevOppId,
+              oppAnteriorEtapa: trim(oppById.get(bestPrevOppId)?.[' Etapa'] || ''),
+              agendaAnterior: (actionsByOppId.get(bestPrevOppId) || []).length,
+            });
           }
         }
       }
     }
 
-    // KPIs com deduplicação financeira
-    const uniqueOppIds = new Set<string>();
-    let totalValueDedup = 0;
-    let totalFechadoDedup = 0;
-    const hotOpsIds = new Set<string>();
-    let ganhasCount = 0;
-    let perdidasCount = 0;
-    let abertasCount = 0;
-    let ganhasValor = 0; // Item 4: Usar valorFechado para ganhas
-    let perdidasValor = 0;
-    let abertasValor = 0;
-
-    for (const opp of opportunities) {
-      const id = trim(opp['Oportunidade ID']);
-      if (uniqueOppIds.has(id)) continue;
-      uniqueOppIds.add(id);
-      const val = parseValue(opp['Valor Previsto']);
-      const valFech = parseValue(opp['Valor Fechado']);
-      totalValueDedup += val;
-      totalFechadoDedup += valFech;
-      const prob = cleanProb(opp['Prob.']);
-      if (prob.num >= 75) hotOpsIds.add(id);
-      const etapa = trim(opp['Etapa']);
-      if (etapa === 'Fechada e Ganha' || etapa === 'Fechada e Ganha TR') {
-        ganhasCount++;
-        ganhasValor += valFech; // Item 4: Usar Valor Fechado para ganhas
-      } else if (etapa === 'Fechada e Perdida') {
-        perdidasCount++; perdidasValor += val;
-      } else {
-        abertasCount++; abertasValor += val;
-      }
-    }
-
-    // FORECAST FECHAMENTO ≥75%
-    let forecastFechamento75 = 0;
-    const forecastSeen = new Set<string>();
-    for (const opp of opportunities) {
-      const id = trim(opp['Oportunidade ID']);
-      if (forecastSeen.has(id)) continue;
-      forecastSeen.add(id);
-      const etapa = trim(opp['Etapa']);
-      if (etapa !== 'Fechada e Ganha' && etapa !== 'Fechada e Ganha TR' && etapa !== 'Fechada e Perdida') {
-        const prob = cleanProb(opp['Prob.']);
-        if (prob.num >= 75) {
-          forecastFechamento75 += parseValue(opp['Valor Previsto']);
-        }
-      }
-    }
-
-    // Motivos de perda
-    const motivosPerda = new Map<string, number>();
-    const motivosSeen = new Set<string>();
-    for (const opp of opportunities) {
-      const id = trim(opp['Oportunidade ID']);
-      if (motivosSeen.has(id)) continue;
-      motivosSeen.add(id);
-      if (trim(opp['Etapa']) === 'Fechada e Perdida') {
-        const motivo = trim(opp['Motivo da Perda']) || trim(opp['Motivo de Fechamento']) || 'Não informado';
-        motivosPerda.set(motivo, (motivosPerda.get(motivo) || 0) + 1);
-      }
-    }
-
-    // Funil por etapa
-    const funnelData = new Map<string, { count: number; value: number }>();
-    const funnelSeen = new Set<string>();
-    for (const opp of opportunities) {
-      const id = trim(opp['Oportunidade ID']);
-      if (funnelSeen.has(id)) continue;
-      funnelSeen.add(id);
-      const etapa = trim(opp['Etapa']);
-      if (!etapa) continue;
-      const val = parseValue(opp['Valor Previsto']);
-      const existing = funnelData.get(etapa) || { count: 0, value: 0 };
-      existing.count++;
-      existing.value += val;
-      funnelData.set(etapa, existing);
-    }
-
-    // Funil de Forecast
-    const forecastFunnel = new Map<string, { count: number; value: number; avgProb: number; totalProb: number }>();
-    const forecastFunnelSeen = new Set<string>();
-    for (const opp of opportunities) {
-      const id = trim(opp['Oportunidade ID']);
-      if (forecastFunnelSeen.has(id)) continue;
-      forecastFunnelSeen.add(id);
-      const etapa = trim(opp['Etapa']);
-      if (etapa === 'Fechada e Ganha' || etapa === 'Fechada e Ganha TR' || etapa === 'Fechada e Perdida') continue;
-      const prob = cleanProb(opp['Prob.']);
-      if (prob.num >= 75) {
-        const val = parseValue(opp['Valor Previsto']);
-        const existing = forecastFunnel.get(etapa) || { count: 0, value: 0, avgProb: 0, totalProb: 0 };
-        existing.count++;
-        existing.value += val;
-        existing.totalProb += prob.num;
-        forecastFunnel.set(etapa, existing);
-      }
-    }
-    for (const [, data] of Array.from(forecastFunnel.entries())) {
-      data.avgProb = data.count > 0 ? data.totalProb / data.count : 0;
-    }
-
-    // ETN Top 10
-    const etnData = new Map<string, { count: number; value: number }>();
-    const etnSeen = new Map<string, Set<string>>();
-    for (const r of records) {
-      if (r.etn === 'Sem Agenda') continue;
-      if (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR' || r.etapa === 'Fechada e Perdida') continue;
-      if (r.probNum < 75) continue;
-      if (!etnSeen.has(r.etn)) etnSeen.set(r.etn, new Set());
-      if (etnSeen.get(r.etn)!.has(r.oppId)) continue;
-      etnSeen.get(r.etn)!.add(r.oppId);
-      const e = etnData.get(r.etn) || { count: 0, value: 0 };
-      e.count++;
-      e.value += r.valorPrevisto;
-      etnData.set(r.etn, e);
-    }
-
-    // Opções de filtro - CORRIGIDO: meses agora usam nome do mês
-    const filterSets = {
-      years: new Set<string>(),
-      months: new Set<string>(),
-      representantes: new Set<string>(),
-      responsaveis: new Set<string>(),
-      etns: new Set<string>(),
-      etapas: new Set<string>(),
-      probabilidades: new Set<string>(),
-      agenda: new Set<string>(),
-      contas: new Set<string>(),
-      tipos: new Set<string>(),
-      origens: new Set<string>(),
-      segmentos: new Set<string>(),
+    // Extrair opções de filtro
+    const filterOptions = {
+      years: Array.from(new Set(records.map(r => r.anoPrevisao).filter(Boolean))).sort(),
+      months: Array.from(new Set(records.map(r => r.mesPrevisao).filter(Boolean))),
+      representantes: Array.from(new Set(records.map(r => r.representante).filter(Boolean))).sort(),
+      responsaveis: Array.from(new Set(records.map(r => r.responsavel).filter(Boolean))).sort(),
+      etns: Array.from(new Set(records.map(r => r.etn).filter(Boolean))).sort(),
+      etapas: Array.from(new Set(records.map(r => r.etapa).filter(Boolean))),
+      probabilidades: Array.from(new Set(records.map(r => r.probabilidade).filter(Boolean))).sort((a, b) => {
+        const aNum = parseInt(a);
+        const bNum = parseInt(b);
+        return aNum - bNum;
+      }),
+      agenda: Array.from(new Set(records.map(r => r.agenda.toString()).filter(Boolean))).sort((a, b) => parseInt(a) - parseInt(b)),
+      contas: Array.from(new Set(records.map(r => r.conta).filter(Boolean))).sort(),
+      tipos: Array.from(new Set(records.map(r => r.tipoOportunidade).filter(Boolean))).sort(),
+      origens: Array.from(new Set(records.map(r => r.origemOportunidade).filter(Boolean))).sort(),
+      segmentos: Array.from(new Set(records.map(r => r.cnaeSegmento).filter(Boolean))).sort(),
     };
 
+    // KPIs básicos (deduplicados por oppId)
+    const seenOps = new Set<string>();
+    let totalAgendas = 0;
     for (const r of records) {
-      if (r.anoPrevisao) filterSets.years.add(r.anoPrevisao);
-      if (r.mesPrevisao && r.mesPrevisao !== '') filterSets.months.add(r.mesPrevisao);
-      if (r.representante) filterSets.representantes.add(r.representante);
-      if (r.responsavel) filterSets.responsaveis.add(r.responsavel);
-      if (r.etn) filterSets.etns.add(r.etn);
-      if (r.etapa) filterSets.etapas.add(r.etapa);
-      if (r.probabilidade) filterSets.probabilidades.add(r.probabilidade);
-      if (r.tipoOportunidade) filterSets.tipos.add(r.tipoOportunidade);
-      if (r.origemOportunidade) filterSets.origens.add(r.origemOportunidade);
-      if (r.cnaeSegmento) filterSets.segmentos.add(r.cnaeSegmento);
-      const q = r.agenda;
-      filterSets.agenda.add(q === 0 ? '0' : q === 1 ? '1' : q === 2 ? '2' : '3+');
-    }
-    for (const r of records) {
-      if (r.agenda > 0) filterSets.contas.add(r.conta);
+      if (!seenOps.has(r.oppId)) {
+        seenOps.add(r.oppId);
+      }
+      totalAgendas += r.agenda;
     }
 
     return {
       records,
       missingAgendas,
-      kpis: {
-        uniqueOps: uniqueOppIds.size,
-        totalActions: actions.length,
-        hotOps: hotOpsIds.size,
-        totalValue: totalValueDedup,
-        totalFechado: totalFechadoDedup,
-        ganhasCount, perdidasCount, abertasCount,
-        ganhasValor, perdidasValor, abertasValor,
-        forecastFechamento75,
-        pipelineAberto: abertasValor,
-      },
-      motivosPerda: Array.from(motivosPerda.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
-        .map(([motivo, count]) => ({ motivo, count })),
-      funnelData: Array.from(funnelData.entries())
-        .map(([etapa, data]) => ({ etapa, ...data }))
-        .sort((a, b) => b.count - a.count),
-      forecastFunnel: Array.from(forecastFunnel.entries())
-        .map(([etapa, data]) => ({ etapa, count: data.count, value: data.value, avgProb: Math.round(data.avgProb) }))
-        .sort((a, b) => b.value - a.value),
-      etnTop10: Array.from(etnData.entries())
-        .map(([name, d]) => ({ name: name.length > 20 ? name.slice(0, 20) + '…' : name, fullName: name, ...d }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 10),
-      filterOptions: {
-        years: Array.from(filterSets.years).sort(),
-        months: Array.from(filterSets.months).sort((a, b) => {
-          const order = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-          return order.indexOf(a) - order.indexOf(b);
-        }),
-        representantes: Array.from(filterSets.representantes).sort(),
-        responsaveis: Array.from(filterSets.responsaveis).sort(),
-        etns: Array.from(filterSets.etns).sort(),
-        etapas: Array.from(filterSets.etapas).sort(),
-        probabilidades: Array.from(filterSets.probabilidades).sort((a, b) => parseInt(a) - parseInt(b)),
-        agenda: ['0', '1', '2', '3+'].filter(c => filterSets.agenda.has(c)),
-        contas: Array.from(filterSets.contas).sort(),
-        tipos: Array.from(filterSets.tipos).sort(),
-        origens: Array.from(filterSets.origens).sort(),
-        segmentos: Array.from(filterSets.segmentos).sort(),
-      },
+      filterOptions,
+      kpis: { totalOps: seenOps.size, totalAgendas },
     };
   }, [opportunities, actions]);
 
-  return combinedData;
+  // Funnel data (lazy-evaluated)
+  const funnelData = useMemo(() => {
+    if (!combinedData?.records) return [];
+    const records = combinedData.records;
+    const seen = new Set<string>();
+    const funnel = new Map<string, { count: number; value: number }>();
+    
+    for (const r of records) {
+      if (seen.has(r.oppId)) continue;
+      seen.add(r.oppId);
+      const stage = r.etapa || 'Desconhecido';
+      const f = funnel.get(stage) || { count: 0, value: 0 };
+      f.count++;
+      f.value += r.valorPrevisto;
+      funnel.set(stage, f);
+    }
+    
+    return Array.from(funnel.entries()).map(([etapa, d]) => ({ etapa, ...d }));
+  }, [combinedData]);
+
+  // Forecast funnel (lazy-evaluated)
+  const forecastFunnel = useMemo(() => {
+    if (!combinedData?.records) return [];
+    const records = combinedData.records;
+    const seen = new Set<string>();
+    const funnel = new Map<string, { count: number; value: number; probs: number[] }>();
+    
+    for (const r of records) {
+      if (seen.has(r.oppId) || r.probNum < 75) continue;
+      seen.add(r.oppId);
+      const stage = r.etapa || 'Desconhecido';
+      const f = funnel.get(stage) || { count: 0, value: 0, probs: [] };
+      f.count++;
+      f.value += r.valorPrevisto;
+      f.probs.push(r.probNum);
+      funnel.set(stage, f);
+    }
+    
+    return Array.from(funnel.entries())
+      .map(([etapa, d]) => ({
+        etapa,
+        count: d.count,
+        value: d.value,
+        avgProb: d.probs.length > 0 ? d.probs.reduce((a, b) => a + b, 0) / d.probs.length : 0,
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [combinedData]);
+
+  // ETN Top 10 (lazy-evaluated)
+  const etnTop10 = useMemo(() => {
+    if (!combinedData?.records) return [];
+    const records = combinedData.records;
+    const seen = new Set<string>();
+    const etnMap = new Map<string, { count: number; value: number }>();
+    
+    for (const r of records) {
+      if (r.probNum < 75 || seen.has(r.oppId)) continue;
+      seen.add(r.oppId);
+      const e = etnMap.get(r.etn) || { count: 0, value: 0 };
+      e.count++;
+      e.value += r.valorPrevisto;
+      etnMap.set(r.etn, e);
+    }
+    
+    return Array.from(etnMap.entries())
+      .map(([name, d]) => ({ name: name.length > 20 ? name.slice(0, 20) + '...' : name, fullName: name, ...d }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+  }, [combinedData]);
+
+  // Motivos de perda (lazy-evaluated)
+  const motivosPerda = useMemo(() => {
+    if (!combinedData?.records) return [];
+    const records = combinedData.records;
+    const motivoMap = new Map<string, number>();
+    
+    for (const r of records) {
+      if (r.etapa !== 'Fechada e Perdida') continue;
+      const motivo = r.motivoPerda || 'Sem motivo';
+      motivoMap.set(motivo, (motivoMap.get(motivo) || 0) + r.valorPrevisto);
+    }
+    
+    return Array.from(motivoMap.entries())
+      .map(([motivo, value]) => ({ motivo, count: value }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  }, [combinedData]);
+
+  return combinedData ? {
+    records: combinedData.records,
+    missingAgendas: combinedData.missingAgendas,
+    kpis: combinedData.kpis,
+    motivosPerda,
+    funnelData,
+    forecastFunnel,
+    etnTop10,
+    filterOptions: combinedData.filterOptions,
+  } : null;
 }
