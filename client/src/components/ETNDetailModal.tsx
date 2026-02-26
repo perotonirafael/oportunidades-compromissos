@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { X, TrendingUp, Award, Target, Calendar, Trophy, XCircle, DollarSign, Search, Filter, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, Cell, PieChart, Pie } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, Cell, PieChart, Pie } from 'recharts';
 import { KPICard } from './KPICard';
 
 interface ProcessedRecord {
@@ -19,6 +19,9 @@ interface ProcessedRecord {
   mesFech: string;
   valorPrevisto: number;
   valorFechado: number;
+  valorReconhecido: number;
+  valorFechadoReconhecido: number;
+  percentualReconhecimento: number;
   agenda: number;
   tipoOportunidade: string;
   subtipoOportunidade: string;
@@ -118,10 +121,10 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
     const perdidasOps = uniqueOps.filter(r => r.etapa === 'Fechada e Perdida');
     const ganhas = ganhasOps.length;
     const perdidas = perdidasOps.length;
-    const ganhasValor = ganhasOps.reduce((sum, r) => sum + r.valorFechado, 0);
-    const perdidasValor = perdidasOps.reduce((sum, r) => sum + r.valorPrevisto, 0);
+    const ganhasValor = ganhasOps.reduce((sum, r) => sum + (r.valorFechadoReconhecido ?? r.valorFechado), 0);
+    const perdidasValor = perdidasOps.reduce((sum, r) => sum + (r.valorReconhecido ?? r.valorPrevisto), 0);
     const winRate = ganhas + perdidas > 0 ? ((ganhas / (ganhas + perdidas)) * 100).toFixed(1) : '0';
-    const valorTotal = uniqueOps.reduce((sum, r) => sum + r.valorPrevisto, 0);
+    const valorTotal = uniqueOps.reduce((sum, r) => sum + (r.valorReconhecido ?? r.valorPrevisto), 0);
     const valorMedio = totalOps > 0 ? valorTotal / totalOps : 0;
     const totalAgendas = etnDataFiltered.reduce((sum, r) => sum + r.agenda, 0);
 
@@ -229,7 +232,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
         const key = `${r.anoPrevisao}-${r.mesPrevisao}`;
         const e = map.get(key) || { count: 0, valor: 0 };
         e.count++;
-        e.valor += r.valorFechado;
+        e.valor += (r.valorFechadoReconhecido ?? r.valorFechado);
         map.set(key, e);
       }
     }
@@ -474,10 +477,10 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
             <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
               <h3 className="font-semibold text-gray-800 mb-1 text-sm">Distribuição por Etapa</h3>
               <p className="text-[10px] text-gray-500 mb-3">Clique para filtrar a tabela abaixo</p>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={etapaDistribution}>
+              <ResponsiveContainer width="100%" height={420}>
+                <BarChart data={etapaDistribution} margin={{ bottom: 10, left: 10, right: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                  <XAxis dataKey="etapa" angle={-30} textAnchor="end" height={80} tick={{ fontSize: 10, fill: '#6b7280' }} />
+                  <XAxis dataKey="etapa" angle={-40} textAnchor="end" height={150} tick={{ fontSize: 9, fill: '#6b7280' }} interval={0} />
                   <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} allowDecimals={false} />
                   <Tooltip contentStyle={{ background: 'rgba(255,255,255,0.97)', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '12px' }} />
                   <Bar dataKey="count" radius={[6, 6, 0, 0]} name="Oportunidades" cursor="pointer" onClick={(d: any) => handleChartClick('etapa', d.etapa)}>
@@ -538,27 +541,33 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
               <p className="text-[10px] text-gray-400 text-center mt-2">Período: {dateRange}</p>
             </div>
 
-            {/* Item 4: Evolução de Compromissos Realizados - clique filtra grid */}
+            {/* Evolução de Compromissos Realizados - quantidade por mês */}
             <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
               <h3 className="font-semibold text-gray-800 mb-1 text-sm">Evolução de Compromissos Realizados</h3>
-              <p className="text-[10px] text-gray-500 mb-3">Clique para ver oportunidades vinculadas</p>
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={compromissosTimelineWithAccum}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} />
-                  <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#6b7280' }} allowDecimals={false} />
-                  <Tooltip contentStyle={{ background: 'rgba(255,255,255,0.97)', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '12px' }} />
-                  <Legend wrapperStyle={{ fontSize: '11px' }} />
-                  <Bar yAxisId="left" dataKey="agendas" fill="#3b82f6" name="Agendas no Mês" radius={[4, 4, 0, 0]} cursor="pointer"
-                    onClick={(d: any) => handleChartClick('compromissoMes', `${d.fullMonth}|${d.year}`)}>
-                    {compromissosTimelineWithAccum.map((entry, i) => {
-                      const isActive = chartFilter?.type === 'compromissoMes' && chartFilter?.value === `${entry.fullMonth}|${entry.year}`;
-                      return <Cell key={i} fill={COLORS[i % COLORS.length]} opacity={chartFilter?.type === 'compromissoMes' && !isActive ? 0.3 : 1} />;
-                    })}
-                    <LabelList dataKey="agendas" position="top" fill="#374151" fontSize={10} />
-                  </Bar>
-                </LineChart>
-              </ResponsiveContainer>
+              <p className="text-[10px] text-gray-500 mb-3">Quantidade de compromissos por mês · Clique para ver oportunidades vinculadas</p>
+              {compromissosTimeline.length > 0 ? (
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={compromissosTimeline}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} />
+                    <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} allowDecimals={false} />
+                    <Tooltip contentStyle={{ background: 'rgba(255,255,255,0.97)', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '12px' }} />
+                    <Legend wrapperStyle={{ fontSize: '11px' }} />
+                    <Bar dataKey="agendas" fill="#3b82f6" name="Compromissos no Mês" radius={[4, 4, 0, 0]} cursor="pointer"
+                      onClick={(d: any) => handleChartClick('compromissoMes', `${d.fullMonth}|${d.year}`)}>
+                      {compromissosTimeline.map((entry, i) => {
+                        const isActive = chartFilter?.type === 'compromissoMes' && chartFilter?.value === `${entry.fullMonth}|${entry.year}`;
+                        return <Cell key={i} fill={COLORS[i % COLORS.length]} opacity={chartFilter?.type === 'compromissoMes' && !isActive ? 0.3 : 1} />;
+                      })}
+                      <LabelList dataKey="agendas" position="top" fill="#374151" fontSize={10} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-[280px] flex items-center justify-center text-sm text-gray-400">
+                  Sem dados de compromissos para este período
+                </div>
+              )}
               <p className="text-[10px] text-gray-400 text-center mt-2">Período: {dateRange}</p>
             </div>
 
@@ -643,6 +652,8 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
                       { field: 'probabilidade' as SortField, label: 'Prob.', align: 'left' },
                       { field: 'valorPrevisto' as SortField, label: 'Valor Previsto', align: 'right' },
                       { field: 'valorFechado' as SortField, label: 'Valor Fechado', align: 'right' },
+                      { field: 'valorPrevisto' as SortField, label: '% Rec.', align: 'center' },
+                      { field: 'valorPrevisto' as SortField, label: 'Valor Reconhecido', align: 'right' },
                       { field: 'agenda' as SortField, label: 'Agendas', align: 'center' },
                       { field: 'mesFech' as SortField, label: 'Mês Fech.', align: 'left' },
                     ]).map(col => (
@@ -676,6 +687,18 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
                       <td className="px-3 py-2 text-right font-semibold text-gray-800">{formatCurrency(op.valorPrevisto)}</td>
                       <td className="px-3 py-2 text-right font-semibold text-green-700">
                         {op.valorFechado > 0 ? formatCurrency(op.valorFechado) : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                          (op.percentualReconhecimento ?? 100) === 100 ? 'bg-green-100 text-green-700' :
+                          (op.percentualReconhecimento ?? 100) === 25 ? 'bg-amber-100 text-amber-700' :
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                          {op.percentualReconhecimento ?? 100}%
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right font-semibold text-blue-700">
+                        {formatCurrency(op.valorReconhecido ?? op.valorPrevisto)}
                       </td>
                       <td className="px-3 py-2 text-center">
                         <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${

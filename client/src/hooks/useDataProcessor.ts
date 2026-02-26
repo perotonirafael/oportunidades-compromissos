@@ -20,6 +20,9 @@ export interface ProcessedRecord {
   mesFech: string;
   valorPrevisto: number;
   valorFechado: number;
+  valorReconhecido: number;
+  valorFechadoReconhecido: number;
+  percentualReconhecimento: number;
   agenda: number;
   tipoOportunidade: string;
   subtipoOportunidade: string;
@@ -165,6 +168,9 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
             mesPrevisaoNum: monthNum,
             mesFech: month,
             valorPrevisto, valorFechado,
+            valorReconhecido: valorPrevisto,
+            valorFechadoReconhecido: valorFechado,
+            percentualReconhecimento: 100,
             agenda: userActions.length,
             tipoOportunidade: trim(opp['Tipo de Oportunidade']),
             subtipoOportunidade: trim(opp['Subtipo de Oportunidade']),
@@ -193,6 +199,9 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
           mesPrevisaoNum: monthNum,
           mesFech: month,
           valorPrevisto, valorFechado,
+          valorReconhecido: valorPrevisto,
+          valorFechadoReconhecido: valorFechado,
+          percentualReconhecimento: 100,
           agenda: 0,
           tipoOportunidade: trim(opp['Tipo de Oportunidade']),
           subtipoOportunidade: trim(opp['Subtipo de Oportunidade']),

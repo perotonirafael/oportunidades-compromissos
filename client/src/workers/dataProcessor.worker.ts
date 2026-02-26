@@ -146,6 +146,30 @@ function readFileBuffer(buffer: ArrayBuffer): string {
 
 // ====== PROCESSAMENTO DE DADOS ======
 
+// Categorias com reconhecimento integral (100%)
+const CATEGORIAS_100 = new Set([
+  'Análise de Aderência',
+  'Análise de RFP/RFI',
+  'Demonstração Presencial',
+  'Demonstração Remota',
+  'Edital',
+  'Termo de Referência',
+]);
+
+// Categoria ETN Apoio (25%)
+const CATEGORIA_APOIO = 'ETN Apoio';
+
+function getReconhecimentoPercentual(categoria: string): number {
+  if (!categoria) return 0;
+  const cat = categoria.trim();
+  // Verificar match exato ou case-insensitive
+  for (const c of Array.from(CATEGORIAS_100)) {
+    if (cat.toLowerCase() === c.toLowerCase()) return 100;
+  }
+  if (cat.toLowerCase() === CATEGORIA_APOIO.toLowerCase()) return 25;
+  return 0;
+}
+
 function processData(opportunities: any[], actions: any[]) {
   // INDEX: Ações agrupadas por Oportunidade ID
   const actionsByOppId = new Map<string, any[]>();
@@ -192,14 +216,26 @@ function processData(opportunities: any[], actions: any[]) {
 
         const catCount = new Map<string, number>();
         const actCount = new Map<string, number>();
+        // Calcular o maior percentual de reconhecimento entre todos os compromissos do usuário
+        let maxReconhecimento = 0;
         for (const a of userActions) {
-          const c = trim(a['Categoria']); if (c) catCount.set(c, (catCount.get(c) || 0) + 1);
+          const c = trim(a['Categoria']); 
+          if (c) {
+            catCount.set(c, (catCount.get(c) || 0) + 1);
+            const pct = getReconhecimentoPercentual(c);
+            if (pct > maxReconhecimento) maxReconhecimento = pct;
+          }
           const at = trim(a['Atividade']); if (at) actCount.set(at, (actCount.get(at) || 0) + 1);
         }
         let topCat = ''; let topCatN = 0;
         catCount.forEach((v, k) => { if (v > topCatN) { topCat = k; topCatN = v; } });
         let topAct = ''; let topActN = 0;
         actCount.forEach((v, k) => { if (v > topActN) { topAct = k; topActN = v; } });
+
+        // Aplicar regra de reconhecimento: valor reconhecido = valor * percentual
+        const percentualReconhecimento = maxReconhecimento > 0 ? maxReconhecimento : 100; // Se não tem categoria especial, 100%
+        const valorReconhecido = valorPrevisto * (percentualReconhecimento / 100);
+        const valorFechadoReconhecido = valorFechado * (percentualReconhecimento / 100);
 
         records.push({
           oppId, conta, contaId,
@@ -214,6 +250,9 @@ function processData(opportunities: any[], actions: any[]) {
           mesPrevisaoNum: monthNum,
           mesFech: month,
           valorPrevisto, valorFechado,
+          valorReconhecido,
+          valorFechadoReconhecido,
+          percentualReconhecimento,
           agenda: userActions.length,
           tipoOportunidade: trim(opp['Tipo de Oportunidade']),
           subtipoOportunidade: trim(opp['Subtipo de Oportunidade']),
@@ -242,6 +281,9 @@ function processData(opportunities: any[], actions: any[]) {
         mesPrevisaoNum: monthNum,
         mesFech: month,
         valorPrevisto, valorFechado,
+        valorReconhecido: valorPrevisto,
+        valorFechadoReconhecido: valorFechado,
+        percentualReconhecimento: 100,
         agenda: 0,
         tipoOportunidade: trim(opp['Tipo de Oportunidade']),
         subtipoOportunidade: trim(opp['Subtipo de Oportunidade']),
@@ -348,7 +390,7 @@ function processData(opportunities: any[], actions: any[]) {
     const stage = r.etapa || 'Desconhecido';
     const f = funnelMap.get(stage) || { count: 0, value: 0 };
     f.count++;
-    f.value += r.valorPrevisto;
+    f.value += (r.valorReconhecido ?? r.valorPrevisto);
     funnelMap.set(stage, f);
   }
   const funnelData = Array.from(funnelMap.entries()).map(([etapa, d]) => ({ etapa, ...d }));
@@ -362,7 +404,7 @@ function processData(opportunities: any[], actions: any[]) {
     const stage = r.etapa || 'Desconhecido';
     const f = fcMap.get(stage) || { count: 0, value: 0, probs: [] };
     f.count++;
-    f.value += r.valorPrevisto;
+    f.value += (r.valorReconhecido ?? r.valorPrevisto);
     f.probs.push(r.probNum);
     fcMap.set(stage, f);
   }
@@ -381,7 +423,7 @@ function processData(opportunities: any[], actions: any[]) {
     etnSeen.add(r.oppId);
     const e = etnMap.get(r.etn) || { count: 0, value: 0 };
     e.count++;
-    e.value += r.valorPrevisto;
+    e.value += (r.valorReconhecido ?? r.valorPrevisto);
     etnMap.set(r.etn, e);
   }
   const etnTop10 = Array.from(etnMap.entries())
@@ -394,7 +436,7 @@ function processData(opportunities: any[], actions: any[]) {
   for (const r of records) {
     if (r.etapa !== 'Fechada e Perdida') continue;
     const motivo = r.motivoPerda || 'Sem motivo';
-    motivoMap.set(motivo, (motivoMap.get(motivo) || 0) + r.valorPrevisto);
+    motivoMap.set(motivo, (motivoMap.get(motivo) || 0) + (r.valorReconhecido ?? r.valorPrevisto));
   }
   const motivosPerda = Array.from(motivoMap.entries())
     .map(([motivo, value]) => ({ motivo, count: value }))

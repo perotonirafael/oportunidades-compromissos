@@ -59,6 +59,9 @@ export default function Home() {
         'Mês Fechamento': d.mesFech,
         'Valor Previsto': d.valorPrevisto,
         'Valor Fechado': d.valorFechado,
+        '% Reconhecimento': d.percentualReconhecimento ?? 100,
+        'Valor Reconhecido': d.valorReconhecido ?? d.valorPrevisto,
+        'Valor Fechado Reconhecido': d.valorFechadoReconhecido ?? d.valorFechado,
         'Tipo Oportunidade': d.tipoOportunidade,
         'Subtipo Oportunidade': d.subtipoOportunidade,
         'Origem Oportunidade': d.origemOportunidade,
@@ -186,8 +189,52 @@ export default function Home() {
   
   // Dados das Agendas Faltantes (com filtro de clique nos gráficos E filtro ETN)
   // Item 5: Remover nomes OLD
+  // Função para parsear data no formato dd/mm/yyyy para comparação
+  const parseDate = useCallback((dateStr: string) => {
+    if (!dateStr || dateStr === '-') return 0;
+    const parts = dateStr.split('/');
+    if (parts.length >= 3) {
+      const d = parseInt(parts[0]) || 1;
+      const m = parseInt(parts[1]) || 1;
+      const y = parseInt(parts[2]) || 2000;
+      return y * 10000 + m * 100 + d;
+    }
+    return 0;
+  }, []);
+
+  // Top 5 ETNs com oportunidades sem compromisso com data de criação mais recente
+  const top5MissingETNs = useMemo(() => {
+    const filtered = missingAgendas.filter((r: any) => !r.etn.trim().toUpperCase().endsWith('OLD'));
+    // Agrupar por ETN e encontrar a data de criação mais recente de cada
+    const etnMap = new Map<string, { count: number; maxDate: number; maxDateStr: string }>();
+    for (const r of filtered) {
+      const dateVal = parseDate(r.dataCriacao || '');
+      const existing = etnMap.get(r.etn);
+      if (!existing) {
+        etnMap.set(r.etn, { count: 1, maxDate: dateVal, maxDateStr: r.dataCriacao || '-' });
+      } else {
+        existing.count++;
+        if (dateVal > existing.maxDate) {
+          existing.maxDate = dateVal;
+          existing.maxDateStr = r.dataCriacao || '-';
+        }
+      }
+    }
+    // Ordenar por data de criação mais recente e pegar top 5
+    return Array.from(etnMap.entries())
+      .sort((a, b) => b[1].maxDate - a[1].maxDate)
+      .slice(0, 5)
+      .map(([etn]) => etn);
+  }, [missingAgendas, parseDate]);
+
   const missingAgendasFiltered = useMemo(() => {
     let filtered = missingAgendas.filter((r: any) => !r.etn.trim().toUpperCase().endsWith('OLD'));
+    
+    // Por padrão, mostrar apenas os top 5 ETNs (a menos que o usuário filtre manualmente)
+    if (selETNMissing.length === 0 && !missingSearch && missingFilterEtapas.length === 0 && !(chartFilter && chartFilter.field === 'etnMissing')) {
+      filtered = filtered.filter((r: any) => top5MissingETNs.includes(r.etn));
+    }
+    
     // Filtro ETN do dropdown
     if (selETNMissing.length > 0) {
       filtered = filtered.filter((r: any) => selETNMissing.includes(r.etn));
@@ -196,7 +243,7 @@ export default function Home() {
     if (chartFilter && chartFilter.field === 'etnMissing') {
       filtered = filtered.filter((r: any) => r.etn === chartFilter.value);
     }
-    // Item 5: Filtro por múltiplas etapas
+    // Filtro por múltiplas etapas
     if (missingFilterEtapas.length > 0) {
       filtered = filtered.filter((r: any) => missingFilterEtapas.includes(r.etapa));
     }
@@ -210,8 +257,14 @@ export default function Home() {
         r.etapa.toLowerCase().includes(term)
       );
     }
+    // Ordenar por data de criação da oportunidade (mais recente primeiro)
+    filtered.sort((a: any, b: any) => {
+      const dateA = parseDate(a.dataCriacao || '');
+      const dateB = parseDate(b.dataCriacao || '');
+      return dateB - dateA;
+    });
     return filtered;
-  }, [missingAgendas, chartFilter, selETNMissing, missingFilterEtapas, missingSearch]);
+  }, [missingAgendas, chartFilter, selETNMissing, missingFilterEtapas, missingSearch, top5MissingETNs, parseDate]);
 
   // ETN Top 10 filtrado
   const etnTop10Filtered = useMemo(() => {
@@ -223,7 +276,7 @@ export default function Home() {
       seen.add(r.oppId);
       const e = map.get(r.etn) || { count: 0, value: 0 };
       e.count++;
-      e.value += r.valorPrevisto;
+      e.value += (r.valorReconhecido ?? r.valorPrevisto);
       map.set(r.etn, e);
     }
     return Array.from(map.entries())
@@ -238,7 +291,7 @@ export default function Home() {
     for (const r of filteredData) {
       if (r.etapa !== 'Fechada e Perdida') continue;
       const motivo = r.motivoPerda || 'Sem motivo';
-      map.set(motivo, (map.get(motivo) || 0) + r.valorPrevisto);
+      map.set(motivo, (map.get(motivo) || 0) + (r.valorReconhecido ?? r.valorPrevisto));
     }
     return Array.from(map.entries())
       .map(([motivo, value]) => ({ motivo, count: value }))
@@ -262,16 +315,16 @@ export default function Home() {
         seenOps.add(r.oppId);
         if (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR') {
           seenGanhas.add(r.oppId);
-          ganhasValor += r.valorFechado; // Item 4: Usar Valor Fechado
+          ganhasValor += (r.valorFechadoReconhecido ?? r.valorFechado);
         }
         if (r.etapa === 'Fechada e Perdida') {
           seenPerdidas.add(r.oppId);
-          perdidasValor += r.valorPrevisto;
+          perdidasValor += (r.valorReconhecido ?? r.valorPrevisto);
         }
       }
       totalAgendas += r.agenda;
       if (r.probNum >= 75 && r.etapa !== 'Fechada e Ganha' && r.etapa !== 'Fechada e Ganha TR' && r.etapa !== 'Fechada e Perdida') {
-        totalForecast += r.valorPrevisto;
+        totalForecast += (r.valorReconhecido ?? r.valorPrevisto);
       }
     }
 
@@ -790,7 +843,7 @@ export default function Home() {
                         </tr>
                       </thead>
                       <tbody>
-                        {missingAgendasFiltered.slice(0, 200).map((r: any, idx: number) => (
+                        {missingAgendasFiltered.slice(0, 10).map((r: any, idx: number) => (
                           <tr key={idx} className="border-b hover:bg-amber-50/50">
                             <td className="px-3 py-2 font-semibold text-amber-900">{r.oppId}</td>
                             <td className="px-3 py-2 text-gray-700">{r.conta}</td>
@@ -812,9 +865,9 @@ export default function Home() {
                       </tbody>
                     </table>
                   </div>
-                  {missingAgendasFiltered.length > 200 && (
+                  {missingAgendasFiltered.length > 10 && (
                     <div className="px-4 py-2 bg-amber-50 text-xs text-amber-700 text-center border-t border-amber-200">
-                      Exibindo 200 de {missingAgendasFiltered.length} registros
+                      Exibindo 10 de {missingAgendasFiltered.length} registros (ordenados por data de criação mais recente)
                     </div>
                   )}
                   {/* Item 9: Rodapé com intervalo de datas */}
@@ -875,7 +928,7 @@ function MissingAgendaChart({ data, onBarClick, selectedETN }: { data: MissingAg
     return Array.from(map.entries())
       .map(([name, count]) => ({ name: name.length > 20 ? name.slice(0, 20) + '…' : name, count, fullName: name }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, 15);
+      .slice(0, 5);
   }, [data, selectedETN]);
 
   const colors = ['#f59e0b', '#f97316', '#ef4444', '#ec4899', '#8b5cf6', '#6366f1', '#3b82f6', '#06b6d4', '#14b8a6', '#10b981', '#84cc16', '#eab308', '#d946ef', '#0ea5e9', '#22d3ee'];
