@@ -403,6 +403,64 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
       .slice(0, 10);
   }, [combinedData]);
 
+  // ETN Conversion Top 10 (lazy-evaluated)
+  const etnConversionTop10 = useMemo(() => {
+    if (!combinedData?.records) return [];
+    const records = combinedData.records;
+    const etnMap = new Map<string, { total: number; ganhas: number; perdidas: number }>();
+    const seen = new Set<string>();
+    
+    for (const r of records) {
+      if (seen.has(r.oppId)) continue;
+      // Filtrar apenas oportunidades com Demonstração Presencial/Remota
+      const hasDemo = r.categoriaCompromisso === 'Demonstração Presencial' || r.categoriaCompromisso === 'Demonstração Remota';
+      if (!hasDemo) continue;
+      
+      seen.add(r.oppId);
+      const e = etnMap.get(r.etn) || { total: 0, ganhas: 0, perdidas: 0 };
+      e.total++;
+      if (r.etapa === 'Fechada e Ganha') e.ganhas++;
+      if (r.etapa === 'Fechada e Perdida') e.perdidas++;
+      etnMap.set(r.etn, e);
+    }
+    
+    return Array.from(etnMap.entries())
+      .map(([name, d]) => ({
+        name: name.length > 20 ? name.slice(0, 20) + '...' : name,
+        fullName: name,
+        total: d.total,
+        ganhas: d.ganhas,
+        perdidas: d.perdidas,
+        taxaConversao: d.total > 0 ? (d.ganhas / d.total) * 100 : 0,
+      }))
+      .sort((a, b) => b.taxaConversao - a.taxaConversao)
+      .slice(0, 10);
+  }, [combinedData]);
+
+  // ETN Recursos X Agendas (lazy-evaluated)
+  const etnRecursosAgendas = useMemo(() => {
+    if (!combinedData?.records) return [];
+    const records = combinedData.records;
+    const etnMap = new Map<string, { valor: number; agendas: number }>();
+    
+    for (const r of records) {
+      const e = etnMap.get(r.etn) || { valor: 0, agendas: 0 };
+      e.valor += r.valorReconhecido;
+      e.agendas += r.agenda;
+      etnMap.set(r.etn, e);
+    }
+    
+    return Array.from(etnMap.entries())
+      .map(([name, d]) => ({
+        name: name.length > 20 ? name.slice(0, 20) + '...' : name,
+        fullName: name,
+        valor: d.valor,
+        agendas: d.agendas,
+      }))
+      .sort((a, b) => b.valor - a.valor)
+      .slice(0, 10);
+  }, [combinedData]);
+
   return combinedData ? {
     records: combinedData.records,
     missingAgendas: combinedData.missingAgendas,
@@ -411,6 +469,8 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
     funnelData,
     forecastFunnel,
     etnTop10,
+    etnConversionTop10,
+    etnRecursosAgendas,
     filterOptions: combinedData.filterOptions,
   } : null;
 }

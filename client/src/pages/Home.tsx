@@ -148,6 +148,8 @@ export default function Home() {
   const funnelData = result?.funnelData ?? [];
   const forecastFunnel = result?.forecastFunnel ?? [];
   const etnTop10 = result?.etnTop10 ?? [];
+  const etnConversionTop10 = result?.etnConversionTop10 ?? [];
+  const etnRecursosAgendas = result?.etnRecursosAgendas ?? [];
   const filterOptions = result?.filterOptions ?? {
     years: [], months: [], representantes: [], responsaveis: [], etns: [],
     etapas: [], probabilidades: [], agenda: [], contas: [], tipos: [], origens: [], segmentos: [],
@@ -202,9 +204,18 @@ export default function Home() {
     return 0;
   }, []);
 
-  // Top 5 ETNs com oportunidades sem compromisso com data de criação mais recente
+  // Top 5 ETNs com oportunidades sem compromisso com data de criação mais recente (últimos 30 dias)
   const top5MissingETNs = useMemo(() => {
-    const filtered = missingAgendas.filter((r: any) => !r.etn.trim().toUpperCase().endsWith('OLD'));
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgoNum = thirtyDaysAgo.getFullYear() * 10000 + (thirtyDaysAgo.getMonth() + 1) * 100 + thirtyDaysAgo.getDate();
+    
+    const filtered = missingAgendas.filter((r: any) => {
+      if (r.etn.trim().toUpperCase().endsWith('OLD')) return false;
+      const dateVal = parseDate(r.dataCriacao || '');
+      return dateVal >= thirtyDaysAgoNum;
+    });
+    
     // Agrupar por ETN e encontrar a data de criação mais recente de cada
     const etnMap = new Map<string, { count: number; maxDate: number; maxDateStr: string }>();
     for (const r of filtered) {
@@ -228,7 +239,15 @@ export default function Home() {
   }, [missingAgendas, parseDate]);
 
   const missingAgendasFiltered = useMemo(() => {
-    let filtered = missingAgendas.filter((r: any) => !r.etn.trim().toUpperCase().endsWith('OLD'));
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgoNum = thirtyDaysAgo.getFullYear() * 10000 + (thirtyDaysAgo.getMonth() + 1) * 100 + thirtyDaysAgo.getDate();
+    
+    let filtered = missingAgendas.filter((r: any) => {
+      if (r.etn.trim().toUpperCase().endsWith('OLD')) return false;
+      const dateVal = parseDate(r.dataCriacao || '');
+      return dateVal >= thirtyDaysAgoNum;
+    });
     
     // Por padrão, mostrar apenas os top 5 ETNs (a menos que o usuário filtre manualmente)
     if (selETNMissing.length === 0 && !missingSearch && missingFilterEtapas.length === 0 && !(chartFilter && chartFilter.field === 'etnMissing')) {
@@ -716,6 +735,8 @@ export default function Home() {
               motivosPerda={motivosPerdaFiltered}
               forecastFunnel={forecastFunnel}
               etnTop10={etnTop10Filtered}
+              etnConversionTop10={etnConversionTop10}
+              etnRecursosAgendas={etnRecursosAgendas}
               onChartClick={handleChartClick}
               onETNClick={setSelectedETNDetail}
             />
@@ -819,7 +840,7 @@ export default function Home() {
                         </div>
                       )}
                     </div>
-                    <span className="ml-auto text-xs text-gray-500">{missingAgendasFiltered.length} de {missingAgendas.length} registros</span>
+                    <span className="ml-auto text-xs text-gray-500">{missingAgendasFiltered.slice(0, 10).length} de {missingAgendasFiltered.length} registros (últimos 30 dias)</span>
                     {(missingSearch || missingFilterEtapas.length > 0) && (
                       <button
                         onClick={() => { setMissingSearch(''); setMissingFilterEtapas([]); }}

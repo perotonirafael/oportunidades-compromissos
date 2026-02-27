@@ -443,6 +443,63 @@ function processData(opportunities: any[], actions: any[]) {
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 
+  // TOP 10 Taxa de Conversão (Demonstração Presencial/Remota)
+  const etnConversionMap = new Map<string, { total: number; ganhas: number; perdidas: number }>();
+  const etnConversionSeen = new Set<string>();
+  for (const r of records) {
+    const key = `${r.etn}-${r.oppId}`;
+    if (etnConversionSeen.has(key)) continue;
+    etnConversionSeen.add(key);
+    
+    // Verificar se tem ação com Demonstração Presencial ou Remota
+    const hasDemo = actions.some(a => 
+      a['Oportunidade ID'] === r.oppId && 
+      a['Usuario']?.trim() === r.etn?.trim() &&
+      (a['Categoria']?.includes('Demonstração Presencial') || a['Categoria']?.includes('Demonstração Remota'))
+    );
+    
+    if (!hasDemo) continue;
+    
+    const e = etnConversionMap.get(r.etn) || { total: 0, ganhas: 0, perdidas: 0 };
+    e.total++;
+    if (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR') {
+      e.ganhas++;
+    } else if (r.etapa === 'Fechada e Perdida') {
+      e.perdidas++;
+    }
+    etnConversionMap.set(r.etn, e);
+  }
+  const etnConversionTop10 = Array.from(etnConversionMap.entries())
+    .map(([name, d]) => ({
+      name: name.length > 20 ? name.slice(0, 20) + '...' : name,
+      fullName: name,
+      total: d.total,
+      ganhas: d.ganhas,
+      perdidas: d.perdidas,
+      taxaConversao: d.total > 0 ? Math.round((d.ganhas / d.total) * 100) : 0,
+    }))
+    .sort((a, b) => b.taxaConversao - a.taxaConversao)
+    .slice(0, 10);
+
+  // TOP 10 Maiores Recursos X Agendas
+  const etnAgendaMap = new Map<string, { valor: number; agendas: number }>();
+  for (const r of records) {
+    // Incluir todos os ETNs, inclusive 'Sem Agenda'
+    const e = etnAgendaMap.get(r.etn) || { valor: 0, agendas: 0 };
+    e.valor += (r.valorReconhecido ?? r.valorPrevisto);
+    e.agendas += r.agenda; // Somar quantidade de compromissos
+    etnAgendaMap.set(r.etn, e);
+  }
+  const etnRecursosAgendas = Array.from(etnAgendaMap.entries())
+    .map(([name, d]) => ({
+      name: name.length > 20 ? name.slice(0, 20) + '...' : name,
+      fullName: name,
+      valor: d.valor,
+      agendas: d.agendas,
+    }))
+    .sort((a, b) => b.valor - a.valor)
+    .slice(0, 10);
+
   return {
     records,
     missingAgendas,
@@ -452,6 +509,8 @@ function processData(opportunities: any[], actions: any[]) {
     funnelData,
     forecastFunnel,
     etnTop10,
+    etnConversionTop10,
+    etnRecursosAgendas,
   };
 }
 
