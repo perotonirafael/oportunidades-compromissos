@@ -117,6 +117,9 @@ export default function Home() {
   const [missingSearch, setMissingSearch] = useState('');
   const [missingFilterEtapas, setMissingFilterEtapas] = useState<string[]>([]);
   const [showEtapaDropdown, setShowEtapaDropdown] = useState(false);
+  const [missingPage, setMissingPage] = useState(0);
+  // Reset paginação quando filtros mudam
+  useEffect(() => { setMissingPage(0); }, [missingSearch, missingFilterEtapas, selETNMissing, chartFilter]);
 
   // Estado para modal de detalhe do ETN
   const [selectedETNDetail, setSelectedETNDetail] = useState<string | null>(null);
@@ -148,8 +151,66 @@ export default function Home() {
   const funnelData = result?.funnelData ?? [];
   const forecastFunnel = result?.forecastFunnel ?? [];
   const etnTop10 = result?.etnTop10 ?? [];
-  const etnConversionTop10 = result?.etnConversionTop10 ?? [];
-  const etnRecursosAgendas = result?.etnRecursosAgendas ?? [];
+  // Fallback: calcular etnConversionTop10 e etnRecursosAgendas a partir dos records se não existirem no cache
+  const etnConversionTop10 = useMemo(() => {
+    if (result?.etnConversionTop10 && result.etnConversionTop10.length > 0) return result.etnConversionTop10;
+    if (!processedData || processedData.length === 0) return [];
+    // Calcular a partir dos records
+    const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const demoCategories = ['demonstracao presencial', 'demonstracao remota'];
+    const etnMap = new Map<string, { total: number; ganhas: number; perdidas: number }>();
+    const seen = new Set<string>();
+    for (const r of processedData) {
+      if (r.etn === 'Sem Agenda') continue;
+      const catNorm = normalize(r.categoriaCompromisso || '');
+      const hasDemo = demoCategories.some(c => catNorm.includes(c));
+      if (!hasDemo) continue;
+      const key = `${r.etn}-${r.idOp}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const e = etnMap.get(r.etn) || { total: 0, ganhas: 0, perdidas: 0 };
+      e.total++;
+      const etapaLower = (r.etapa || '').toLowerCase();
+      if (etapaLower.includes('ganha')) e.ganhas++;
+      if (etapaLower.includes('perdida')) e.perdidas++;
+      etnMap.set(r.etn, e);
+    }
+    return Array.from(etnMap.entries())
+      .filter(([, d]) => d.total > 0)
+      .map(([name, d]) => ({
+        name: name.length > 20 ? name.slice(0, 20) + '...' : name,
+        fullName: name,
+        total: d.total,
+        ganhas: d.ganhas,
+        perdidas: d.perdidas,
+        taxaConversao: d.total > 0 ? Math.round((d.ganhas / d.total) * 100) : 0,
+      }))
+      .sort((a, b) => b.taxaConversao - a.taxaConversao)
+      .slice(0, 10);
+  }, [result?.etnConversionTop10, processedData]);
+
+  const etnRecursosAgendas = useMemo(() => {
+    if (result?.etnRecursosAgendas && result.etnRecursosAgendas.length > 0) return result.etnRecursosAgendas;
+    if (!processedData || processedData.length === 0) return [];
+    // Calcular a partir dos records
+    const etnMap = new Map<string, { valor: number; agendas: number }>();
+    for (const r of processedData) {
+      if (r.etn === 'Sem Agenda') continue;
+      const e = etnMap.get(r.etn) || { valor: 0, agendas: 0 };
+      e.valor += (r.valorReconhecido ?? r.valorPrevisto);
+      e.agendas += (r.agenda || 0);
+      etnMap.set(r.etn, e);
+    }
+    return Array.from(etnMap.entries())
+      .map(([name, d]) => ({
+        name: name.length > 20 ? name.slice(0, 20) + '...' : name,
+        fullName: name,
+        valor: d.valor,
+        agendas: d.agendas,
+      }))
+      .sort((a, b) => b.agendas - a.agendas)
+      .slice(0, 10);
+  }, [result?.etnRecursosAgendas, processedData]);
   const filterOptions = result?.filterOptions ?? {
     years: [], months: [], representantes: [], responsaveis: [], etns: [],
     etapas: [], probabilidades: [], agenda: [], contas: [], tipos: [], origens: [], segmentos: [],
@@ -840,7 +901,7 @@ export default function Home() {
                         </div>
                       )}
                     </div>
-                    <span className="ml-auto text-xs text-gray-500">{missingAgendasFiltered.slice(0, 10).length} de {missingAgendasFiltered.length} registros (últimos 30 dias)</span>
+                    <span className="ml-auto text-xs text-gray-500">Pág. {missingPage + 1} de {Math.max(1, Math.ceil(missingAgendasFiltered.length / 10))} · {missingAgendasFiltered.length} registros (últimos 30 dias)</span>
                     {(missingSearch || missingFilterEtapas.length > 0) && (
                       <button
                         onClick={() => { setMissingSearch(''); setMissingFilterEtapas([]); }}
@@ -864,7 +925,7 @@ export default function Home() {
                         </tr>
                       </thead>
                       <tbody>
-                        {missingAgendasFiltered.slice(0, 10).map((r: any, idx: number) => (
+                        {missingAgendasFiltered.slice(missingPage * 10, (missingPage + 1) * 10).map((r: any, idx: number) => (
                           <tr key={idx} className="border-b hover:bg-amber-50/50">
                             <td className="px-3 py-2 font-semibold text-amber-900">{r.oppId}</td>
                             <td className="px-3 py-2 text-gray-700">{r.conta}</td>
@@ -887,8 +948,24 @@ export default function Home() {
                     </table>
                   </div>
                   {missingAgendasFiltered.length > 10 && (
-                    <div className="px-4 py-2 bg-amber-50 text-xs text-amber-700 text-center border-t border-amber-200">
-                      Exibindo 10 de {missingAgendasFiltered.length} registros (ordenados por data de criação mais recente)
+                    <div className="px-4 py-3 bg-amber-50 border-t border-amber-200 flex items-center justify-between">
+                      <button
+                        onClick={() => setMissingPage(p => Math.max(0, p - 1))}
+                        disabled={missingPage === 0}
+                        className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-200 text-amber-900 hover:bg-amber-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        ← Anterior
+                      </button>
+                      <span className="text-xs text-amber-700 font-medium">
+                        Exibindo {missingPage * 10 + 1}–{Math.min((missingPage + 1) * 10, missingAgendasFiltered.length)} de {missingAgendasFiltered.length} registros
+                      </span>
+                      <button
+                        onClick={() => setMissingPage(p => Math.min(Math.ceil(missingAgendasFiltered.length / 10) - 1, p + 1))}
+                        disabled={(missingPage + 1) * 10 >= missingAgendasFiltered.length}
+                        className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-200 text-amber-900 hover:bg-amber-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Próxima →
+                      </button>
                     </div>
                   )}
                   {/* Item 9: Rodapé com intervalo de datas */}

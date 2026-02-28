@@ -412,8 +412,9 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
     
     for (const r of records) {
       if (seen.has(r.oppId)) continue;
-      // Filtrar apenas oportunidades com Demonstração Presencial/Remota
-      const hasDemo = r.categoriaCompromisso === 'Demonstração Presencial' || r.categoriaCompromisso === 'Demonstração Remota';
+      // Filtrar apenas oportunidades com Demonstração Presencial/Remota (normalizado sem acentos)
+      const catNorm = (r.categoriaCompromisso || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const hasDemo = catNorm.includes('demonstracao presencial') || catNorm.includes('demonstracao remota');
       if (!hasDemo) continue;
       
       seen.add(r.oppId);

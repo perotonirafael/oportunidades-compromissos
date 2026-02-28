@@ -147,26 +147,28 @@ function readFileBuffer(buffer: ArrayBuffer): string {
 // ====== PROCESSAMENTO DE DADOS ======
 
 // Categorias com reconhecimento integral (100%)
-const CATEGORIAS_100 = new Set([
-  'Análise de Aderência',
-  'Análise de RFP/RFI',
-  'Demonstração Presencial',
-  'Demonstração Remota',
-  'Edital',
-  'Termo de Referência',
+// Função para normalizar strings removendo acentos
+function normalizeStr(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+const CATEGORIAS_100_NORMALIZED = new Set([
+  'analise de aderencia',
+  'analise de rfp/rfi',
+  'demonstracao presencial',
+  'demonstracao remota',
+  'edital',
+  'termo de referencia',
 ]);
 
 // Categoria ETN Apoio (25%)
-const CATEGORIA_APOIO = 'ETN Apoio';
+const CATEGORIA_APOIO_NORMALIZED = 'etn apoio';
 
 function getReconhecimentoPercentual(categoria: string): number {
   if (!categoria) return 0;
-  const cat = categoria.trim();
-  // Verificar match exato ou case-insensitive
-  for (const c of Array.from(CATEGORIAS_100)) {
-    if (cat.toLowerCase() === c.toLowerCase()) return 100;
-  }
-  if (cat.toLowerCase() === CATEGORIA_APOIO.toLowerCase()) return 25;
+  const catNorm = normalizeStr(categoria);
+  if (CATEGORIAS_100_NORMALIZED.has(catNorm)) return 100;
+  if (catNorm === CATEGORIA_APOIO_NORMALIZED) return 25;
   return 0;
 }
 
@@ -451,12 +453,13 @@ function processData(opportunities: any[], actions: any[]) {
     if (etnConversionSeen.has(key)) continue;
     etnConversionSeen.add(key);
     
-    // Verificar se tem ação com Demonstração Presencial ou Remota
-    const hasDemo = actions.some(a => 
-      a['Oportunidade ID'] === r.oppId && 
-      a['Usuario']?.trim() === r.etn?.trim() &&
-      (a['Categoria']?.includes('Demonstração Presencial') || a['Categoria']?.includes('Demonstração Remota'))
-    );
+    // Verificar se tem ação com Demonstração Presencial ou Remota (normalizado sem acentos)
+    const hasDemo = actions.some(a => {
+      if (a['Oportunidade ID'] !== r.oppId) return false;
+      if (a['Usuario']?.trim() !== r.etn?.trim()) return false;
+      const catNorm = normalizeStr(a['Categoria'] || '');
+      return catNorm.includes('demonstracao presencial') || catNorm.includes('demonstracao remota');
+    });
     
     if (!hasDemo) continue;
     
