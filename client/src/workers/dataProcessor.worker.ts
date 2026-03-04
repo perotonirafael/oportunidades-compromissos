@@ -446,6 +446,19 @@ function processData(opportunities: any[], actions: any[]) {
     .slice(0, 10);
 
   // TOP 10 Taxa de Conversão (Demonstração Presencial/Remota)
+  // PRÉ-INDEXAR: criar Set de chaves oppId+usuario que têm Demonstração Presencial/Remota
+  const demoActionKeys = new Set<string>();
+  for (const a of actions) {
+    const catNorm = normalizeStr(a['Categoria'] || '');
+    if (catNorm.includes('demonstracao presencial') || catNorm.includes('demonstracao remota')) {
+      const oppId = trim(a['Oportunidade ID']);
+      const user = (a['Usuario'] || '').trim();
+      if (oppId && user) {
+        demoActionKeys.add(`${user}-${oppId}`);
+      }
+    }
+  }
+  
   const etnConversionMap = new Map<string, { total: number; ganhas: number; perdidas: number }>();
   const etnConversionSeen = new Set<string>();
   for (const r of records) {
@@ -453,15 +466,8 @@ function processData(opportunities: any[], actions: any[]) {
     if (etnConversionSeen.has(key)) continue;
     etnConversionSeen.add(key);
     
-    // Verificar se tem ação com Demonstração Presencial ou Remota (normalizado sem acentos)
-    const hasDemo = actions.some(a => {
-      if (a['Oportunidade ID'] !== r.oppId) return false;
-      if (a['Usuario']?.trim() !== r.etn?.trim()) return false;
-      const catNorm = normalizeStr(a['Categoria'] || '');
-      return catNorm.includes('demonstracao presencial') || catNorm.includes('demonstracao remota');
-    });
-    
-    if (!hasDemo) continue;
+    // Busca O(1) no Set pré-indexado
+    if (!demoActionKeys.has(key)) continue;
     
     const e = etnConversionMap.get(r.etn) || { total: 0, ganhas: 0, perdidas: 0 };
     e.total++;
