@@ -15,13 +15,14 @@ export interface ProcessedRecord {
   probabilidade: string;
   probNum: number;
   anoPrevisao: string;
-  mesPrevisao: string; // Agora armazena nome do mês (Janeiro, Fevereiro...)
-  mesPrevisaoNum: number; // Número do mês para ordenação
+  mesPrevisao: string;
+  mesPrevisaoNum: number;
   mesFech: string;
   valorPrevisto: number;
   valorFechado: number;
-  valorReconhecido: number;
-  valorFechadoReconhecido: number;
+  valorUnificado: number; // Fechada e Ganha → Valor Fechado * %rec; Restante → Valor Previsto * %rec
+  valorReconhecido?: number; // Legado - manter compatibilidade
+  valorFechadoReconhecido?: number; // Legado - manter compatibilidade
   percentualReconhecimento: number;
   agenda: number;
   tipoOportunidade: string;
@@ -47,6 +48,7 @@ export interface MissingAgendaRecord {
   valorPrevisto: number;
   mesFech: string;
   anoPrevisao: string;
+  subtipoOportunidade?: string;
   dataCriacao: string;
   oppAnteriorId: string;
   oppAnteriorEtapa: string;
@@ -168,6 +170,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
             mesPrevisaoNum: monthNum,
             mesFech: month,
             valorPrevisto, valorFechado,
+            valorUnificado: valorPrevisto,
             valorReconhecido: valorPrevisto,
             valorFechadoReconhecido: valorFechado,
             percentualReconhecimento: 100,
@@ -198,11 +201,12 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
           mesPrevisao: month, // CORRIGIDO: agora armazena nome do mês
           mesPrevisaoNum: monthNum,
           mesFech: month,
-          valorPrevisto, valorFechado,
-          valorReconhecido: valorPrevisto,
-          valorFechadoReconhecido: valorFechado,
-          percentualReconhecimento: 100,
-          agenda: 0,
+            valorPrevisto, valorFechado,
+            valorUnificado: valorPrevisto,
+            valorReconhecido: valorPrevisto,
+            valorFechadoReconhecido: valorFechado,
+            percentualReconhecimento: 100,
+            agenda: 0,
           tipoOportunidade: trim(opp['Tipo de Oportunidade']),
           subtipoOportunidade: trim(opp['Subtipo de Oportunidade']),
           origemOportunidade: trim(opp['Origem da Oportunidade']),
@@ -446,7 +450,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
     
     for (const r of records) {
       const e = etnMap.get(r.etn) || { valor: 0, agendas: 0 };
-      e.valor += r.valorReconhecido;
+      e.valor += (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto);
       e.agendas += r.agenda;
       etnMap.set(r.etn, e);
     }

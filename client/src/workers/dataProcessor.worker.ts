@@ -8,18 +8,26 @@ const MONTH_NAMES: Record<number, string> = {
   9: 'Setembro', 10: 'Outubro', 11: 'Novembro', 12: 'Dezembro'
 };
 
-function parseDate(dateStr: string): { month: string; year: string; monthNum: number } {
-  if (!dateStr) return { month: '', year: '', monthNum: 0 };
+const MONTH_ORDER: Record<string, number> = {
+  'Janeiro': 1, 'Fevereiro': 2, 'Março': 3, 'Abril': 4,
+  'Maio': 5, 'Junho': 6, 'Julho': 7, 'Agosto': 8,
+  'Setembro': 9, 'Outubro': 10, 'Novembro': 11, 'Dezembro': 12
+};
+
+function parseDate(dateStr: string): { month: string; year: string; monthNum: number; dateObj: Date | null } {
+  if (!dateStr) return { month: '', year: '', monthNum: 0, dateObj: null };
   const parts = dateStr.split('/');
   if (parts.length >= 3) {
+    const dayClean = parseInt(parts[0].replace(/[^0-9]/g, ''));
     const mesClean = parseInt(parts[1].replace(/[^0-9]/g, ''));
     const anoClean = parts[2].replace(/[^0-9]/g, '');
     const anoNum = parseInt(anoClean);
     if (mesClean >= 1 && mesClean <= 12 && anoClean.length === 4 && anoNum >= 2000 && anoNum <= 2100) {
-      return { month: MONTH_NAMES[mesClean], year: anoClean, monthNum: mesClean };
+      const dateObj = new Date(anoNum, mesClean - 1, dayClean || 1);
+      return { month: MONTH_NAMES[mesClean], year: anoClean, monthNum: mesClean, dateObj };
     }
   }
-  return { month: '', year: '', monthNum: 0 };
+  return { month: '', year: '', monthNum: 0, dateObj: null };
 }
 
 function cleanProb(val: any): { str: string; num: number } {
@@ -43,6 +51,11 @@ function trim(val: any): string {
 function extractSequential(oppId: string): number {
   const nums = oppId.replace(/[^0-9]/g, '');
   return nums ? parseInt(nums) : 0;
+}
+
+// Verifica se um nome contém "OLD"
+function isOLD(name: string): boolean {
+  return name.trim().toUpperCase().includes('OLD');
 }
 
 // ====== CSV PARSER (roda no worker) ======
@@ -147,7 +160,6 @@ function readFileBuffer(buffer: ArrayBuffer): string {
 // ====== PROCESSAMENTO DE DADOS ======
 
 // Categorias com reconhecimento integral (100%)
-// Função para normalizar strings removendo acentos
 function normalizeStr(s: string): string {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
@@ -161,7 +173,6 @@ const CATEGORIAS_100_NORMALIZED = new Set([
   'termo de referencia',
 ]);
 
-// Categoria ETN Apoio (25%)
 const CATEGORIA_APOIO_NORMALIZED = 'etn apoio';
 
 function getReconhecimentoPercentual(categoria: string): number {
@@ -173,9 +184,21 @@ function getReconhecimentoPercentual(categoria: string): number {
 }
 
 function processData(opportunities: any[], actions: any[]) {
-  // INDEX: Ações agrupadas por Oportunidade ID
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+
+  // ITEM 16: Filtrar compromissos com data futura - remover antes de processar
+  const validActions = actions.filter(act => {
+    const dateStr = trim(act['Data']);
+    if (!dateStr) return true; // Se não tem data, manter
+    const { dateObj } = parseDate(dateStr);
+    if (!dateObj) return true;
+    return dateObj <= today; // Só manter compromissos com data <= hoje
+  });
+
+  // INDEX: Ações agrupadas por Oportunidade ID (usando apenas ações válidas)
   const actionsByOppId = new Map<string, any[]>();
-  for (const act of actions) {
+  for (const act of validActions) {
     const oppId = trim(act['Oportunidade ID']);
     if (oppId) {
       if (!actionsByOppId.has(oppId)) actionsByOppId.set(oppId, []);
@@ -183,8 +206,10 @@ function processData(opportunities: any[], actions: any[]) {
     }
   }
 
-  // INDEX: Para Agendas Faltantes
+  // INDEX: Para Agendas Faltantes - agora com subtipo
   const etnContaOppMap = new Map<string, Map<string, Set<string>>>();
+  // Mapa de ETN -> Subtipo -> Set de OppIds (para cruzamento por produto)
+  const etnSubtipoOppMap = new Map<string, Map<string, Set<string>>>();
 
   // PROCESSAMENTO: Desdobramento 1:N
   const records: any[] = [];
@@ -193,10 +218,37 @@ function processData(opportunities: any[], actions: any[]) {
     const oppId = trim(opp['Oportunidade ID']);
     const contaId = trim(opp['Conta ID']);
     const conta = trim(opp['Conta']);
-    const { month, year, monthNum } = parseDate(trim(opp['Previsão de Fechamento']));
+    const responsavel = trim(opp['Responsável']);
+    const representante = trim(opp['Representante']);
+    const etapa = trim(opp['Etapa']);
+    const subtipoOportunidade = trim(opp['Subtipo de Oportunidade']);
+
+    // ITEM 2: Remover registros com OLD em Responsável
+    if (isOLD(responsavel)) continue;
+
     const prob = cleanProb(opp['Prob.']);
     const valorPrevisto = parseValue(opp['Valor Previsto']);
     const valorFechado = parseValue(opp['Valor Fechado']);
+
+    // ITEM 15: Para oportunidades Fechada e Ganha com data futura, usar Efetivação do Fechamento
+    let previsaoStr = trim(opp['Previsão de Fechamento']);
+    const isGanha = etapa === 'Fechada e Ganha' || etapa === 'Fechada e Ganha TR';
+    if (isGanha) {
+      const { dateObj: previsaoDate } = parseDate(previsaoStr);
+      if (previsaoDate && previsaoDate > today) {
+        // Data futura - usar Efetivação do Fechamento
+        const efetivacao = trim(opp['Efetivação do Fechamento']) || trim(opp['Efetivacao do Fechamento']);
+        if (efetivacao) {
+          previsaoStr = efetivacao;
+        }
+      }
+    }
+
+    const { month, year, monthNum } = parseDate(previsaoStr);
+
+    // ITEM 10/14: Regra de valor unificado
+    // Fechada e Ganha → usar Valor Fechado; Restante → usar Valor Previsto
+    // A regra de reconhecimento (25% ETN Apoio) se aplica sobre o valor base
 
     const linkedActions = actionsByOppId.get(oppId) || [];
 
@@ -209,16 +261,26 @@ function processData(opportunities: any[], actions: any[]) {
       }
 
       for (const [user, userActions] of Array.from(byUser.entries())) {
+        // ITEM 2: Remover ETNs com OLD
+        if (isOLD(user)) continue;
+
         if (contaId && user !== 'Sem Agenda') {
           if (!etnContaOppMap.has(user)) etnContaOppMap.set(user, new Map());
           const contaMap = etnContaOppMap.get(user)!;
           if (!contaMap.has(contaId)) contaMap.set(contaId, new Set());
           contaMap.get(contaId)!.add(oppId);
+
+          // ITEM 11: Mapear ETN -> Subtipo -> OppIds
+          if (subtipoOportunidade) {
+            if (!etnSubtipoOppMap.has(user)) etnSubtipoOppMap.set(user, new Map());
+            const subtipoMap = etnSubtipoOppMap.get(user)!;
+            if (!subtipoMap.has(subtipoOportunidade)) subtipoMap.set(subtipoOportunidade, new Set());
+            subtipoMap.get(subtipoOportunidade)!.add(oppId);
+          }
         }
 
         const catCount = new Map<string, number>();
         const actCount = new Map<string, number>();
-        // Calcular o maior percentual de reconhecimento entre todos os compromissos do usuário
         let maxReconhecimento = 0;
         for (const a of userActions) {
           const c = trim(a['Categoria']); 
@@ -234,30 +296,35 @@ function processData(opportunities: any[], actions: any[]) {
         let topAct = ''; let topActN = 0;
         actCount.forEach((v, k) => { if (v > topActN) { topAct = k; topActN = v; } });
 
-        // Aplicar regra de reconhecimento: valor reconhecido = valor * percentual
-        const percentualReconhecimento = maxReconhecimento > 0 ? maxReconhecimento : 100; // Se não tem categoria especial, 100%
-        const valorReconhecido = valorPrevisto * (percentualReconhecimento / 100);
-        const valorFechadoReconhecido = valorFechado * (percentualReconhecimento / 100);
+        const percentualReconhecimento = maxReconhecimento > 0 ? maxReconhecimento : 100;
+
+        // ITEM 10/14: Valor unificado
+        // Se Fechada e Ganha → valor base = Valor Fechado
+        // Senão → valor base = Valor Previsto
+        // Aplicar % reconhecimento sobre o valor base
+        const valorBase = isGanha ? valorFechado : valorPrevisto;
+        const valorUnificado = valorBase * (percentualReconhecimento / 100);
 
         records.push({
           oppId, conta, contaId,
-          representante: trim(opp['Representante']),
-          responsavel: trim(opp['Responsável']),
+          representante,
+          responsavel,
           etn: user,
-          etapa: trim(opp['Etapa']),
+          etapa,
           probabilidade: prob.str,
           probNum: prob.num,
           anoPrevisao: year,
           mesPrevisao: month,
           mesPrevisaoNum: monthNum,
           mesFech: month,
-          valorPrevisto, valorFechado,
-          valorReconhecido,
-          valorFechadoReconhecido,
+          valorPrevisto,
+          valorFechado,
+          // Valor unificado: substitui valorReconhecido e valorFechadoReconhecido
+          valorUnificado,
           percentualReconhecimento,
           agenda: userActions.length,
           tipoOportunidade: trim(opp['Tipo de Oportunidade']),
-          subtipoOportunidade: trim(opp['Subtipo de Oportunidade']),
+          subtipoOportunidade,
           origemOportunidade: trim(opp['Origem da Oportunidade']),
           motivoFechamento: trim(opp['Motivo de Fechamento']),
           motivoPerda: trim(opp['Motivo da Perda']),
@@ -270,25 +337,27 @@ function processData(opportunities: any[], actions: any[]) {
         });
       }
     } else {
+      const valorBase = isGanha ? valorFechado : valorPrevisto;
+
       records.push({
         oppId, conta, contaId,
-        representante: trim(opp['Representante']),
-        responsavel: trim(opp['Responsável']),
+        representante,
+        responsavel,
         etn: 'Sem Agenda',
-        etapa: trim(opp['Etapa']),
+        etapa,
         probabilidade: prob.str,
         probNum: prob.num,
         anoPrevisao: year,
         mesPrevisao: month,
         mesPrevisaoNum: monthNum,
         mesFech: month,
-        valorPrevisto, valorFechado,
-        valorReconhecido: valorPrevisto,
-        valorFechadoReconhecido: valorFechado,
+        valorPrevisto,
+        valorFechado,
+        valorUnificado: valorBase,
         percentualReconhecimento: 100,
         agenda: 0,
         tipoOportunidade: trim(opp['Tipo de Oportunidade']),
-        subtipoOportunidade: trim(opp['Subtipo de Oportunidade']),
+        subtipoOportunidade,
         origemOportunidade: trim(opp['Origem da Oportunidade']),
         motivoFechamento: trim(opp['Motivo de Fechamento']),
         motivoPerda: trim(opp['Motivo da Perda']),
@@ -302,7 +371,7 @@ function processData(opportunities: any[], actions: any[]) {
     }
   }
 
-  // AGENDAS FALTANTES
+  // AGENDAS FALTANTES - ITEM 11: Cruzar por Subtipo de Oportunidade
   const missingAgendas: any[] = [];
   const oppById = new Map<string, any>();
   for (const opp of opportunities) {
@@ -319,6 +388,12 @@ function processData(opportunities: any[], actions: any[]) {
   }
 
   for (const [etn, contaMap] of Array.from(etnContaOppMap.entries())) {
+    // ITEM 2: Pular ETNs com OLD
+    if (isOLD(etn)) continue;
+
+    // Obter os subtipos que este ETN já trabalhou
+    const etnSubtipos = etnSubtipoOppMap.get(etn) || new Map();
+
     for (const [contaId, oppIdsWithAction] of Array.from(contaMap.entries())) {
       let maxSeqWithAction = 0;
       let bestPrevOppId = '';
@@ -334,8 +409,14 @@ function processData(opportunities: any[], actions: any[]) {
       for (const opp of allOppsForConta) {
         const thisOppId = trim(opp['Oportunidade ID']);
         const thisSeq = extractSequential(thisOppId);
+        const thisSubtipo = trim(opp['Subtipo de Oportunidade']);
 
         if (!oppIdsWithAction.has(thisOppId) && thisSeq > maxSeqWithAction) {
+          // ITEM 11: Só mostrar se o ETN tem cadastro do mesmo subtipo/produto
+          if (thisSubtipo && etnSubtipos.size > 0) {
+            if (!etnSubtipos.has(thisSubtipo)) continue; // ETN não trabalhou com este produto
+          }
+
           const etapa = trim(opp['Etapa']);
           const { month: mFech, year: yFech } = parseDate(trim(opp['Previsão de Fechamento']));
           const prob = cleanProb(opp['Prob.']);
@@ -349,6 +430,7 @@ function processData(opportunities: any[], actions: any[]) {
             valorPrevisto: parseValue(opp['Valor Previsto']),
             mesFech: mFech,
             anoPrevisao: yFech,
+            subtipoOportunidade: thisSubtipo,
             dataCriacao: trim(opp['Data']) || trim(opp['Data de Criação']) || trim(opp['Data Criação']) || '',
             oppAnteriorId: bestPrevOppId,
             oppAnteriorEtapa: trim(oppById.get(bestPrevOppId)?.['Etapa'] || ''),
@@ -360,18 +442,53 @@ function processData(opportunities: any[], actions: any[]) {
   }
 
   // Extrair opções de filtro
+  // ITEM 1: Meses ordenados por número do mês
+  const monthSet = new Map<string, number>();
+  for (const r of records) {
+    if (r.mesPrevisao && r.mesPrevisaoNum) {
+      monthSet.set(r.mesPrevisao, r.mesPrevisaoNum);
+    }
+  }
+  const sortedMonths = Array.from(monthSet.entries())
+    .sort((a, b) => a[1] - b[1])
+    .map(([name]) => name);
+
+  // ITEM 5: Probabilidades agrupadas - acima de 75% vira ">75%"
+  const probSet = new Set<string>();
+  for (const r of records) {
+    if (r.probabilidade) {
+      const num = parseInt(r.probabilidade);
+      if (num > 75) {
+        probSet.add('>75%');
+      } else {
+        probSet.add(r.probabilidade);
+      }
+    }
+  }
+  const sortedProbs = Array.from(probSet).sort((a, b) => {
+    if (a === '>75%') return 1;
+    if (b === '>75%') return -1;
+    return parseInt(a) - parseInt(b);
+  });
+
+  // ITEM 6: Adicionar subtipos de oportunidade como opção de filtro
+  const subtipos = Array.from(new Set(records.map((r: any) => r.subtipoOportunidade).filter(Boolean))).sort();
+
+  // ITEM 2: Filtrar OLD dos filtros
+  const filterOLD = (arr: string[]) => arr.filter(s => !isOLD(s));
+
   const filterOptions = {
     years: Array.from(new Set(records.map((r: any) => r.anoPrevisao).filter(Boolean))).sort(),
-    months: Array.from(new Set(records.map((r: any) => r.mesPrevisao).filter(Boolean))),
-    representantes: Array.from(new Set(records.map((r: any) => r.representante).filter(Boolean))).sort(),
-    responsaveis: Array.from(new Set(records.map((r: any) => r.responsavel).filter(Boolean))).sort(),
-    etns: Array.from(new Set(records.map((r: any) => r.etn).filter(Boolean))).sort(),
+    months: sortedMonths,
+    representantes: filterOLD(Array.from(new Set(records.map((r: any) => r.representante).filter(Boolean))).sort()),
+    responsaveis: filterOLD(Array.from(new Set(records.map((r: any) => r.responsavel).filter(Boolean))).sort()),
+    etns: filterOLD(Array.from(new Set(records.map((r: any) => r.etn).filter(Boolean))).sort()),
     etapas: Array.from(new Set(records.map((r: any) => r.etapa).filter(Boolean))),
-    probabilidades: Array.from(new Set(records.map((r: any) => r.probabilidade).filter(Boolean))).sort((a: string, b: string) => parseInt(a) - parseInt(b)),
+    probabilidades: sortedProbs,
     agenda: Array.from(new Set(records.map((r: any) => r.agenda.toString()).filter(Boolean))).sort((a: string, b: string) => parseInt(a) - parseInt(b)),
     contas: Array.from(new Set(records.map((r: any) => r.conta).filter(Boolean))).sort(),
     tipos: Array.from(new Set(records.map((r: any) => r.tipoOportunidade).filter(Boolean))).sort(),
-    origens: Array.from(new Set(records.map((r: any) => r.origemOportunidade).filter(Boolean))).sort(),
+    subtipos,
     segmentos: Array.from(new Set(records.map((r: any) => r.cnaeSegmento).filter(Boolean))).sort(),
   };
 
@@ -392,7 +509,7 @@ function processData(opportunities: any[], actions: any[]) {
     const stage = r.etapa || 'Desconhecido';
     const f = funnelMap.get(stage) || { count: 0, value: 0 };
     f.count++;
-    f.value += (r.valorReconhecido ?? r.valorPrevisto);
+    f.value += r.valorUnificado;
     funnelMap.set(stage, f);
   }
   const funnelData = Array.from(funnelMap.entries()).map(([etapa, d]) => ({ etapa, ...d }));
@@ -406,7 +523,7 @@ function processData(opportunities: any[], actions: any[]) {
     const stage = r.etapa || 'Desconhecido';
     const f = fcMap.get(stage) || { count: 0, value: 0, probs: [] };
     f.count++;
-    f.value += (r.valorReconhecido ?? r.valorPrevisto);
+    f.value += r.valorUnificado;
     f.probs.push(r.probNum);
     fcMap.set(stage, f);
   }
@@ -417,15 +534,20 @@ function processData(opportunities: any[], actions: any[]) {
     }))
     .sort((a, b) => b.value - a.value);
 
-  // ETN Top 10
+  // ITEM 4: ETN Top 10 - só etapas Proposta e Negociação com prob >= 75%
   const etnSeen = new Set<string>();
   const etnMap = new Map<string, { count: number; value: number }>();
   for (const r of records) {
-    if (r.probNum < 75 || etnSeen.has(r.oppId)) continue;
+    if (isOLD(r.etn) || r.etn === 'Sem Agenda') continue;
+    if (r.probNum < 75) continue;
+    // ITEM 4: Apenas Proposta e Negociação
+    const etapaLower = r.etapa.toLowerCase();
+    if (!etapaLower.includes('proposta') && !etapaLower.includes('negociação') && !etapaLower.includes('negociacao')) continue;
+    if (etnSeen.has(r.oppId)) continue;
     etnSeen.add(r.oppId);
     const e = etnMap.get(r.etn) || { count: 0, value: 0 };
     e.count++;
-    e.value += (r.valorReconhecido ?? r.valorPrevisto);
+    e.value += r.valorUnificado;
     etnMap.set(r.etn, e);
   }
   const etnTop10 = Array.from(etnMap.entries())
@@ -438,22 +560,21 @@ function processData(opportunities: any[], actions: any[]) {
   for (const r of records) {
     if (r.etapa !== 'Fechada e Perdida') continue;
     const motivo = r.motivoPerda || 'Sem motivo';
-    motivoMap.set(motivo, (motivoMap.get(motivo) || 0) + (r.valorReconhecido ?? r.valorPrevisto));
+    motivoMap.set(motivo, (motivoMap.get(motivo) || 0) + r.valorUnificado);
   }
   const motivosPerda = Array.from(motivoMap.entries())
     .map(([motivo, value]) => ({ motivo, count: value }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 
-  // TOP 10 Taxa de Conversão (Demonstração Presencial/Remota)
-  // PRÉ-INDEXAR: criar Set de chaves oppId+usuario que têm Demonstração Presencial/Remota
+  // ITEM 7: TOP 10 Taxa de Conversão (Demonstração Presencial/Remota)
   const demoActionKeys = new Set<string>();
-  for (const a of actions) {
+  for (const a of validActions) {
     const catNorm = normalizeStr(a['Categoria'] || '');
     if (catNorm.includes('demonstracao presencial') || catNorm.includes('demonstracao remota')) {
       const oppId = trim(a['Oportunidade ID']);
       const user = (a['Usuario'] || '').trim();
-      if (oppId && user) {
+      if (oppId && user && !isOLD(user)) {
         demoActionKeys.add(`${user}-${oppId}`);
       }
     }
@@ -462,11 +583,11 @@ function processData(opportunities: any[], actions: any[]) {
   const etnConversionMap = new Map<string, { total: number; ganhas: number; perdidas: number }>();
   const etnConversionSeen = new Set<string>();
   for (const r of records) {
+    if (isOLD(r.etn) || r.etn === 'Sem Agenda') continue;
     const key = `${r.etn}-${r.oppId}`;
     if (etnConversionSeen.has(key)) continue;
     etnConversionSeen.add(key);
     
-    // Busca O(1) no Set pré-indexado
     if (!demoActionKeys.has(key)) continue;
     
     const e = etnConversionMap.get(r.etn) || { total: 0, ganhas: 0, perdidas: 0 };
@@ -490,13 +611,13 @@ function processData(opportunities: any[], actions: any[]) {
     .sort((a, b) => b.taxaConversao - a.taxaConversao)
     .slice(0, 10);
 
-  // TOP 10 Maiores Recursos X Agendas
+  // ITEM 8: TOP 10 Maiores Recursos X Agendas - TODOS os compromissos
   const etnAgendaMap = new Map<string, { valor: number; agendas: number }>();
   for (const r of records) {
-    // Incluir todos os ETNs, inclusive 'Sem Agenda'
+    if (isOLD(r.etn) || r.etn === 'Sem Agenda') continue;
     const e = etnAgendaMap.get(r.etn) || { valor: 0, agendas: 0 };
-    e.valor += (r.valorReconhecido ?? r.valorPrevisto);
-    e.agendas += r.agenda; // Somar quantidade de compromissos
+    e.valor += r.valorUnificado;
+    e.agendas += r.agenda; // Todos os compromissos
     etnAgendaMap.set(r.etn, e);
   }
   const etnRecursosAgendas = Array.from(etnAgendaMap.entries())
@@ -506,7 +627,7 @@ function processData(opportunities: any[], actions: any[]) {
       valor: d.valor,
       agendas: d.agendas,
     }))
-    .sort((a, b) => b.valor - a.valor)
+    .sort((a, b) => b.agendas - a.agendas)
     .slice(0, 10);
 
   return {
@@ -529,7 +650,6 @@ self.onmessage = (event: MessageEvent) => {
   const { type } = event.data;
 
   if (type === 'process') {
-    // Modo antigo: recebe dados já parseados
     try {
       const result = processData(event.data.opportunities, event.data.actions);
       self.postMessage({ type: 'result', ...result });
@@ -537,7 +657,6 @@ self.onmessage = (event: MessageEvent) => {
       self.postMessage({ type: 'error', message: error instanceof Error ? error.message : 'Unknown error' });
     }
   } else if (type === 'processFiles') {
-    // Modo novo: recebe ArrayBuffers e faz tudo no worker
     try {
       const { oppBuffer, actBuffer, oppFileName, actFileName } = event.data;
 

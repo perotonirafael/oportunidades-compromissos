@@ -1,16 +1,30 @@
-# Alterações Pendentes
+# Ajustes Rodada C - 16 Itens
 
-- [ ] 1. Renomear "Ops. Únicas" → "OPORTUNIDADES"
-- [ ] 2. Renomear "Total Registros" → "TOTAL DE COMPROMISSOS"
-- [ ] 3. Renomear "Hot Ops (≥75%)" → "OPORTUNIDADES FECHAMENTO (≥75%)"
-- [ ] 4. Renomear "Win Rate" → "Total de Oportunidades Ganhas" (mostrar apenas ganhas, não ratio)
-- [ ] 5. Renomear "Ganhas" → "Oportunidades Ganhas"
-- [ ] 6. Renomear "Perdidas" → "Oportunidades Perdidas"
-- [ ] 7. Renomear "Forecast Pond." → "FORECAST FECHAMENTO (≥75%)" com valores em R$
-- [ ] 8. Alterar gráfico "Distribuição por Probabilidade" → "FUNIL DE FORECAST" (formato funil, qtd oportunidades, etapas, % fechamento)
-- [ ] 9. Adicionar rótulos de dados no gráfico "Top 10 Motivos de Perda" + clique em qualquer gráfico filtra tabela analítica
-- [ ] 10. Alterar gráfico "Top 10 Representantes" → "ETN" (comparar qtd oportunidades e valor previsto por ETN top 10, regra ≥75%)
-- [ ] 11. Renomear "Usuário Ação" → "ETN" em todo o painel
-- [ ] 12. Corrigir join: APENAS por Oportunidade ID (remover fallback por Conta ID)
-- [ ] 13. Renomear "Qtde. Ações" → "Agenda" em todo o painel
-- [ ] 14. Criar gráfico + grid de Agendas Faltantes (oportunidades sem compromissos de ETN que atuou em oportunidade anterior do mesmo cliente)
+## Filtros
+- [ ] 1. Filtro mês ordenado por mês (Jan, Fev, Mar... não alfabético)
+- [ ] 2. Remover dados com "OLD" em Responsável e ETN (filtros, gráficos, grid)
+- [ ] 3. Remover filtro Origem
+- [ ] 5. Filtro Probabilidade: agrupar opções acima de 75% em ">75%"
+- [ ] 6. Adicionar filtro "Subtipo de Oportunidade" (chamado "Produto")
+
+## Gráficos
+- [ ] 4. ETN Top 10: só listar ETNs com oportunidades em etapa Proposta e Negociação com probabilidade >= 75%
+- [ ] 7. TOP 10 Taxa de Conversão: corrigir para listar oportunidades com Demonstração Presencial e Remota
+- [ ] 8. TOP 10 Maiores Recursos X Agendas: listar TODOS os compromissos (não apenas categorias específicas)
+
+## Tabelas
+- [ ] 9. Coluna "Etapa" na tabela analítica sem quebra de linha (nowrap)
+- [ ] 12. No desempenho individual, campo Etapa sem quebra de linha
+
+## Regras de Valor
+- [ ] 10/14. Unificar Valor Previsto e Valor Reconhecido em uma coluna: Fechada e Ganha → Valor Fechado; Restante → Valor Previsto (com regra 25% ETN Apoio mantida). Aplicar em tabelas, gráficos e KPIs tanto no painel principal quanto no desempenho individual.
+
+## Regras de Data
+- [ ] 15. Oportunidade Fechada e Ganha com data futura → usar campo "Efetivação do Fechamento"
+- [ ] 16. Compromissos com campo "Data" no futuro não devem ser considerados em nenhuma regra
+
+## Agendas Faltantes
+- [ ] 11. Cruzar Subtipo de Oportunidade: só mostrar oportunidades pendentes onde ETN tem cadastro do mesmo produto mas sem compromisso
+
+## Desempenho Individual
+- [ ] 13. Clicar em KPI deve filtrar todos os gráficos e grid do modal

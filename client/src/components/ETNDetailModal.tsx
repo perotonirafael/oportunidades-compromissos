@@ -19,8 +19,9 @@ interface ProcessedRecord {
   mesFech: string;
   valorPrevisto: number;
   valorFechado: number;
-  valorReconhecido: number;
-  valorFechadoReconhecido: number;
+  valorUnificado?: number;
+  valorReconhecido?: number;
+  valorFechadoReconhecido?: number;
   percentualReconhecimento: number;
   agenda: number;
   tipoOportunidade: string;
@@ -121,10 +122,10 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
     const perdidasOps = uniqueOps.filter(r => r.etapa === 'Fechada e Perdida');
     const ganhas = ganhasOps.length;
     const perdidas = perdidasOps.length;
-    const ganhasValor = ganhasOps.reduce((sum, r) => sum + (r.valorFechadoReconhecido ?? r.valorFechado), 0);
-    const perdidasValor = perdidasOps.reduce((sum, r) => sum + (r.valorReconhecido ?? r.valorPrevisto), 0);
+    const ganhasValor = ganhasOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorFechadoReconhecido ?? r.valorFechado), 0);
+    const perdidasValor = perdidasOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto), 0);
     const winRate = ganhas + perdidas > 0 ? ((ganhas / (ganhas + perdidas)) * 100).toFixed(1) : '0';
-    const valorTotal = uniqueOps.reduce((sum, r) => sum + (r.valorReconhecido ?? r.valorPrevisto), 0);
+    const valorTotal = uniqueOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto), 0);
     const valorMedio = totalOps > 0 ? valorTotal / totalOps : 0;
     const totalAgendas = etnDataFiltered.reduce((sum, r) => sum + r.agenda, 0);
 
@@ -232,7 +233,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
         const key = `${r.anoPrevisao}-${r.mesPrevisao}`;
         const e = map.get(key) || { count: 0, valor: 0 };
         e.count++;
-        e.valor += (r.valorFechadoReconhecido ?? r.valorFechado);
+        e.valor += (r.valorUnificado ?? r.valorFechadoReconhecido ?? r.valorFechado);
         map.set(key, e);
       }
     }
@@ -655,6 +656,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
                       { field: 'valorPrevisto' as SortField, label: '% Rec.', align: 'center' },
                       { field: 'valorPrevisto' as SortField, label: 'Valor Reconhecido', align: 'right' },
                       { field: 'agenda' as SortField, label: 'Agendas', align: 'center' },
+                      { field: 'mesFech' as SortField, label: 'Produto', align: 'left' },
                       { field: 'mesFech' as SortField, label: 'Mês Fech.', align: 'left' },
                     ]).map(col => (
                       <th key={col.field}
@@ -698,7 +700,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
                         </span>
                       </td>
                       <td className="px-3 py-2 text-right font-semibold text-blue-700">
-                        {formatCurrency(op.valorReconhecido ?? op.valorPrevisto)}
+                        {formatCurrency(op.valorUnificado ?? op.valorReconhecido ?? op.valorPrevisto)}
                       </td>
                       <td className="px-3 py-2 text-center">
                         <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
@@ -707,6 +709,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
                           {op.agenda}
                         </span>
                       </td>
+                      <td className="px-3 py-2 text-gray-600 truncate max-w-[120px]">{op.subtipoOportunidade || '-'}</td>
                       <td className="px-3 py-2 text-gray-700">{op.mesFech}/{op.anoPrevisao?.slice(2)}</td>
                     </tr>
                   ))}

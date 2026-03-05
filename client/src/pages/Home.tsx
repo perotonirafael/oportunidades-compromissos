@@ -31,11 +31,9 @@ export default function Home() {
   const { processData: processDataWithWorker, processFiles: processFilesWithWorker, isProcessing: isWorkerProcessing, progress: workerProgress } = useWorkerDataProcessor();
   const [workerResult, setWorkerResult] = useState<any>(null);
   const [useWorkerOnly, setUseWorkerOnly] = useState(false);
-  // Dados leves para o useDataProcessor (apenas demo)
   const [lightOpportunities, setLightOpportunities] = useState<Opportunity[]>([]);
   const [lightActions, setLightActions] = useState<Action[]>([]);
 
-  // Função para carregar dados de demonstração
   const handleLoadDemo = useCallback(() => {
     setOpportunities([]);
     setActions([]);
@@ -44,7 +42,6 @@ export default function Home() {
     setWorkerResult(null);
     setUseWorkerOnly(false);
     setError(null);
-    // Simular processamento com dados demo
     setTimeout(() => {
       const demoOppsData = DEMO_DATA.map(d => ({
         'Oportunidade ID': d.oppId,
@@ -74,7 +71,6 @@ export default function Home() {
       }));
       setOpportunities(demoOppsData);
       setLightOpportunities(demoOppsData);
-      // Gerar ações individuais (1 registro por agenda) com datas e categorias
       const demoActions: any[] = [];
       for (const d of DEMO_DATA) {
         if (d.etn === 'Sem Agenda' || d.agenda === 0) continue;
@@ -106,25 +102,19 @@ export default function Home() {
   const [selAgenda, setSelAgenda] = useState<string[]>([]);
   const [selAccounts, setSelAccounts] = useState<string[]>([]);
   const [selTypes, setSelTypes] = useState<string[]>([]);
-  const [selOrigins, setSelOrigins] = useState<string[]>([]);
+  // ITEM 6: Novo filtro Subtipo de Oportunidade (Produto)
+  const [selSubtipos, setSelSubtipos] = useState<string[]>([]);
 
-  // Estado para clique nos gráficos filtrar tabela
   const [chartFilter, setChartFilter] = useState<{ field: string; value: string } | null>(null);
-  
-  // Estado para filtro ETN nas Agendas Faltantes
   const [selETNMissing, setSelETNMissing] = useState<string[]>([]);
-  // Item 10: Pesquisa e filtros na grid de agendas faltantes
   const [missingSearch, setMissingSearch] = useState('');
   const [missingFilterEtapas, setMissingFilterEtapas] = useState<string[]>([]);
   const [showEtapaDropdown, setShowEtapaDropdown] = useState(false);
   const [missingPage, setMissingPage] = useState(0);
-  // Reset paginação quando filtros mudam
   useEffect(() => { setMissingPage(0); }, [missingSearch, missingFilterEtapas, selETNMissing, chartFilter]);
 
-  // Estado para modal de detalhe do ETN
   const [selectedETNDetail, setSelectedETNDetail] = useState<string | null>(null);
 
-  // Cache de dados
   const [cacheInfo, setCacheInfo] = useState<{
     exists: boolean;
     timestamp?: number;
@@ -135,12 +125,10 @@ export default function Home() {
   } | null>(null);
   const [isLoadingCache, setIsLoadingCache] = useState(false);
 
-  // Verificar cache ao montar
   useEffect(() => {
     getCacheInfo().then(info => setCacheInfo(info));
   }, []);
 
-  // useDataProcessor APENAS para dados leves (demo) - NÃO para arquivos reais
   const normalResult = useDataProcessor(lightOpportunities, lightActions);
   const result = workerResult || normalResult;
 
@@ -151,11 +139,10 @@ export default function Home() {
   const funnelData = result?.funnelData ?? [];
   const forecastFunnel = result?.forecastFunnel ?? [];
   const etnTop10 = result?.etnTop10 ?? [];
-  // Fallback: calcular etnConversionTop10 e etnRecursosAgendas a partir dos records se não existirem no cache
+
   const etnConversionTop10 = useMemo(() => {
     if (result?.etnConversionTop10 && result.etnConversionTop10.length > 0) return result.etnConversionTop10;
     if (!processedData || processedData.length === 0) return [];
-    // Calcular a partir dos records
     const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
     const demoCategories = ['demonstracao presencial', 'demonstracao remota'];
     const etnMap = new Map<string, { total: number; ganhas: number; perdidas: number }>();
@@ -165,7 +152,7 @@ export default function Home() {
       const catNorm = normalize(r.categoriaCompromisso || '');
       const hasDemo = demoCategories.some(c => catNorm.includes(c));
       if (!hasDemo) continue;
-      const key = `${r.etn}-${r.idOp}`;
+      const key = `${r.etn}-${r.oppId}`;
       if (seen.has(key)) continue;
       seen.add(key);
       const e = etnMap.get(r.etn) || { total: 0, ganhas: 0, perdidas: 0 };
@@ -192,12 +179,11 @@ export default function Home() {
   const etnRecursosAgendas = useMemo(() => {
     if (result?.etnRecursosAgendas && result.etnRecursosAgendas.length > 0) return result.etnRecursosAgendas;
     if (!processedData || processedData.length === 0) return [];
-    // Calcular a partir dos records
     const etnMap = new Map<string, { valor: number; agendas: number }>();
     for (const r of processedData) {
       if (r.etn === 'Sem Agenda') continue;
       const e = etnMap.get(r.etn) || { valor: 0, agendas: 0 };
-      e.valor += (r.valorReconhecido ?? r.valorPrevisto);
+      e.valor += (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto);
       e.agendas += (r.agenda || 0);
       etnMap.set(r.etn, e);
     }
@@ -211,12 +197,13 @@ export default function Home() {
       .sort((a, b) => b.agendas - a.agendas)
       .slice(0, 10);
   }, [result?.etnRecursosAgendas, processedData]);
+
   const filterOptions = result?.filterOptions ?? {
     years: [], months: [], representantes: [], responsaveis: [], etns: [],
-    etapas: [], probabilidades: [], agenda: [], contas: [], tipos: [], origens: [], segmentos: [],
+    etapas: [], probabilidades: [], agenda: [], contas: [], tipos: [], subtipos: [], segmentos: [],
   };
 
-  // Filtrar dados
+  // ITEM 5: Filtrar dados com probabilidade agrupada >75%
   const filteredData = useMemo(() => {
     return processedData.filter((r: ProcessedRecord) => {
       if (selYears.length > 0 && !selYears.includes(r.anoPrevisao)) return false;
@@ -225,16 +212,21 @@ export default function Home() {
       if (selResp.length > 0 && !selResp.includes(r.responsavel)) return false;
       if (selETN.length > 0 && !selETN.includes(r.etn)) return false;
       if (selStages.length > 0 && !selStages.includes(r.etapa)) return false;
-      if (selProbs.length > 0 && !selProbs.includes(r.probabilidade)) return false;
+      // ITEM 5: Probabilidade agrupada - ">75%" inclui todas acima de 75
+      if (selProbs.length > 0) {
+        const probNum = parseInt(r.probabilidade);
+        const probLabel = probNum > 75 ? '>75%' : r.probabilidade;
+        if (!selProbs.includes(probLabel)) return false;
+      }
       if (selAgenda.length > 0 && !selAgenda.includes(r.agenda.toString())) return false;
       if (selAccounts.length > 0 && !selAccounts.includes(r.conta)) return false;
       if (selTypes.length > 0 && !selTypes.includes(r.tipoOportunidade)) return false;
-      if (selOrigins.length > 0 && !selOrigins.includes(r.origemOportunidade)) return false;
+      // ITEM 6: Filtro por Subtipo de Oportunidade (Produto)
+      if (selSubtipos.length > 0 && !selSubtipos.includes(r.subtipoOportunidade)) return false;
       return true;
     });
-  }, [processedData, selYears, selMonths, selReps, selResp, selETN, selStages, selProbs, selAgenda, selAccounts, selTypes, selOrigins]);
+  }, [processedData, selYears, selMonths, selReps, selResp, selETN, selStages, selProbs, selAgenda, selAccounts, selTypes, selSubtipos]);
 
-  // Dados da tabela (com filtro de clique nos gráficos)
   const tableData = useMemo(() => {
     if (!chartFilter) return filteredData;
     return filteredData.filter((r: ProcessedRecord) => {
@@ -250,9 +242,6 @@ export default function Home() {
     });
   }, [filteredData, chartFilter]);
   
-  // Dados das Agendas Faltantes (com filtro de clique nos gráficos E filtro ETN)
-  // Item 5: Remover nomes OLD
-  // Função para parsear data no formato dd/mm/yyyy para comparação
   const parseDate = useCallback((dateStr: string) => {
     if (!dateStr || dateStr === '-') return 0;
     const parts = dateStr.split('/');
@@ -265,19 +254,16 @@ export default function Home() {
     return 0;
   }, []);
 
-  // Top 5 ETNs com oportunidades sem compromisso com data de criação mais recente (últimos 30 dias)
   const top5MissingETNs = useMemo(() => {
     const today = new Date();
     const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
     const thirtyDaysAgoNum = thirtyDaysAgo.getFullYear() * 10000 + (thirtyDaysAgo.getMonth() + 1) * 100 + thirtyDaysAgo.getDate();
     
     const filtered = missingAgendas.filter((r: any) => {
-      if (r.etn.trim().toUpperCase().endsWith('OLD')) return false;
       const dateVal = parseDate(r.dataCriacao || '');
       return dateVal >= thirtyDaysAgoNum;
     });
     
-    // Agrupar por ETN e encontrar a data de criação mais recente de cada
     const etnMap = new Map<string, { count: number; maxDate: number; maxDateStr: string }>();
     for (const r of filtered) {
       const dateVal = parseDate(r.dataCriacao || '');
@@ -292,7 +278,6 @@ export default function Home() {
         }
       }
     }
-    // Ordenar por data de criação mais recente e pegar top 5
     return Array.from(etnMap.entries())
       .sort((a, b) => b[1].maxDate - a[1].maxDate)
       .slice(0, 5)
@@ -305,29 +290,23 @@ export default function Home() {
     const thirtyDaysAgoNum = thirtyDaysAgo.getFullYear() * 10000 + (thirtyDaysAgo.getMonth() + 1) * 100 + thirtyDaysAgo.getDate();
     
     let filtered = missingAgendas.filter((r: any) => {
-      if (r.etn.trim().toUpperCase().endsWith('OLD')) return false;
       const dateVal = parseDate(r.dataCriacao || '');
       return dateVal >= thirtyDaysAgoNum;
     });
     
-    // Por padrão, mostrar apenas os top 5 ETNs (a menos que o usuário filtre manualmente)
     if (selETNMissing.length === 0 && !missingSearch && missingFilterEtapas.length === 0 && !(chartFilter && chartFilter.field === 'etnMissing')) {
       filtered = filtered.filter((r: any) => top5MissingETNs.includes(r.etn));
     }
     
-    // Filtro ETN do dropdown
     if (selETNMissing.length > 0) {
       filtered = filtered.filter((r: any) => selETNMissing.includes(r.etn));
     }
-    // Filtro de clique no gráfico
     if (chartFilter && chartFilter.field === 'etnMissing') {
       filtered = filtered.filter((r: any) => r.etn === chartFilter.value);
     }
-    // Filtro por múltiplas etapas
     if (missingFilterEtapas.length > 0) {
       filtered = filtered.filter((r: any) => missingFilterEtapas.includes(r.etapa));
     }
-    // Pesquisa textual
     if (missingSearch) {
       const term = missingSearch.toLowerCase();
       filtered = filtered.filter((r: any) =>
@@ -337,7 +316,6 @@ export default function Home() {
         r.etapa.toLowerCase().includes(term)
       );
     }
-    // Ordenar por data de criação da oportunidade (mais recente primeiro)
     filtered.sort((a: any, b: any) => {
       const dateA = parseDate(a.dataCriacao || '');
       const dateB = parseDate(b.dataCriacao || '');
@@ -346,17 +324,21 @@ export default function Home() {
     return filtered;
   }, [missingAgendas, chartFilter, selETNMissing, missingFilterEtapas, missingSearch, top5MissingETNs, parseDate]);
 
-  // ETN Top 10 filtrado
+  // ETN Top 10 filtrado - ITEM 4: apenas Proposta e Negociação com prob >= 75%
   const etnTop10Filtered = useMemo(() => {
     const map = new Map<string, { count: number; value: number }>();
     const seen = new Set<string>();
     for (const r of filteredData) {
       if (r.probNum < 75) continue;
+      // ITEM 4: Apenas etapas Proposta e Negociação
+      const etapaLower = r.etapa.toLowerCase();
+      if (!etapaLower.includes('proposta') && !etapaLower.includes('negociação') && !etapaLower.includes('negociacao')) continue;
       if (seen.has(r.oppId)) continue;
       seen.add(r.oppId);
+      const val = r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto;
       const e = map.get(r.etn) || { count: 0, value: 0 };
       e.count++;
-      e.value += (r.valorReconhecido ?? r.valorPrevisto);
+      e.value += val;
       map.set(r.etn, e);
     }
     return Array.from(map.entries())
@@ -371,7 +353,8 @@ export default function Home() {
     for (const r of filteredData) {
       if (r.etapa !== 'Fechada e Perdida') continue;
       const motivo = r.motivoPerda || 'Sem motivo';
-      map.set(motivo, (map.get(motivo) || 0) + (r.valorReconhecido ?? r.valorPrevisto));
+      const val = r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto;
+      map.set(motivo, (map.get(motivo) || 0) + val);
     }
     return Array.from(map.entries())
       .map(([motivo, value]) => ({ motivo, count: value }))
@@ -379,7 +362,7 @@ export default function Home() {
       .slice(0, 10);
   }, [filteredData]);
 
-  // KPIs filtrados (deduplicados)
+  // KPIs filtrados - ITEM 10: usar valorUnificado
   const filteredKPIs = useMemo(() => {
     if (!kpis) return null;
     const seenOps = new Set<string>();
@@ -395,16 +378,16 @@ export default function Home() {
         seenOps.add(r.oppId);
         if (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR') {
           seenGanhas.add(r.oppId);
-          ganhasValor += (r.valorFechadoReconhecido ?? r.valorFechado);
+          ganhasValor += (r.valorUnificado ?? r.valorFechadoReconhecido ?? r.valorFechado);
         }
         if (r.etapa === 'Fechada e Perdida') {
           seenPerdidas.add(r.oppId);
-          perdidasValor += (r.valorReconhecido ?? r.valorPrevisto);
+          perdidasValor += (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto);
         }
       }
       totalAgendas += r.agenda;
       if (r.probNum >= 75 && r.etapa !== 'Fechada e Ganha' && r.etapa !== 'Fechada e Ganha TR' && r.etapa !== 'Fechada e Perdida') {
-        totalForecast += (r.valorReconhecido ?? r.valorPrevisto);
+        totalForecast += (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto);
       }
     }
 
@@ -432,14 +415,11 @@ export default function Home() {
     setError(null);
     setUseWorkerOnly(true);
     setWorkerResult(null);
-    // Limpar dados leves para não disparar useDataProcessor
     setLightOpportunities([]);
     setLightActions([]);
     try {
-      // Enviar arquivos DIRETAMENTE ao Web Worker (parsing + processamento fora da thread principal)
       const workerRes = await processFilesWithWorker(oppFile, actFile);
       setWorkerResult(workerRes);
-      // Salvar no cache
       try {
         await saveToCache(
           workerRes,
@@ -481,7 +461,6 @@ export default function Home() {
     }
   };
 
-  // Carregar dados do cache
   const handleLoadCache = useCallback(async () => {
     setIsLoadingCache(true);
     setError(null);
@@ -502,7 +481,6 @@ export default function Home() {
     }
   }, []);
 
-  // Limpar cache
   const handleClearCache = useCallback(async () => {
     await clearCache();
     setCacheInfo({ exists: false });
@@ -566,7 +544,6 @@ export default function Home() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Oportunidades */}
               <div className="bg-white rounded-xl p-6 border-2 border-green-200 hover:border-green-400 transition-all hover:shadow-lg hover:shadow-green-100">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="p-2.5 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 shadow-md shadow-green-200">
@@ -591,7 +568,6 @@ export default function Home() {
                 </label>
               </div>
 
-              {/* Compromissos */}
               <div className="bg-white rounded-xl p-6 border-2 border-blue-200 hover:border-blue-400 transition-all hover:shadow-lg hover:shadow-blue-100">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="p-2.5 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 shadow-md shadow-blue-200">
@@ -641,7 +617,6 @@ export default function Home() {
               Suporta .xlsx, .xls e .csv (separador ; ou ,) &middot; Até 200K registros
             </p>
 
-            {/* Card de Cache */}
             {cacheInfo?.exists && (
               <div className="mt-6 bg-white rounded-xl p-5 border-2 border-emerald-200 shadow-sm">
                 <div className="flex items-center justify-between">
@@ -701,18 +676,8 @@ export default function Home() {
           <div className="space-y-6">
             {/* KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              <KPICard
-                title="OPORTUNIDADES"
-                value={filteredKPIs?.totalOps ?? 0}
-                icon={<Target size={20} />}
-                color="blue"
-              />
-              <KPICard
-                title="TOTAL DE COMPROMISSOS"
-                value={filteredKPIs?.totalAgendas ?? 0}
-                icon={<Calendar size={20} />}
-                color="green"
-              />
+              <KPICard title="OPORTUNIDADES" value={filteredKPIs?.totalOps ?? 0} icon={<Target size={20} />} color="blue" />
+              <KPICard title="TOTAL DE COMPROMISSOS" value={filteredKPIs?.totalAgendas ?? 0} icon={<Calendar size={20} />} color="green" />
               <KPICard
                 title="FECHADA E GANHA"
                 value={`${filteredKPIs?.ganhas ?? 0}`}
@@ -727,12 +692,7 @@ export default function Home() {
                 icon={<XCircle size={20} />}
                 color="red"
               />
-              <KPICard
-                title="WIN RATE"
-                value={`${filteredKPIs?.winRate ?? '0'}%`}
-                icon={<TrendingUp size={20} />}
-                color="amber"
-              />
+              <KPICard title="WIN RATE" value={`${filteredKPIs?.winRate ?? '0'}%`} icon={<TrendingUp size={20} />} color="amber" />
               <KPICard
                 title="FORECAST (≥75%)"
                 value={`R$ ${((filteredKPIs?.totalForecast ?? 0) / 1e6).toFixed(1)}M`}
@@ -752,6 +712,10 @@ export default function Home() {
                   setOppFileName('');
                   setActFileName('');
                   setChartFilter(null);
+                  setWorkerResult(null);
+                  setUseWorkerOnly(false);
+                  setLightOpportunities([]);
+                  setLightActions([]);
                   resetState();
                 }}
                 className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all"
@@ -760,7 +724,7 @@ export default function Home() {
               </button>
             </div>
 
-            {/* Filtros */}
+            {/* Filtros - ITEM 3: Removido filtro Origem, ITEM 6: Adicionado filtro Produto */}
             <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
               <h3 className="text-sm font-bold text-foreground mb-4">Filtros</h3>
               <div className="flex flex-wrap gap-3">
@@ -774,7 +738,7 @@ export default function Home() {
                 <MultiSelectDropdown label="Agenda" options={filterOptions.agenda} selected={selAgenda} onChange={setSelAgenda} />
                 <MultiSelectDropdown label="Conta" options={filterOptions.contas} selected={selAccounts} onChange={setSelAccounts} />
                 <MultiSelectDropdown label="Tipo Op." options={filterOptions.tipos} selected={selTypes} onChange={setSelTypes} />
-                <MultiSelectDropdown label="Origem" options={filterOptions.origens} selected={selOrigins} onChange={setSelOrigins} />
+                <MultiSelectDropdown label="Produto" options={filterOptions.subtipos || []} selected={selSubtipos} onChange={setSelSubtipos} />
               </div>
             </div>
 
@@ -807,7 +771,7 @@ export default function Home() {
               <AnalyticsTable data={tableData} />
             </div>
 
-            {/* Agendas Faltantes (Item 14) */}
+            {/* Agendas Faltantes */}
             {missingAgendas.length > 0 && (
               <div className="mt-10">
                 <div className="flex items-center gap-3 mb-4">
@@ -817,15 +781,14 @@ export default function Home() {
                   <div>
                     <h2 className="text-lg font-bold text-foreground">Agendas Faltantes</h2>
                     <p className="text-xs text-muted-foreground">
-                      Oportunidades sem compromisso registrado, onde o ETN já atuou em outra oportunidade do mesmo cliente
+                      Oportunidades sem compromisso registrado, cruzadas por Subtipo de Oportunidade (Produto)
                     </p>
                   </div>
                   <span className="ml-auto bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full">
-                    {missingAgendas.length} registros
+                    {missingAgendasFiltered.length} registros
                   </span>
                 </div>
 
-                {/* Gráfico de Agendas Faltantes por ETN */}
                 <div className="bg-white rounded-xl p-5 border border-border shadow-sm mb-4">
                   <div className="flex justify-between items-center mb-4">
                     <div>
@@ -842,7 +805,7 @@ export default function Home() {
                     </div>
                   </div>
                   <MissingAgendaChart 
-                    data={missingAgendas} 
+                    data={missingAgendasFiltered} 
                     onBarClick={(etn) => {
                       setChartFilter({ field: 'etnMissing', value: etn });
                       setSelectedETNDetail(etn);
@@ -851,9 +814,7 @@ export default function Home() {
                   />
                 </div>
 
-                {/* Grid de Agendas Faltantes */}
                 <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
-                  {/* Item 10: Barra de pesquisa e filtros */}
                   <div className="p-4 border-b border-gray-200 flex flex-wrap items-center gap-3">
                     <div className="relative">
                       <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -918,7 +879,8 @@ export default function Home() {
                           <th className="text-left px-3 py-2.5 font-bold text-amber-900">Op. ID</th>
                           <th className="text-left px-3 py-2.5 font-bold text-amber-900">Conta</th>
                           <th className="text-left px-3 py-2.5 font-bold text-amber-900">ETN</th>
-                          <th className="text-left px-3 py-2.5 font-bold text-amber-900">Etapa</th>
+                          <th className="text-left px-3 py-2.5 font-bold text-amber-900 whitespace-nowrap">Etapa</th>
+                          <th className="text-left px-3 py-2.5 font-bold text-amber-900">Produto</th>
                           <th className="text-left px-3 py-2.5 font-bold text-amber-900">Prob.</th>
                           <th className="text-right px-3 py-2.5 font-bold text-amber-900">Valor Previsto</th>
                           <th className="text-left px-3 py-2.5 font-bold text-amber-900">Data Criação</th>
@@ -930,15 +892,16 @@ export default function Home() {
                             <td className="px-3 py-2 font-semibold text-amber-900">{r.oppId}</td>
                             <td className="px-3 py-2 text-gray-700">{r.conta}</td>
                             <td className="px-3 py-2 text-gray-700">{r.etn}</td>
-                            <td className="px-3 py-2">
+                            <td className="px-3 py-2 whitespace-nowrap">
                               <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                                r.etapa === 'Fechada e Ganha' ? 'bg-green-100 text-green-800' :
+                                r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR' ? 'bg-green-100 text-green-800' :
                                 r.etapa === 'Fechada e Perdida' ? 'bg-red-100 text-red-800' :
                                 'bg-blue-100 text-blue-800'
                               }`}>
                                 {r.etapa}
                               </span>
                             </td>
+                            <td className="px-3 py-2 text-gray-700">{r.subtipoOportunidade || '-'}</td>
                             <td className="px-3 py-2 text-gray-700">{r.probabilidade}</td>
                             <td className="px-3 py-2 text-right font-semibold text-amber-900">R$ {(r.valorPrevisto / 1000).toFixed(0)}K</td>
                             <td className="px-3 py-2 text-gray-700">{r.dataCriacao || '-'}</td>
@@ -968,7 +931,6 @@ export default function Home() {
                       </button>
                     </div>
                   )}
-                  {/* Item 9: Rodapé com intervalo de datas */}
                   <div className="px-4 py-1.5 bg-gray-50 text-[10px] text-gray-400 text-center border-t border-gray-100">
                     Período dos filtros aplicados: {(() => {
                       const mNames = ['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -1017,8 +979,6 @@ import {
 function MissingAgendaChart({ data, onBarClick, selectedETN }: { data: MissingAgendaRecord[]; onBarClick: (etn: string) => void; selectedETN: string[] }) {
   const chartData = useMemo(() => {
     let filtered = selectedETN.length > 0 ? data.filter(r => selectedETN.includes(r.etn)) : data;
-    // Item 5: Remover nomes OLD do gráfico
-    filtered = filtered.filter(r => !r.etn.trim().toUpperCase().endsWith('OLD'));
     const map = new Map<string, number>();
     for (const r of filtered) {
       map.set(r.etn, (map.get(r.etn) || 0) + 1);

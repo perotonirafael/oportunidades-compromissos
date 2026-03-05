@@ -104,7 +104,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
       seen.add(r.oppId);
       const e = map.get(r.etapa) || { count: 0, value: 0 };
       e.count++;
-      e.value += (r.valorReconhecido ?? r.valorPrevisto);
+      e.value += (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto);
       map.set(r.etapa, e);
     }
     return Array.from(map.entries())
@@ -122,7 +122,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
       seen.add(r.oppId);
       const key = `${r.anoPrevisao}-${r.mesPrevisaoNum.toString().padStart(2, '0')}`;
       const e = map.get(key) || { previsto: 0, fechado: 0 };
-      e.previsto += (r.valorReconhecido ?? r.valorPrevisto);
+      e.previsto += (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto);
       e.fechado += (r.valorFechadoReconhecido ?? r.valorFechado);
       map.set(key, e);
     }
@@ -152,12 +152,12 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
       const etnMap = motivoETNMap.get(motivo)!;
       const e = etnMap.get(etn) || { count: 0, value: 0 };
       e.count++;
-      e.value += (r.valorReconhecido ?? r.valorPrevisto);
+      e.value += (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto);
       etnMap.set(etn, e);
 
       const t = motivoTotalMap.get(motivo) || { count: 0, value: 0 };
       t.count++;
-      t.value += (r.valorReconhecido ?? r.valorPrevisto);
+      t.value += (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto);
       motivoTotalMap.set(motivo, t);
     }
 
@@ -203,7 +203,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
       const stage = r.etapa || 'Desconhecido';
       const f = fcMap.get(stage) || { count: 0, value: 0, probs: [] };
       f.count++;
-      f.value += r.valorPrevisto;
+      f.value += (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto);
       f.probs.push(r.probNum);
       fcMap.set(stage, f);
     }
@@ -222,7 +222,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
       {/* Item 3: ETN Top 10 - PRIMEIRO GRÁFICO */}
       <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
         <h3 className="text-sm font-bold text-foreground mb-1">ETN Top 10</h3>
-        <p className="text-xs text-muted-foreground mb-4">Valor previsto por ETN (prob. ≥75%) - clique para ver detalhes</p>
+        <p className="text-xs text-muted-foreground mb-4">Valor por ETN (Proposta e Negociação, prob. ≥75%) - clique para ver detalhes</p>
         {etnTop10Clean.length > 0 ? (
           <div style={{ height: Math.max(280, etnTop10Clean.length * 35) }}>
             <ResponsiveContainer width="100%" height="100%">
