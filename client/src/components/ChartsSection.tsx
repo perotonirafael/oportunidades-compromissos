@@ -411,68 +411,79 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
           <DateRangeFooter data={data} />
         </div>
 
-        {/* Item 5: TOP 10 Taxa de Conversão - Ganhas vs Perdidas */}
-        {etnConversionTop10.filter(e => filterOLD(e.fullName)).length > 0 && (
-          <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-            <h3 className="text-sm font-bold text-foreground mb-1">TOP 10 Taxa de Conversão</h3>
-            <p className="text-xs text-muted-foreground mb-4">Fechada e Ganha vs Fechada e Perdida (% aproveitamento)</p>
-            <div style={{ height: Math.max(280, etnConversionTop10.filter(e => filterOLD(e.fullName)).length * 40) }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={etnConversionTop10.filter(e => filterOLD(e.fullName))} layout="vertical" margin={{ left: 10, right: 60 }}>
-                  <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
-                  <YAxis type="category" dataKey="name" width={170} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
-                  <Tooltip
-                    {...tooltipStyle}
-                    content={({ active, payload }: any) => {
-                      if (!active || !payload?.length) return null;
-                      const d = payload[0]?.payload;
-                      if (!d) return null;
-                      return (
-                        <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-lg text-xs">
-                          <p className="font-bold text-gray-800 mb-1">{d.fullName}</p>
-                          <p className="text-gray-600">Taxa de Conversão: <span className="font-bold text-blue-600">{d.taxaConversao}%</span></p>
-                          <p className="text-green-700">Ganhas: <span className="font-bold">{d.ganhas}</span> ({formatCurrency(d.ganhasValor)})</p>
-                          <p className="text-red-700">Perdidas: <span className="font-bold">{d.perdidas}</span> ({formatCurrency(d.perdidasValor)})</p>
-                          <p className="text-gray-600 mt-1 pt-1 border-t">Total fechadas: <span className="font-bold">{d.total}</span></p>
-                        </div>
-                      );
-                    }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '11px' }} />
-                  <Bar dataKey="ganhas" name="Ganhas" stackId="conv" fill="#10b981" radius={[0, 0, 0, 0]}>
-                    <LabelList
-                      content={({ x, y, width, height, index }: any) => {
-                        const filtered = etnConversionTop10.filter(e => filterOLD(e.fullName));
-                        const d = filtered[index];
-                        if (!d) return null;
-                        return (
-                          <text x={(x || 0) + (width || 0) + (d.perdidas > 0 ? 0 : 8)} y={(y || 0) + (height || 0) / 2} fill="#374151" fontSize={10} dominantBaseline="middle">
-                            {d.perdidas === 0 ? `${d.taxaConversao}%` : ''}
-                          </text>
-                        );
-                      }}
-                    />
-                  </Bar>
-                  <Bar dataKey="perdidas" name="Perdidas" stackId="conv" fill="#ef4444" radius={[0, 6, 6, 0]}>
-                    <LabelList
-                      content={({ x, y, width, height, index }: any) => {
-                        const filtered = etnConversionTop10.filter(e => filterOLD(e.fullName));
-                        const d = filtered[index];
-                        if (!d) return null;
-                        return (
-                          <text x={(x || 0) + (width || 0) + 8} y={(y || 0) + (height || 0) / 2} fill="#374151" fontSize={10} dominantBaseline="middle" fontWeight="bold">
-                            {d.taxaConversao}%
-                          </text>
-                        );
-                      }}
-                    />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+        {/* Ajuste 3: TOP 10 Taxa de Conversão - Novo estilo com barras de progresso */}
+        {(() => {
+          const convData = etnConversionTop10.filter(e => filterOLD(e.fullName));
+          if (convData.length === 0) return null;
+          const totalGanhas = convData.reduce((s, d) => s + d.ganhas, 0);
+          const totalPerdidas = convData.reduce((s, d) => s + d.perdidas, 0);
+          const totalAll = totalGanhas + totalPerdidas;
+          const taxaGeral = totalAll > 0 ? Math.round((totalGanhas / totalAll) * 100) : 0;
+          return (
+            <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
+              <h3 className="text-sm font-bold text-foreground mb-1">Taxa de Conversão por ETN</h3>
+              <p className="text-xs text-muted-foreground mb-4">Fechada e Ganha vs Fechada e Perdida (% aproveitamento) — respeitando filtros aplicados</p>
+              
+              {/* Resumo geral */}
+              <div className="grid grid-cols-3 gap-3 mb-5">
+                <div className="bg-emerald-50 rounded-lg p-3 text-center border border-emerald-100">
+                  <p className="text-lg font-bold text-emerald-700">{taxaGeral}%</p>
+                  <p className="text-[10px] text-emerald-600 font-medium">Taxa Geral</p>
+                </div>
+                <div className="bg-green-50 rounded-lg p-3 text-center border border-green-100">
+                  <p className="text-lg font-bold text-green-700">{totalGanhas}</p>
+                  <p className="text-[10px] text-green-600 font-medium">Ganhas</p>
+                </div>
+                <div className="bg-red-50 rounded-lg p-3 text-center border border-red-100">
+                  <p className="text-lg font-bold text-red-600">{totalPerdidas}</p>
+                  <p className="text-[10px] text-red-500 font-medium">Perdidas</p>
+                </div>
+              </div>
+
+              {/* Lista de ETNs com barras de progresso */}
+              <div className="space-y-3">
+                {convData.map((d, i) => (
+                  <div key={d.fullName} className="group">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-gray-700 truncate max-w-[200px]" title={d.fullName}>
+                        {i + 1}. {d.fullName}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-green-600 font-medium">{d.ganhas}G</span>
+                        <span className="text-[10px] text-red-500 font-medium">{d.perdidas}P</span>
+                        <span className="text-xs font-bold text-gray-800 min-w-[36px] text-right">{d.taxaConversao}%</span>
+                      </div>
+                    </div>
+                    <div className="w-full h-5 bg-gray-100 rounded-full overflow-hidden flex">
+                      <div
+                        className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 flex items-center justify-center transition-all duration-500"
+                        style={{ width: `${d.taxaConversao}%`, minWidth: d.ganhas > 0 ? '8px' : '0' }}
+                      >
+                        {d.taxaConversao >= 15 && (
+                          <span className="text-[9px] font-bold text-white">{d.ganhas}</span>
+                        )}
+                      </div>
+                      <div
+                        className="h-full bg-gradient-to-r from-red-400 to-red-500 flex items-center justify-center transition-all duration-500"
+                        style={{ width: `${100 - d.taxaConversao}%`, minWidth: d.perdidas > 0 ? '8px' : '0' }}
+                      >
+                        {(100 - d.taxaConversao) >= 15 && (
+                          <span className="text-[9px] font-bold text-white">{d.perdidas}</span>
+                        )}
+                      </div>
+                    </div>
+                    {/* Tooltip com valores */}
+                    <div className="flex items-center justify-between mt-0.5">
+                      <span className="text-[9px] text-gray-400">{formatCurrency(d.ganhasValor)} ganhas</span>
+                      <span className="text-[9px] text-gray-400">{formatCurrency(d.perdidasValor)} perdidas</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <DateRangeFooter data={data} />
             </div>
-            <DateRangeFooter data={data} />
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* Item 6: TOP 10 Maiores Recursos X Agendas */}

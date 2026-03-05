@@ -18,9 +18,7 @@ const COLUMNS: { key: keyof ProcessedRecord; label: string }[] = [
   { key: 'agenda', label: 'Agenda' },
   { key: 'mesFech', label: 'Mês Fech.' },
   { key: 'anoPrevisao', label: 'Ano' },
-  { key: 'valorPrevisto', label: 'Valor Previsto' },
-  { key: 'valorUnificado', label: 'Valor Reconhecido' },
-  { key: 'percentualReconhecimento', label: '% Rec.' },
+  { key: 'valorUnificado', label: 'Valor' },
 ];
 
 const PAGE_SIZE = 20;
@@ -175,17 +173,7 @@ function AnalyticsTableInner({ data }: Props) {
                 <td className="px-3 py-2 font-mono text-center text-gray-600">{r.agenda}</td>
                 <td className="px-3 py-2 text-gray-600">{r.mesFech}</td>
                 <td className="px-3 py-2 font-mono text-gray-600">{r.anoPrevisao}</td>
-                <td className="px-3 py-2 font-mono text-right font-medium text-gray-800">{formatCurrency(r.valorPrevisto)}</td>
-                <td className="px-3 py-2 font-mono text-right font-medium text-blue-700">{formatCurrency(r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto)}</td>
-                <td className="px-3 py-2 text-center">
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                    (r.percentualReconhecimento ?? 100) === 100 ? 'bg-green-100 text-green-700' :
-                    (r.percentualReconhecimento ?? 100) === 25 ? 'bg-amber-100 text-amber-700' :
-                    'bg-gray-100 text-gray-700'
-                  }`}>
-                    {r.percentualReconhecimento ?? 100}%
-                  </span>
-                </td>
+                <td className="px-3 py-2 font-mono text-right font-medium text-emerald-700">{formatCurrency(r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto)}</td>
               </tr>
             ))}
           </tbody>
