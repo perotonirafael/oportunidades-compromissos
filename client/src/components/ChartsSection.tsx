@@ -40,9 +40,10 @@ function formatName(name: string): string {
     .join(' ');
 }
 
-// Item 3: Filtrar nomes que terminam com OLD
+// Item 3: Filtrar nomes que contenham OLD ou INATIVO
 function filterOLD(name: string): boolean {
-  return !name.trim().toUpperCase().endsWith('OLD');
+  const upper = name.trim().toUpperCase();
+  return !upper.includes('OLD') && !upper.includes('INATIVO');
 }
 
 interface Props {
@@ -51,7 +52,7 @@ interface Props {
   motivosPerda: { motivo: string; count: number }[];
   forecastFunnel: { etapa: string; count: number; value: number; avgProb: number }[];
   etnTop10: { name: string; fullName: string; count: number; value: number }[];
-  etnConversionTop10: { name: string; fullName: string; total: number; ganhas: number; perdidas: number; taxaConversao: number }[];
+  etnConversionTop10: { name: string; fullName: string; total: number; ganhas: number; perdidas: number; ganhasValor: number; perdidasValor: number; taxaConversao: number }[];
   etnRecursosAgendas: { name: string; fullName: string; valor: number; agendas: number }[];
   onChartClick: (field: string, value: string) => void;
   onETNClick?: (etn: string) => void;
@@ -410,32 +411,61 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
           <DateRangeFooter data={data} />
         </div>
 
-        {/* Item 5: TOP 10 Taxa de Conversão (Demonstração Presencial/Remota) */}
-        {etnConversionTop10.length > 0 && (
+        {/* Item 5: TOP 10 Taxa de Conversão - Ganhas vs Perdidas */}
+        {etnConversionTop10.filter(e => filterOLD(e.fullName)).length > 0 && (
           <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
             <h3 className="text-sm font-bold text-foreground mb-1">TOP 10 Taxa de Conversão</h3>
-            <p className="text-xs text-muted-foreground mb-4">ETNs com Demonstração Presencial/Remota</p>
-            <div style={{ height: Math.max(280, etnConversionTop10.length * 35) }}>
+            <p className="text-xs text-muted-foreground mb-4">Fechada e Ganha vs Fechada e Perdida (% aproveitamento)</p>
+            <div style={{ height: Math.max(280, etnConversionTop10.filter(e => filterOLD(e.fullName)).length * 40) }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={etnConversionTop10} layout="vertical" margin={{ left: 10, right: 50 }}>
+                <BarChart data={etnConversionTop10.filter(e => filterOLD(e.fullName))} layout="vertical" margin={{ left: 10, right: 60 }}>
                   <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                   <YAxis type="category" dataKey="name" width={170} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                   <Tooltip
                     {...tooltipStyle}
-                    formatter={(v: number, name: string) => {
-                      if (name === 'Taxa') return [`${v}%`, 'Taxa de Conversão'];
-                      return [formatNum(v), name];
-                    }}
-                    labelFormatter={(label: string) => {
-                      const item = etnConversionTop10.find(d => d.name === label);
-                      return item?.fullName || label;
+                    content={({ active, payload }: any) => {
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0]?.payload;
+                      if (!d) return null;
+                      return (
+                        <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-lg text-xs">
+                          <p className="font-bold text-gray-800 mb-1">{d.fullName}</p>
+                          <p className="text-gray-600">Taxa de Conversão: <span className="font-bold text-blue-600">{d.taxaConversao}%</span></p>
+                          <p className="text-green-700">Ganhas: <span className="font-bold">{d.ganhas}</span> ({formatCurrency(d.ganhasValor)})</p>
+                          <p className="text-red-700">Perdidas: <span className="font-bold">{d.perdidas}</span> ({formatCurrency(d.perdidasValor)})</p>
+                          <p className="text-gray-600 mt-1 pt-1 border-t">Total fechadas: <span className="font-bold">{d.total}</span></p>
+                        </div>
+                      );
                     }}
                   />
-                  <Bar dataKey="taxaConversao" name="Taxa" radius={[0, 6, 6, 0]} fill="#3b82f6">
-                    {etnConversionTop10.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
-                    <LabelList dataKey="taxaConversao" position="right" fill="#374151" fontSize={10} formatter={(v: number) => `${v}%`} />
+                  <Legend wrapperStyle={{ fontSize: '11px' }} />
+                  <Bar dataKey="ganhas" name="Ganhas" stackId="conv" fill="#10b981" radius={[0, 0, 0, 0]}>
+                    <LabelList
+                      content={({ x, y, width, height, index }: any) => {
+                        const filtered = etnConversionTop10.filter(e => filterOLD(e.fullName));
+                        const d = filtered[index];
+                        if (!d) return null;
+                        return (
+                          <text x={(x || 0) + (width || 0) + (d.perdidas > 0 ? 0 : 8)} y={(y || 0) + (height || 0) / 2} fill="#374151" fontSize={10} dominantBaseline="middle">
+                            {d.perdidas === 0 ? `${d.taxaConversao}%` : ''}
+                          </text>
+                        );
+                      }}
+                    />
+                  </Bar>
+                  <Bar dataKey="perdidas" name="Perdidas" stackId="conv" fill="#ef4444" radius={[0, 6, 6, 0]}>
+                    <LabelList
+                      content={({ x, y, width, height, index }: any) => {
+                        const filtered = etnConversionTop10.filter(e => filterOLD(e.fullName));
+                        const d = filtered[index];
+                        if (!d) return null;
+                        return (
+                          <text x={(x || 0) + (width || 0) + 8} y={(y || 0) + (height || 0) / 2} fill="#374151" fontSize={10} dominantBaseline="middle" fontWeight="bold">
+                            {d.taxaConversao}%
+                          </text>
+                        );
+                      }}
+                    />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -449,10 +479,10 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
       <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
         <h3 className="text-sm font-bold text-foreground mb-1">TOP 10 Maiores Recursos X Agendas</h3>
         <p className="text-xs text-muted-foreground mb-4">Valor previsto vs quantidade de compromissos por ETN</p>
-        {etnRecursosAgendas.length > 0 ? (
-          <div style={{ height: Math.max(280, etnRecursosAgendas.length * 35) }}>
+        {etnRecursosAgendas.filter(e => filterOLD(e.fullName)).length > 0 ? (
+          <div style={{ height: Math.max(280, etnRecursosAgendas.filter(e => filterOLD(e.fullName)).length * 35) }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={etnRecursosAgendas} layout="vertical" margin={{ left: 10, right: 50 }}>
+              <BarChart data={etnRecursosAgendas.filter(e => filterOLD(e.fullName))} layout="vertical" margin={{ left: 10, right: 50 }}>
                 <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <YAxis type="category" dataKey="name" width={170} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <Tooltip
@@ -462,12 +492,12 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                     return [formatNum(v), 'Agendas'];
                   }}
                   labelFormatter={(label: string) => {
-                    const item = etnRecursosAgendas.find(d => d.name === label);
+                    const item = etnRecursosAgendas.filter(e => filterOLD(e.fullName)).find(d => d.name === label);
                     return item?.fullName || label;
                   }}
                 />
                 <Bar dataKey="valor" name="Valor" radius={[0, 6, 6, 0]} cursor="pointer" onClick={(d: any) => onChartClick('etn', d.fullName || d.name)}>
-                  {etnRecursosAgendas.map((_, i) => (
+                  {etnRecursosAgendas.filter(e => filterOLD(e.fullName)).map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
                   <LabelList dataKey="valor" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />

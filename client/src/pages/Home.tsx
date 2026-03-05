@@ -254,15 +254,14 @@ export default function Home() {
     return 0;
   }, []);
 
+  const isCleanETN = useCallback((name: string) => {
+    const upper = name.trim().toUpperCase();
+    return !upper.includes('OLD') && !upper.includes('INATIVO');
+  }, []);
+
   const top5MissingETNs = useMemo(() => {
-    const today = new Date();
-    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const thirtyDaysAgoNum = thirtyDaysAgo.getFullYear() * 10000 + (thirtyDaysAgo.getMonth() + 1) * 100 + thirtyDaysAgo.getDate();
-    
-    const filtered = missingAgendas.filter((r: any) => {
-      const dateVal = parseDate(r.dataCriacao || '');
-      return dateVal >= thirtyDaysAgoNum;
-    });
+    // Sem filtro de data - mostrar todos os registros, excluindo OLD/INATIVO
+    const filtered = missingAgendas.filter((r: any) => isCleanETN(r.etn));
     
     const etnMap = new Map<string, { count: number; maxDate: number; maxDateStr: string }>();
     for (const r of filtered) {
@@ -285,14 +284,8 @@ export default function Home() {
   }, [missingAgendas, parseDate]);
 
   const missingAgendasFiltered = useMemo(() => {
-    const today = new Date();
-    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const thirtyDaysAgoNum = thirtyDaysAgo.getFullYear() * 10000 + (thirtyDaysAgo.getMonth() + 1) * 100 + thirtyDaysAgo.getDate();
-    
-    let filtered = missingAgendas.filter((r: any) => {
-      const dateVal = parseDate(r.dataCriacao || '');
-      return dateVal >= thirtyDaysAgoNum;
-    });
+    // Sem filtro de data - mostrar todos os registros, excluindo OLD/INATIVO
+    let filtered = missingAgendas.filter((r: any) => isCleanETN(r.etn));
     
     if (selETNMissing.length === 0 && !missingSearch && missingFilterEtapas.length === 0 && !(chartFilter && chartFilter.field === 'etnMissing')) {
       filtered = filtered.filter((r: any) => top5MissingETNs.includes(r.etn));
@@ -862,7 +855,7 @@ export default function Home() {
                         </div>
                       )}
                     </div>
-                    <span className="ml-auto text-xs text-gray-500">Pág. {missingPage + 1} de {Math.max(1, Math.ceil(missingAgendasFiltered.length / 10))} · {missingAgendasFiltered.length} registros (últimos 30 dias)</span>
+                    <span className="ml-auto text-xs text-gray-500">Pág. {missingPage + 1} de {Math.max(1, Math.ceil(missingAgendasFiltered.length / 10))} · {missingAgendasFiltered.length} registros</span>
                     {(missingSearch || missingFilterEtapas.length > 0) && (
                       <button
                         onClick={() => { setMissingSearch(''); setMissingFilterEtapas([]); }}
@@ -978,7 +971,12 @@ import {
 
 function MissingAgendaChart({ data, onBarClick, selectedETN }: { data: MissingAgendaRecord[]; onBarClick: (etn: string) => void; selectedETN: string[] }) {
   const chartData = useMemo(() => {
-    let filtered = selectedETN.length > 0 ? data.filter(r => selectedETN.includes(r.etn)) : data;
+    // Filtrar OLD/INATIVO dos dados
+    const isClean = (name: string) => {
+      const upper = name.trim().toUpperCase();
+      return !upper.includes('OLD') && !upper.includes('INATIVO');
+    };
+    let filtered = (selectedETN.length > 0 ? data.filter(r => selectedETN.includes(r.etn)) : data).filter(r => isClean(r.etn));
     const map = new Map<string, number>();
     for (const r of filtered) {
       map.set(r.etn, (map.get(r.etn) || 0) + 1);

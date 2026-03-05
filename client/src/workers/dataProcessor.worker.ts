@@ -53,9 +53,10 @@ function extractSequential(oppId: string): number {
   return nums ? parseInt(nums) : 0;
 }
 
-// Verifica se um nome contém "OLD"
+// Verifica se um nome contém "OLD" ou "INATIVO"
 function isOLD(name: string): boolean {
-  return name.trim().toUpperCase().includes('OLD');
+  const upper = name.trim().toUpperCase();
+  return upper.includes('OLD') || upper.includes('INATIVO');
 }
 
 // ====== CSV PARSER (roda no worker) ======
@@ -371,11 +372,32 @@ function processData(opportunities: any[], actions: any[]) {
     }
   }
 
-  // AGENDAS FALTANTES - ITEM 11: Cruzar por Subtipo de Oportunidade
+  // AGENDAS FALTANTES - ITEM 11: Cruzar por ETN + Subtipo de Oportunidade (Produto)
+  // Lógica: Para cada ETN, verificar quais OPs da mesma conta NÃO têm compromisso
+  // com aquele ETN para o mesmo Produto (Subtipo de Oportunidade).
+  // Ex: Se ETN tem compromisso com HCM Senior na OP 379211, mas a OP também tem ERP,
+  // e o ETN NÃO tem compromisso com ERP, então a OP aparece como faltante para ERP.
   const missingAgendas: any[] = [];
   const oppById = new Map<string, any>();
   for (const opp of opportunities) {
     oppById.set(trim(opp['Oportunidade ID']), opp);
+  }
+
+  // Mapear: OppId+ETN -> Set de Subtipos com compromisso
+  // Isso nos diz para cada OP e ETN, quais produtos já têm compromisso
+  const oppEtnSubtiposComCompromisso = new Map<string, Set<string>>();
+  for (const act of validActions) {
+    const oppId = trim(act['Oportunidade ID']);
+    const user = trim(act['Usuario']) || trim(act['Responsavel']) || trim(act['Usuário Ação']);
+    if (!oppId || !user || isOLD(user)) continue;
+    // Buscar o subtipo da oportunidade
+    const opp = oppById.get(oppId);
+    if (!opp) continue;
+    const subtipo = trim(opp['Subtipo de Oportunidade']);
+    if (!subtipo) continue;
+    const key = `${oppId}||${user}`;
+    if (!oppEtnSubtiposComCompromisso.has(key)) oppEtnSubtiposComCompromisso.set(key, new Set());
+    oppEtnSubtiposComCompromisso.get(key)!.add(subtipo);
   }
 
   const oppsByContaId = new Map<string, any[]>();
@@ -387,11 +409,13 @@ function processData(opportunities: any[], actions: any[]) {
     }
   }
 
+  // Conjunto de OPs que já foram adicionadas como faltantes (evitar duplicatas)
+  const missingAdded = new Set<string>();
+
   for (const [etn, contaMap] of Array.from(etnContaOppMap.entries())) {
-    // ITEM 2: Pular ETNs com OLD
     if (isOLD(etn)) continue;
 
-    // Obter os subtipos que este ETN já trabalhou
+    // Obter os subtipos/produtos que este ETN já trabalhou (em qualquer OP)
     const etnSubtipos = etnSubtipoOppMap.get(etn) || new Map();
 
     for (const [contaId, oppIdsWithAction] of Array.from(contaMap.entries())) {
@@ -410,12 +434,19 @@ function processData(opportunities: any[], actions: any[]) {
         const thisOppId = trim(opp['Oportunidade ID']);
         const thisSeq = extractSequential(thisOppId);
         const thisSubtipo = trim(opp['Subtipo de Oportunidade']);
+        const thisResp = trim(opp['Responsável']);
+        if (isOLD(thisResp)) continue;
 
+        // OP sem nenhum compromisso do ETN e sequencial maior
+        // (Produto/Subtipo é apenas informativo, não cruza por produto)
         if (!oppIdsWithAction.has(thisOppId) && thisSeq > maxSeqWithAction) {
-          // ITEM 11: Só mostrar se o ETN tem cadastro do mesmo subtipo/produto
+          // Se o ETN trabalha com subtipos específicos, só mostrar OPs desses subtipos
           if (thisSubtipo && etnSubtipos.size > 0) {
-            if (!etnSubtipos.has(thisSubtipo)) continue; // ETN não trabalhou com este produto
+            if (!etnSubtipos.has(thisSubtipo)) continue;
           }
+          const missingKey = `${thisOppId}||${etn}`;
+          if (missingAdded.has(missingKey)) continue;
+          missingAdded.add(missingKey);
 
           const etapa = trim(opp['Etapa']);
           const { month: mFech, year: yFech } = parseDate(trim(opp['Previsão de Fechamento']));
@@ -567,20 +598,9 @@ function processData(opportunities: any[], actions: any[]) {
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 
-  // ITEM 7: TOP 10 Taxa de Conversão (Demonstração Presencial/Remota)
-  const demoActionKeys = new Set<string>();
-  for (const a of validActions) {
-    const catNorm = normalizeStr(a['Categoria'] || '');
-    if (catNorm.includes('demonstracao presencial') || catNorm.includes('demonstracao remota')) {
-      const oppId = trim(a['Oportunidade ID']);
-      const user = (a['Usuario'] || '').trim();
-      if (oppId && user && !isOLD(user)) {
-        demoActionKeys.add(`${user}-${oppId}`);
-      }
-    }
-  }
-  
-  const etnConversionMap = new Map<string, { total: number; ganhas: number; perdidas: number }>();
+  // ITEM 7: TOP 10 Taxa de Conversão - mesma lógica do modal individual
+  // Ganhas / (Ganhas + Perdidas) = % de aproveitamento
+  const etnConversionMap = new Map<string, { total: number; ganhas: number; perdidas: number; ganhasValor: number; perdidasValor: number }>();
   const etnConversionSeen = new Set<string>();
   for (const r of records) {
     if (isOLD(r.etn) || r.etn === 'Sem Agenda') continue;
@@ -588,27 +608,35 @@ function processData(opportunities: any[], actions: any[]) {
     if (etnConversionSeen.has(key)) continue;
     etnConversionSeen.add(key);
     
-    if (!demoActionKeys.has(key)) continue;
+    // Só considerar oportunidades Fechadas (Ganha ou Perdida)
+    const isGanha = r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR';
+    const isPerdida = r.etapa === 'Fechada e Perdida';
+    if (!isGanha && !isPerdida) continue;
     
-    const e = etnConversionMap.get(r.etn) || { total: 0, ganhas: 0, perdidas: 0 };
+    const e = etnConversionMap.get(r.etn) || { total: 0, ganhas: 0, perdidas: 0, ganhasValor: 0, perdidasValor: 0 };
     e.total++;
-    if (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR') {
+    if (isGanha) {
       e.ganhas++;
-    } else if (r.etapa === 'Fechada e Perdida') {
+      e.ganhasValor += r.valorUnificado;
+    } else {
       e.perdidas++;
+      e.perdidasValor += r.valorUnificado;
     }
     etnConversionMap.set(r.etn, e);
   }
   const etnConversionTop10 = Array.from(etnConversionMap.entries())
+    .filter(([name, d]) => d.total > 0 && !isOLD(name)) // Qualquer ETN com ops fechadas, sem OLD/INATIVO
     .map(([name, d]) => ({
       name: name.length > 20 ? name.slice(0, 20) + '...' : name,
       fullName: name,
       total: d.total,
       ganhas: d.ganhas,
       perdidas: d.perdidas,
-      taxaConversao: d.total > 0 ? Math.round((d.ganhas / d.total) * 100) : 0,
+      ganhasValor: d.ganhasValor,
+      perdidasValor: d.perdidasValor,
+      taxaConversao: d.ganhas + d.perdidas > 0 ? Math.round((d.ganhas / (d.ganhas + d.perdidas)) * 100) : 0,
     }))
-    .sort((a, b) => b.taxaConversao - a.taxaConversao)
+    .sort((a, b) => b.total - a.total || b.taxaConversao - a.taxaConversao)
     .slice(0, 10);
 
   // ITEM 8: TOP 10 Maiores Recursos X Agendas - TODOS os compromissos
