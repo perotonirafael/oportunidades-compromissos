@@ -222,7 +222,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
     <div className="space-y-6">
       {/* Item 3: ETN Top 10 - PRIMEIRO GRÁFICO */}
       <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-        <h3 className="text-sm font-bold text-foreground mb-1">ETN Top 10</h3>
+        <h3 className="text-sm font-bold text-foreground mb-1">FORECAST por ETN</h3>
         <p className="text-xs text-muted-foreground mb-4">Valor por ETN (Proposta e Negociação, prob. ≥75%) - clique para ver detalhes</p>
         {etnTop10Clean.length > 0 ? (
           <div style={{ height: Math.max(280, etnTop10Clean.length * 35) }}>
