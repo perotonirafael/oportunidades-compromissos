@@ -164,7 +164,11 @@ export default function Home() {
       if (selAccounts.length > 0 && !selAccounts.includes(r.conta)) return false;
       if (selTypes.length > 0 && !selTypes.includes(r.tipoOportunidade)) return false;
       // ITEM 6: Filtro por Subtipo de Oportunidade (Produto)
-      if (selSubtipos.length > 0 && !selSubtipos.includes(r.subtipoOportunidade)) return false;
+      // Suporta valores compostos: 'HCM Senior; Wiipo' deve casar com filtro 'HCM Senior' ou 'Wiipo'
+      if (selSubtipos.length > 0) {
+        const parts = (r.subtipoOportunidade || '').split(/[;,]/).map((s: string) => s.trim()).filter(Boolean);
+        if (parts.length === 0 || !parts.some((p: string) => selSubtipos.includes(p))) return false;
+      }
       return true;
     });
   }, [processedData, selYears, selMonths, selReps, selResp, selETN, selStages, selProbs, selAgenda, selAccounts, selTypes, selSubtipos]);

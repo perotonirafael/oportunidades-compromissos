@@ -503,7 +503,16 @@ function processData(opportunities: any[], actions: any[]) {
   });
 
   // ITEM 6: Adicionar subtipos de oportunidade como opção de filtro
-  const subtipos = Array.from(new Set(records.map((r: any) => r.subtipoOportunidade).filter(Boolean))).sort();
+  // Simplificar: separar valores compostos (ex: 'HCM Senior; Wiipo') em itens individuais
+  const subtiposSet = new Set<string>();
+  for (const r of records) {
+    const raw = (r as any).subtipoOportunidade;
+    if (!raw) continue;
+    // Separar por ; e , para extrair produtos individuais
+    const parts = String(raw).split(/[;,]/).map((s: string) => s.trim()).filter(Boolean);
+    for (const p of parts) subtiposSet.add(p);
+  }
+  const subtipos = Array.from(subtiposSet).sort();
 
   // ITEM 2: Filtrar OLD dos filtros
   const filterOLD = (arr: string[]) => arr.filter(s => !isOLD(s));
