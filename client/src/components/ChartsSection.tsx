@@ -32,6 +32,17 @@ const formatCurrency = (v: number) => {
 
 const formatNum = (v: number) => v.toLocaleString('pt-BR');
 
+
+const getAdaptiveChartHeight = (itemCount: number, longestLabel: number, minHeight: number, baseRowHeight: number) => {
+  const extraPerRow = longestLabel > 18 ? 4 : 0;
+  return Math.max(minHeight, itemCount * (baseRowHeight + extraPerRow));
+};
+
+const getAdaptiveYAxisWidth = (longestLabel: number, minWidth: number, maxWidth = 280) => {
+  const estimated = Math.round(longestLabel * 7.2);
+  return Math.min(maxWidth, Math.max(minWidth, estimated));
+};
+
 // Item 3: Padronizar nome - Primeira letra maiúscula, nome e sobrenome
 function formatName(name: string): string {
   if (!name) return name;
@@ -271,6 +282,11 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
     .slice(0, 3)
     .map((d) => ({ label: d.fullName, value: `${formatCurrency(d.valor)} · ${formatNum(d.agendas)} agendas` }));
 
+  const forecastEtnMaxLabel = Math.max(0, ...etnTop10Clean.map((d) => (d.name || '').length));
+  const pipelineMaxLabel = Math.max(0, ...pipelineByStage.map((d) => (d.name || '').length));
+  const motivosMaxLabel = Math.max(0, ...lossReasonsWithETN.map((d) => (d.name || '').length));
+  const recursosMaxLabel = Math.max(0, ...etnRecursosAgendas.map((d) => (d.name || '').length));
+
   if (!data.length) return null;
 
   return (
@@ -285,11 +301,11 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
           <div className="flex items-center gap-2"><Top3Hover items={top3ForecastEtn} /><ExportChartButton onClick={() => handleExportChart('chart-forecast-etn', 'forecast-por-etn')} /></div>
         </div>
         {etnTop10Clean.length > 0 ? (
-          <div style={{ height: Math.max(280, etnTop10Clean.length * 35) }}>
+          <div style={{ height: getAdaptiveChartHeight(etnTop10Clean.length, forecastEtnMaxLabel, 300, 36) }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={etnTop10Clean} layout="vertical" margin={{ left: 10, right: 50 }}>
                 <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
-                <YAxis type="category" dataKey="name" width={170} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
+                <YAxis type="category" dataKey="name" width={getAdaptiveYAxisWidth(forecastEtnMaxLabel, 170)} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <Tooltip
                   {...tooltipStyle}
                   formatter={(v: number, name: string) => {
@@ -332,7 +348,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
             </div>
             <div className="flex items-center gap-2"><Top3Hover items={top3Pipeline} /><ExportChartButton onClick={() => handleExportChart('chart-pipeline-etapa', 'pipeline-por-etapa')} /></div>
           </div>
-          <div style={{ height: Math.max(300, pipelineByStage.length * 50) }}>
+          <div style={{ height: getAdaptiveChartHeight(pipelineByStage.length, pipelineMaxLabel, 320, 50) }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={pipelineByStage} layout="vertical" margin={{ left: 10, right: 50 }}>
                 <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
@@ -361,11 +377,11 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
               </div>
               <div className="flex items-center gap-2"><Top3Hover items={top3Motivos} /><ExportChartButton onClick={() => handleExportChart('chart-motivos-perda', 'motivos-de-perda')} /></div>
             </div>
-            <div style={{ height: Math.max(320, lossReasonsWithETN.length * 55) }}>
+            <div style={{ height: getAdaptiveChartHeight(lossReasonsWithETN.length, motivosMaxLabel, 340, 56) }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={lossReasonsWithETN} layout="vertical" margin={{ left: 10, right: 60 }}>
                   <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
-                  <YAxis type="category" dataKey="name" width={220} tick={{ fill: '#374151', fontSize: 10 }} axisLine={{ stroke: '#e5e7eb' }} />
+                  <YAxis type="category" dataKey="name" width={getAdaptiveYAxisWidth(motivosMaxLabel, 220)} tick={{ fill: '#374151', fontSize: 10 }} axisLine={{ stroke: '#e5e7eb' }} />
                   <Tooltip
                     {...tooltipStyle}
                     content={({ active, payload }: any) => {
@@ -585,11 +601,11 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
           <div className="flex items-center gap-2"><Top3Hover items={top3RecursosAgendas} /><ExportChartButton onClick={() => handleExportChart('chart-recursos-agendas', 'top10-recursos-x-agendas')} /></div>
         </div>
         {etnRecursosAgendas.length > 0 ? (
-          <div style={{ height: Math.max(280, etnRecursosAgendas.length * 35) }}>
+          <div style={{ height: getAdaptiveChartHeight(etnRecursosAgendas.length, recursosMaxLabel, 300, 36) }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={etnRecursosAgendas} layout="vertical" margin={{ left: 10, right: 50 }}>
                 <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
-                <YAxis type="category" dataKey="name" width={170} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
+                <YAxis type="category" dataKey="name" width={getAdaptiveYAxisWidth(recursosMaxLabel, 170)} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <Tooltip
                   {...tooltipStyle}
                   formatter={(v: number, name: string) => {
