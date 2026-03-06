@@ -64,7 +64,7 @@ interface Props {
 }
 
 export function ETNComparativeAnalysis({ data, actions }: Props) {
-  // 1. Matriz de Performance ETN (Win Rate, Valor Médio, Ciclo, Agendas/Op)
+  // 1. Matriz de Performance ETN (Taxa de Conversão, Valor Médio, Ciclo, Agendas/Op)
   const performanceMatrix = useMemo(() => {
     const etnMap = new Map<string, {
       total: number;
@@ -255,7 +255,7 @@ export function ETNComparativeAnalysis({ data, actions }: Props) {
                 <th className="px-4 py-2 text-left font-semibold">ETN</th>
                 <th className="px-4 py-2 text-right font-semibold">Total Oport.</th>
                 <th className="px-4 py-2 text-right font-semibold">Ganhas</th>
-                <th className="px-4 py-2 text-right font-semibold">Win Rate</th>
+                <th className="px-4 py-2 text-right font-semibold">Taxa de Conversão</th>
                 <th className="px-4 py-2 text-right font-semibold">Valor Ganho</th>
                 <th className="px-4 py-2 text-right font-semibold">Valor Perdido</th>
                 <th className="px-4 py-2 text-right font-semibold">Valor Médio/Op</th>

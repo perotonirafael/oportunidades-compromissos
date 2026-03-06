@@ -65,6 +65,14 @@ function trim(val: any): string {
   return val ? val.toString().trim() : '';
 }
 
+function normalize(val: string): string {
+  return (val || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
 export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailModalProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEtapa, setFilterEtapa] = useState('');
@@ -116,10 +124,19 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
     for (const r of etnDataFiltered) {
       if (!oppMap.has(r.oppId)) oppMap.set(r.oppId, r);
     }
+    const demoOppIds = new Set<string>();
+    for (const a of etnActions) {
+      const categoria = normalize(trim(a['Categoria']));
+      const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
+      if (!isDemo) continue;
+      const oppId = trim(a['Oportunidade ID']);
+      if (oppId) demoOppIds.add(oppId);
+    }
+
     const uniqueOps = Array.from(oppMap.values());
     const totalOps = uniqueOps.length;
-    const ganhasOps = uniqueOps.filter(r => r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR');
-    const perdidasOps = uniqueOps.filter(r => r.etapa === 'Fechada e Perdida');
+    const ganhasOps = uniqueOps.filter(r => demoOppIds.has(r.oppId) && (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR'));
+    const perdidasOps = uniqueOps.filter(r => demoOppIds.has(r.oppId) && r.etapa === 'Fechada e Perdida');
     const ganhas = ganhasOps.length;
     const perdidas = perdidasOps.length;
     const ganhasValor = ganhasOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorFechadoReconhecido ?? r.valorFechado), 0);
@@ -130,7 +147,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
     const totalAgendas = etnDataFiltered.reduce((sum, r) => sum + r.agenda, 0);
 
     return { totalOps, ganhas, perdidas, ganhasValor, perdidasValor, winRate, valorTotal, valorMedio, totalAgendas };
-  }, [etnDataFiltered]);
+  }, [etnDataFiltered, etnActions]);
 
   // Gráfico: Distribuição por Etapa
   const etapaDistribution = useMemo(() => {
@@ -456,7 +473,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
             <div onClick={() => handleKPIClick('perdidas')} className={`cursor-pointer transition-all ${activeKPIFilter === 'perdidas' ? 'ring-2 ring-red-500 rounded-xl' : ''}`}>
               <KPICard title="Fechada e Perdida" value={kpis.perdidas.toString()} subtitle={formatCurrency(kpis.perdidasValor)} icon={<XCircle size={18} />} color="red" />
             </div>
-            <KPICard title="Win Rate" value={`${kpis.winRate}%`} icon={<TrendingUp size={18} />} color="amber" />
+            <KPICard title="Taxa de Conversão" value={`${kpis.winRate}%`} icon={<TrendingUp size={18} />} color="amber" />
             <KPICard title="Total de Agendas" value={kpis.totalAgendas.toString()} icon={<Calendar size={18} />} color="purple" />
 
           </div>

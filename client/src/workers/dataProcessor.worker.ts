@@ -48,6 +48,10 @@ function trim(val: any): string {
   return val ? val.toString().trim() : '';
 }
 
+function splitSubtipos(raw: string): string[] {
+  return String(raw || '').split(/[;,]/).map(s => s.trim()).filter(Boolean);
+}
+
 function extractSequential(oppId: string): number {
   const nums = oppId.replace(/[^0-9]/g, '');
   return nums ? parseInt(nums) : 0;
@@ -207,10 +211,8 @@ function processData(opportunities: any[], actions: any[]) {
     }
   }
 
-  // INDEX: Para Agendas Faltantes - agora com subtipo
+  // INDEX: Para Agendas Faltantes
   const etnContaOppMap = new Map<string, Map<string, Set<string>>>();
-  // Mapa de ETN -> Subtipo -> Set de OppIds (para cruzamento por produto)
-  const etnSubtipoOppMap = new Map<string, Map<string, Set<string>>>();
 
   // PROCESSAMENTO: Desdobramento 1:N
   const records: any[] = [];
@@ -269,13 +271,6 @@ function processData(opportunities: any[], actions: any[]) {
           if (!contaMap.has(contaId)) contaMap.set(contaId, new Set());
           contaMap.get(contaId)!.add(oppId);
 
-          // ITEM 11: Mapear ETN -> Subtipo -> OppIds
-          if (subtipoOportunidade) {
-            if (!etnSubtipoOppMap.has(user)) etnSubtipoOppMap.set(user, new Map());
-            const subtipoMap = etnSubtipoOppMap.get(user)!;
-            if (!subtipoMap.has(subtipoOportunidade)) subtipoMap.set(subtipoOportunidade, new Set());
-            subtipoMap.get(subtipoOportunidade)!.add(oppId);
-          }
         }
 
         const catCount = new Map<string, number>();
@@ -381,23 +376,6 @@ function processData(opportunities: any[], actions: any[]) {
     oppById.set(trim(opp['Oportunidade ID']), opp);
   }
 
-  // Mapear: OppId+ETN -> Set de Subtipos com compromisso
-  // Isso nos diz para cada OP e ETN, quais produtos já têm compromisso
-  const oppEtnSubtiposComCompromisso = new Map<string, Set<string>>();
-  for (const act of validActions) {
-    const oppId = trim(act['Oportunidade ID']);
-    const user = trim(act['Usuario']) || trim(act['Responsavel']) || trim(act['Usuário Ação']);
-    if (!oppId || !user) continue;
-    // Buscar o subtipo da oportunidade
-    const opp = oppById.get(oppId);
-    if (!opp) continue;
-    const subtipo = trim(opp['Subtipo de Oportunidade']);
-    if (!subtipo) continue;
-    const key = `${oppId}||${user}`;
-    if (!oppEtnSubtiposComCompromisso.has(key)) oppEtnSubtiposComCompromisso.set(key, new Set());
-    oppEtnSubtiposComCompromisso.get(key)!.add(subtipo);
-  }
-
   const oppsByContaId = new Map<string, any[]>();
   for (const opp of opportunities) {
     const cid = trim(opp['Conta ID']);
@@ -412,9 +390,6 @@ function processData(opportunities: any[], actions: any[]) {
 
   for (const [etn, contaMap] of Array.from(etnContaOppMap.entries())) {
 
-    // Obter os subtipos/produtos que este ETN já trabalhou (em qualquer OP)
-    const etnSubtipos = etnSubtipoOppMap.get(etn) || new Map();
-
     for (const [contaId, oppIdsWithAction] of Array.from(contaMap.entries())) {
       let maxSeqWithAction = 0;
       let bestPrevOppId = '';
@@ -426,19 +401,33 @@ function processData(opportunities: any[], actions: any[]) {
         }
       }
 
+      const subtiposComCompromissoNaConta = new Set<string>();
+      for (const oppIdComCompromisso of Array.from(oppIdsWithAction)) {
+        const oppComCompromisso = oppById.get(oppIdComCompromisso);
+        if (!oppComCompromisso) continue;
+        for (const subtipo of splitSubtipos(trim(oppComCompromisso['Subtipo de Oportunidade']))) {
+          subtiposComCompromissoNaConta.add(subtipo);
+        }
+      }
+
       const allOppsForConta = oppsByContaId.get(contaId) || [];
       for (const opp of allOppsForConta) {
         const thisOppId = trim(opp['Oportunidade ID']);
         const thisSeq = extractSequential(thisOppId);
         const thisSubtipo = trim(opp['Subtipo de Oportunidade']);
-        const thisResp = trim(opp['Responsável']);
+        const thisSubtipos = splitSubtipos(thisSubtipo);
 
         // OP sem nenhum compromisso do ETN e sequencial maior
         // (Produto/Subtipo é apenas informativo, não cruza por produto)
         if (!oppIdsWithAction.has(thisOppId) && thisSeq > maxSeqWithAction) {
-          // Se o ETN trabalha com subtipos específicos, só mostrar OPs desses subtipos
-          if (thisSubtipo && etnSubtipos.size > 0) {
-            if (!etnSubtipos.has(thisSubtipo)) continue;
+          // Ajuste 3: sempre cruzar por produto na própria conta.
+          // Se não houver produto em comum entre a nova OP e os compromissos já feitos pelo ETN
+          // nesta conta, não listar como agenda faltante.
+          if (thisSubtipos.length > 0 && subtiposComCompromissoNaConta.size > 0) {
+            const hasMatchingProduct = thisSubtipos.some(st => subtiposComCompromissoNaConta.has(st));
+            if (!hasMatchingProduct) continue;
+          } else if (subtiposComCompromissoNaConta.size > 0 && thisSubtipos.length === 0) {
+            continue;
           }
           const missingKey = `${thisOppId}||${etn}`;
           if (missingAdded.has(missingKey)) continue;
@@ -603,27 +592,37 @@ function processData(opportunities: any[], actions: any[]) {
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 
-  // ITEM 7: TOP 10 Taxa de Conversão - mesma lógica do modal individual
-  // Ganhas / (Ganhas + Perdidas) = % de aproveitamento
+  // ITEM 7: TOP 10 Taxa de Conversão (somente Demonstração Presencial/Remota)
+  // Ganhas / (Ganhas + Perdidas) considerando apenas oportunidades com demo presencial/remota
+  const demoOppByEtn = new Set<string>();
+  for (const act of validActions) {
+    const user = trim(act['Usuario']) || trim(act['Responsavel']) || trim(act['Usuário Ação']);
+    const oppId = trim(act['Oportunidade ID']);
+    const categoria = normalizeStr(trim(act['Categoria']));
+    const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
+    if (!user || !oppId || !isDemo) continue;
+    demoOppByEtn.add(`${user}||${oppId}`);
+  }
+
   const etnConversionMap = new Map<string, { total: number; ganhas: number; perdidas: number; ganhasValor: number; perdidasValor: number }>();
   const etnConversionSeen = new Set<string>();
   for (const r of records) {
     if (r.etn === 'Sem Agenda') continue;
-    const key = `${r.etn}-${r.oppId}`;
-    if (etnConversionSeen.has(key)) continue;
+    const key = `${r.etn}||${r.oppId}`;
+    if (!demoOppByEtn.has(key) || etnConversionSeen.has(key)) continue;
     etnConversionSeen.add(key);
-    
-    // Só considerar oportunidades Fechadas (Ganha ou Perdida)
+
     const isGanha = r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR';
     const isPerdida = r.etapa === 'Fechada e Perdida';
     if (!isGanha && !isPerdida) continue;
-    
+
     const e = etnConversionMap.get(r.etn) || { total: 0, ganhas: 0, perdidas: 0, ganhasValor: 0, perdidasValor: 0 };
     e.total++;
     if (isGanha) {
       e.ganhas++;
       e.ganhasValor += r.valorUnificado;
-    } else {
+    }
+    if (isPerdida) {
       e.perdidas++;
       e.perdidasValor += r.valorUnificado;
     }
