@@ -1,7 +1,7 @@
 import {
   Upload, AlertCircle, TrendingUp, Target, Zap, DollarSign,
   Loader, BarChart3, Trophy, XCircle, FileText, RotateCcw,
-  Calendar, AlertTriangle, Search, Database, Trash2, Clock, ChevronDown,
+  Calendar, AlertTriangle, Search, Database, Trash2, Clock, ChevronDown, Download,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { useDataProcessor, type Opportunity, type Action, type ProcessedRecord, type MissingAgendaRecord } from '@/hooks/useDataProcessor';
@@ -16,6 +16,7 @@ import { ETNDetailModal } from '@/components/ETNDetailModal';
 import { ETNComparativeAnalysis } from '@/components/ETNComparativeAnalysis';
 import { DEMO_DATA } from '@/lib/demoData';
 import { saveToCache, loadFromCache, clearCache, getCacheInfo } from '@/hooks/useDataCache';
+import { exportChartAsJpeg } from '@/lib/exportChartAsJpeg';
 
 export default function Home() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
@@ -33,6 +34,10 @@ export default function Home() {
   const [useWorkerOnly, setUseWorkerOnly] = useState(false);
   const [lightOpportunities, setLightOpportunities] = useState<Opportunity[]>([]);
   const [lightActions, setLightActions] = useState<Action[]>([]);
+
+  const handleExportChartAsJpeg = useCallback((chartId: string, fileName: string) => {
+    void exportChartAsJpeg({ elementId: chartId, fileName });
+  }, []);
 
   const handleLoadDemo = useCallback(() => {
     setOpportunities([]);
@@ -173,7 +178,7 @@ export default function Home() {
     });
   }, [processedData, selYears, selMonths, selReps, selResp, selETN, selStages, selProbs, selAgenda, selAccounts, selTypes, selSubtipos]);
 
-  // Ajuste 2+3: Taxa de Conversão (somente Demonstração Presencial/Remota)
+  // Ajuste 2+3: Taxa de Conversão (Demonstração Presencial/Remota + Fechada Ganha/Perdida)
   const etnConversionTop10 = useMemo(() => {
     if (!filteredData || filteredData.length === 0) return [];
 
@@ -183,37 +188,37 @@ export default function Home() {
       .toLowerCase()
       .trim();
 
-    const demoKeys = new Set<string>();
-    for (const a of actions) {
-      const categoria = normalize((a['Categoria'] || '').toString());
-      const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
-      if (!isDemo) continue;
-
-      const oppId = (a['Oportunidade ID'] || '').toString().trim();
-      const etn = (a['Usuario'] || a['Responsavel'] || a['Usuário Ação'] || '').toString().trim();
-      if (!oppId || !etn) continue;
-      demoKeys.add(`${etn}||${oppId}`);
-    }
-
     const etnMap = new Map<string, { total: number; ganhas: number; perdidas: number; ganhasValor: number; perdidasValor: number }>();
     const seen = new Set<string>();
 
     for (const r of filteredData) {
-      if (r.etn === 'Sem Agenda') continue;
+      if (!r.etn || r.etn === 'Sem Agenda') continue;
 
-      const key = `${r.etn}||${r.oppId}`;
-      if (!demoKeys.has(key) || seen.has(key)) continue;
-      seen.add(key);
+      const categoria = normalize((r.categoriaCompromisso || '').toString());
+      const isDemo = categoria.includes('demonstracao presencial') || categoria.includes('demonstracao remota');
+      if (!isDemo) continue;
 
       const isGanha = r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR';
       const isPerdida = r.etapa === 'Fechada e Perdida';
       if (!isGanha && !isPerdida) continue;
 
+      const key = `${r.etn}||${r.oppId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
       const e = etnMap.get(r.etn) || { total: 0, ganhas: 0, perdidas: 0, ganhasValor: 0, perdidasValor: 0 };
-      e.total++;
       const val = r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto;
-      if (isGanha) { e.ganhas++; e.ganhasValor += val; }
-      if (isPerdida) { e.perdidas++; e.perdidasValor += val; }
+
+      if (isGanha) {
+        e.ganhas++;
+        e.ganhasValor += val;
+      }
+      if (isPerdida) {
+        e.perdidas++;
+        e.perdidasValor += val;
+      }
+      e.total = e.ganhas + e.perdidas;
+
       etnMap.set(r.etn, e);
     }
 
@@ -229,9 +234,9 @@ export default function Home() {
         perdidasValor: d.perdidasValor,
         taxaConversao: d.total > 0 ? Math.round((d.ganhas / d.total) * 100) : 0,
       }))
-      .sort((a, b) => b.taxaConversao - a.taxaConversao || b.total - a.total)
+      .sort((a, b) => b.total - a.total || b.taxaConversao - a.taxaConversao)
       .slice(0, 10);
-  }, [filteredData, actions]);
+  }, [filteredData]);
 
   // Ajuste 2: Recursos X Agendas recalculado a partir de filteredData
   const etnRecursosAgendas = useMemo(() => {
@@ -341,6 +346,17 @@ export default function Home() {
     });
     return filtered;
   }, [missingAgendas, chartFilter, selETNMissing, missingFilterEtapas, missingSearch, top5MissingETNs, parseDate]);
+
+  const top3MissingAgendas = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of missingAgendasFiltered) {
+      map.set(r.etn, (map.get(r.etn) || 0) + 1);
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([label, count]) => ({ label, count }));
+  }, [missingAgendasFiltered]);
 
   // ETN Top 10 filtrado - ITEM 4: apenas Proposta e Negociação com prob >= 75%
   const etnTop10Filtered = useMemo(() => {
@@ -728,7 +744,13 @@ export default function Home() {
                 icon={<XCircle size={20} />}
                 color="red"
               />
-              <KPICard title="WIN RATE" value={`${filteredKPIs?.winRate ?? '0'}%`} icon={<TrendingUp size={20} />} color="amber" />
+              <KPICard
+                title="TAXA DE CONVERSÃO"
+                value={`${filteredKPIs?.winRate ?? '0'}%`}
+                icon={<TrendingUp size={20} />}
+                color="green"
+                titleClassName="text-emerald-700"
+              />
               <KPICard
                 title="FORECAST (≥75%)"
                 value={`R$ ${((filteredKPIs?.totalForecast ?? 0) / 1e6).toFixed(1)}M`}
@@ -826,18 +848,44 @@ export default function Home() {
                 </div>
 
                 <div className="bg-white rounded-xl p-5 border border-border shadow-sm mb-4">
-                  <div className="flex justify-between items-center mb-4">
+                  <div className="flex justify-between items-start mb-4 gap-3">
                     <div>
                       <h3 className="text-sm font-bold text-foreground mb-1">Agendas Faltantes por ETN</h3>
                       <p className="text-xs text-muted-foreground">Clique na barra para filtrar a tabela abaixo</p>
                     </div>
-                    <div className="w-56">
-                      <MultiSelectDropdown
-                        label="Filtrar ETN"
-                        options={filterOptions.etns}
-                        selected={selETNMissing}
-                        onChange={setSelETNMissing}
-                      />
+                    <div className="flex items-center gap-2">
+                      <div className="relative group">
+                        <button
+                          type="button"
+                          className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700"
+                        >
+                          Top 3
+                        </button>
+                        <div className="pointer-events-none absolute right-0 top-full z-20 mt-1 hidden w-64 rounded-xl border border-emerald-200 bg-white p-3 text-xs shadow-xl group-hover:block">
+                          <p className="mb-1 font-bold text-emerald-800">Top 3 ETNs sem agenda</p>
+                          {top3MissingAgendas.map((item, i) => (
+                            <p key={`${item.label}-${i}`} className="text-gray-700">
+                              {i + 1}. {item.label}: <span className="font-semibold text-emerald-700">{item.count}</span>
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleExportChartAsJpeg('chart-missing-agendas', 'agendas-faltantes-por-etn')}
+                        className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-800 transition-colors"
+                        title="Exportar gráfico em imagem (JPEG)"
+                      >
+                        <Download size={12} /> Exportar
+                      </button>
+                      <div className="w-56">
+                        <MultiSelectDropdown
+                          label="Filtrar ETN"
+                          options={filterOptions.etns}
+                          selected={selETNMissing}
+                          onChange={setSelETNMissing}
+                        />
+                      </div>
                     </div>
                   </div>
                   <MissingAgendaChart 
@@ -847,6 +895,7 @@ export default function Home() {
                       setSelectedETNDetail(etn);
                     }}
                     selectedETN={selETNMissing}
+                    chartId="chart-missing-agendas"
                   />
                 </div>
 
@@ -1009,10 +1058,10 @@ export default function Home() {
 
 // Componente de gráfico para Agendas Faltantes
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList,
 } from 'recharts';
 
-function MissingAgendaChart({ data, onBarClick, selectedETN }: { data: MissingAgendaRecord[]; onBarClick: (etn: string) => void; selectedETN: string[] }) {
+function MissingAgendaChart({ data, onBarClick, selectedETN, chartId }: { data: MissingAgendaRecord[]; onBarClick: (etn: string) => void; selectedETN: string[]; chartId?: string }) {
   const chartData = useMemo(() => {
     // Mostrar todos os dados (OLD/INATIVO aparecem normalmente)
     let filtered = selectedETN.length > 0 ? data.filter(r => selectedETN.includes(r.etn)) : data;
@@ -1027,13 +1076,16 @@ function MissingAgendaChart({ data, onBarClick, selectedETN }: { data: MissingAg
   }, [data, selectedETN]);
 
   const colors = ['#f59e0b', '#f97316', '#ef4444', '#ec4899', '#8b5cf6', '#6366f1', '#3b82f6', '#06b6d4', '#14b8a6', '#10b981', '#84cc16', '#eab308', '#d946ef', '#0ea5e9', '#22d3ee'];
+  const longestLabel = Math.max(0, ...chartData.map((d) => (d.name || '').length));
+  const adaptiveHeight = Math.max(300, chartData.length * (38 + (longestLabel > 18 ? 4 : 0)));
+  const adaptiveYAxisWidth = Math.min(240, Math.max(160, Math.round(longestLabel * 7.2)));
 
   return (
-    <div style={{ height: 300 }}>
+    <div id={chartId} style={{ height: adaptiveHeight }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 30 }}>
           <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 11 }} allowDecimals={false} axisLine={{ stroke: '#e5e7eb' }} />
-          <YAxis type="category" dataKey="name" width={160} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
+          <YAxis type="category" dataKey="name" hide width={0} />
           <Tooltip
             contentStyle={{ background: 'rgba(255,255,255,0.97)', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '12px', color: '#1f2937', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}
             formatter={(v: number) => [v, 'Oportunidades sem agenda']}
@@ -1042,7 +1094,9 @@ function MissingAgendaChart({ data, onBarClick, selectedETN }: { data: MissingAg
               return item?.fullName || label;
             }}
           />
-          <Bar dataKey="count" radius={[0, 6, 6, 0]} onClick={(data: any) => onBarClick(data.fullName)}>
+          <Bar dataKey="count" radius={[0, 12, 12, 0]} onClick={(data: any) => onBarClick(data.fullName)}>
+            <LabelList dataKey="name" position="insideLeft" fill="#ffffff" fontSize={10} fontWeight={700} />
+            <LabelList dataKey="count" position="insideRight" fill="#ffffff" fontSize={10} fontWeight={700} />
             {chartData.map((_, i) => (
               <Cell key={i} fill={colors[i % colors.length]} style={{ cursor: 'pointer' }} />
             ))}

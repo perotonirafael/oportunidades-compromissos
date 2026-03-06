@@ -5,6 +5,8 @@ import {
   Cell, LineChart, Line, CartesianGrid, Legend, LabelList,
   Treemap,
 } from 'recharts';
+import { Download } from 'lucide-react';
+import { exportChartAsJpeg } from '@/lib/exportChartAsJpeg';
 
 const COLORS = [
   '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6',
@@ -29,6 +31,17 @@ const formatCurrency = (v: number) => {
 };
 
 const formatNum = (v: number) => v.toLocaleString('pt-BR');
+
+
+const getAdaptiveChartHeight = (itemCount: number, longestLabel: number, minHeight: number, baseRowHeight: number) => {
+  const extraPerRow = longestLabel > 18 ? 4 : 0;
+  return Math.max(minHeight, itemCount * (baseRowHeight + extraPerRow));
+};
+
+const getAdaptiveYAxisWidth = (longestLabel: number, minWidth: number, maxWidth = 280) => {
+  const estimated = Math.round(longestLabel * 7.2);
+  return Math.min(maxWidth, Math.max(minWidth, estimated));
+};
 
 // Item 3: Padronizar nome - Primeira letra maiúscula, nome e sobrenome
 function formatName(name: string): string {
@@ -66,6 +79,45 @@ const tooltipStyle = {
   },
 };
 
+
+function ExportChartButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-export-ignore="true"
+      className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-800 transition-colors"
+      title="Exportar gráfico em imagem (JPEG)"
+    >
+      <Download size={12} /> Exportar
+    </button>
+  );
+}
+
+
+function Top3Hover({ items }: { items: { label: string; value: string }[] }) {
+  if (!items.length) return null;
+
+  return (
+    <div className="relative group" data-export-ignore="true">
+      <button
+        type="button"
+        className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700"
+      >
+        Top 3
+      </button>
+      <div className="pointer-events-none absolute right-0 top-full z-20 mt-1 hidden w-64 rounded-xl border border-emerald-200 bg-white p-3 text-xs shadow-xl group-hover:block">
+        <p className="mb-1 font-bold text-emerald-800">Top 3</p>
+        {items.map((item, i) => (
+          <p key={`${item.label}-${i}`} className="text-gray-700">
+            {i + 1}. {item.label}: <span className="font-semibold text-emerald-700">{item.value}</span>
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // Componente de rodapé com intervalo de datas (Item 9)
 function DateRangeFooter({ data }: { data: ProcessedRecord[] }) {
   const range = useMemo(() => {
@@ -92,6 +144,10 @@ function DateRangeFooter({ data }: { data: ProcessedRecord[] }) {
 }
 
 function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, etnTop10, etnConversionTop10, etnRecursosAgendas, onChartClick, onETNClick }: Props) {
+  const handleExportChart = (chartId: string, fileName: string) => {
+    void exportChartAsJpeg({ elementId: chartId, fileName });
+  };
+
   // Item 1: Pipeline por Etapa - mostrar valor em R$ (não quantidade)
   const pipelineByStage = useMemo(() => {
     const map = new Map<string, { count: number; value: number }>();
@@ -213,20 +269,43 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
       .sort((a, b) => b.value - a.value);
   }, [data]);
 
+  const top3ForecastEtn = etnTop10Clean.slice(0, 3).map((d) => ({ label: d.fullName, value: formatCurrency(d.value) }));
+  const top3Pipeline = pipelineByStage.slice(0, 3).map((d) => ({ label: d.fullName, value: formatCurrency(d.value) }));
+  const top3Motivos = lossReasonsWithETN.slice(0, 3).map((d) => ({ label: d.fullName, value: formatCurrency(d.value) }));
+  const top3Funnel = forecastFunnelFiltered.slice(0, 3).map((d) => ({ label: d.etapa, value: formatCurrency(d.value) }));
+  const top3Timeline = [...monthlyTimeline]
+    .sort((a, b) => b.previsto - a.previsto)
+    .slice(0, 3)
+    .map((d) => ({ label: d.name, value: formatCurrency(d.previsto) }));
+  const top3RecursosAgendas = [...etnRecursosAgendas]
+    .sort((a, b) => b.valor - a.valor)
+    .slice(0, 3)
+    .map((d) => ({ label: d.fullName, value: `${formatCurrency(d.valor)} · ${formatNum(d.agendas)} agendas` }));
+
+  const forecastEtnMaxLabel = Math.max(0, ...etnTop10Clean.map((d) => (d.name || '').length));
+  const pipelineMaxLabel = Math.max(0, ...pipelineByStage.map((d) => (d.name || '').length));
+  const motivosMaxLabel = Math.max(0, ...lossReasonsWithETN.map((d) => (d.name || '').length));
+  const recursosMaxLabel = Math.max(0, ...etnRecursosAgendas.map((d) => (d.name || '').length));
+
   if (!data.length) return null;
 
   return (
     <div className="space-y-6">
       {/* Item 3: ETN Top 10 - PRIMEIRO GRÁFICO */}
-      <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-        <h3 className="text-sm font-bold text-foreground mb-1">FORECAST por ETN</h3>
-        <p className="text-xs text-muted-foreground mb-4">Valor por ETN (Proposta e Negociação, prob. ≥75%) - clique para ver detalhes</p>
+      <div id="chart-forecast-etn" className="bg-white rounded-xl p-5 border border-border shadow-sm">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-foreground mb-1">FORECAST por ETN</h3>
+            <p className="text-xs text-muted-foreground">Valor por ETN (Proposta e Negociação, prob. ≥75%) - clique para ver detalhes</p>
+          </div>
+          <div className="flex items-center gap-2"><Top3Hover items={top3ForecastEtn} /><ExportChartButton onClick={() => handleExportChart('chart-forecast-etn', 'forecast-por-etn')} /></div>
+        </div>
         {etnTop10Clean.length > 0 ? (
-          <div style={{ height: Math.max(280, etnTop10Clean.length * 35) }}>
+          <div style={{ height: getAdaptiveChartHeight(etnTop10Clean.length, forecastEtnMaxLabel, 300, 36) }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={etnTop10Clean} layout="vertical" margin={{ left: 10, right: 50 }}>
                 <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
-                <YAxis type="category" dataKey="name" width={170} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
+                <YAxis type="category" dataKey="name" hide width={0} />
                 <Tooltip
                   {...tooltipStyle}
                   formatter={(v: number, name: string) => {
@@ -238,14 +317,15 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                     return item?.fullName || label;
                   }}
                 />
-                <Bar dataKey="value" name="Valor" radius={[0, 6, 6, 0]} cursor="pointer" onClick={(d: any) => {
+                <Bar dataKey="value" name="Valor" radius={[0, 12, 12, 0]} cursor="pointer" onClick={(d: any) => {
                   if (onETNClick) onETNClick(d.fullName || d.name);
                   onChartClick('etn', d.fullName || d.name);
                 }}>
                   {etnTop10Clean.map((entry, i) => (
                     <Cell key={i} fill={entry.color} />
                   ))}
-                  <LabelList dataKey="value" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
+                  <LabelList dataKey="name" position="insideLeft" fill="#ffffff" fontSize={10} fontWeight={700} />
+                  <LabelList dataKey="value" position="insideRight" fill="#ffffff" fontSize={10} fontWeight={700} formatter={(v: number) => formatCurrency(v)} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -261,20 +341,26 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
       {/* Item 1: Pipeline por Etapa + Item 4: Motivos de Perda + Item 5: Taxa Conversão + Item 6: Recursos X Agendas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Pipeline por Etapa - Item 1: valor em R$, gráfico maior */}
-        <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-          <h3 className="text-sm font-bold text-foreground mb-1">Pipeline por Etapa</h3>
-          <p className="text-xs text-muted-foreground mb-4">Valor previsto de oportunidades abertas (clique para filtrar)</p>
-          <div style={{ height: Math.max(300, pipelineByStage.length * 50) }}>
+        <div id="chart-pipeline-etapa" className="bg-white rounded-xl p-5 border border-border shadow-sm">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-foreground mb-1">Pipeline por Etapa</h3>
+              <p className="text-xs text-muted-foreground">Valor previsto de oportunidades abertas (clique para filtrar)</p>
+            </div>
+            <div className="flex items-center gap-2"><Top3Hover items={top3Pipeline} /><ExportChartButton onClick={() => handleExportChart('chart-pipeline-etapa', 'pipeline-por-etapa')} /></div>
+          </div>
+          <div style={{ height: getAdaptiveChartHeight(pipelineByStage.length, pipelineMaxLabel, 320, 50) }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={pipelineByStage} layout="vertical" margin={{ left: 10, right: 50 }}>
                 <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
-                <YAxis type="category" dataKey="name" width={220} tick={{ fill: '#374151', fontSize: 10 }} axisLine={{ stroke: '#e5e7eb' }} />
+                <YAxis type="category" dataKey="name" hide width={0} />
                 <Tooltip {...tooltipStyle} formatter={(v: number) => [formatCurrency(v), 'Valor Previsto']} labelFormatter={(label: string) => { const item = pipelineByStage.find(d => d.name === label); return item?.fullName || label; }} />
-                <Bar dataKey="value" radius={[0, 6, 6, 0]} cursor="pointer" onClick={(d: any) => onChartClick('etapa', d.fullName || d.name)}>
+                <Bar dataKey="value" radius={[0, 12, 12, 0]} cursor="pointer" onClick={(d: any) => onChartClick('etapa', d.fullName || d.name)}>
                   {pipelineByStage.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
-                  <LabelList dataKey="value" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
+                  <LabelList dataKey="name" position="insideLeft" fill="#ffffff" fontSize={10} fontWeight={700} />
+                  <LabelList dataKey="value" position="insideRight" fill="#ffffff" fontSize={10} fontWeight={700} formatter={(v: number) => formatCurrency(v)} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -284,14 +370,19 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
 
         {/* Item 4: Top 10 Motivos de Perda com ETNs */}
         {lossReasonsWithETN.length > 0 && (
-          <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-            <h3 className="text-sm font-bold text-foreground mb-1">Top 10 Motivos de Perda</h3>
-            <p className="text-xs text-muted-foreground mb-4">Principais causas e ETNs com mais perdas (clique para filtrar)</p>
-            <div style={{ height: Math.max(320, lossReasonsWithETN.length * 55) }}>
+          <div id="chart-motivos-perda" className="bg-white rounded-xl p-5 border border-border shadow-sm">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-foreground mb-1">Top 10 Motivos de Perda</h3>
+                <p className="text-xs text-muted-foreground">Principais causas e ETNs com mais perdas (clique para filtrar)</p>
+              </div>
+              <div className="flex items-center gap-2"><Top3Hover items={top3Motivos} /><ExportChartButton onClick={() => handleExportChart('chart-motivos-perda', 'motivos-de-perda')} /></div>
+            </div>
+            <div style={{ height: getAdaptiveChartHeight(lossReasonsWithETN.length, motivosMaxLabel, 340, 56) }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={lossReasonsWithETN} layout="vertical" margin={{ left: 10, right: 60 }}>
                   <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
-                  <YAxis type="category" dataKey="name" width={220} tick={{ fill: '#374151', fontSize: 10 }} axisLine={{ stroke: '#e5e7eb' }} />
+                  <YAxis type="category" dataKey="name" hide width={0} />
                   <Tooltip
                     {...tooltipStyle}
                     content={({ active, payload }: any) => {
@@ -316,12 +407,13 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                       );
                     }}
                   />
-                  <Bar dataKey="value" radius={[0, 6, 6, 0]} cursor="pointer" onClick={(d: any) => onChartClick('motivoPerda', d.fullName || d.name)}>
+                  <Bar dataKey="value" radius={[0, 12, 12, 0]} cursor="pointer" onClick={(d: any) => onChartClick('motivoPerda', d.fullName || d.name)}>
                     {lossReasonsWithETN.map((_, i) => {
                       const colors = ['#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#8b5cf6'];
                       return <Cell key={i} fill={colors[i % colors.length]} />;
                     })}
-                    <LabelList dataKey="value" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
+                    <LabelList dataKey="name" position="insideLeft" fill="#ffffff" fontSize={10} fontWeight={700} />
+                  <LabelList dataKey="value" position="insideRight" fill="#ffffff" fontSize={10} fontWeight={700} formatter={(v: number) => formatCurrency(v)} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -332,9 +424,14 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
       </div>
 
       {/* Item 10: FUNIL DE FORECAST - Funnel Chart estilo, linha inteira */}
-      <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-        <h3 className="text-sm font-bold text-foreground mb-1">FUNIL DE FORECAST</h3>
-        <p className="text-xs text-muted-foreground mb-4">Oportunidades com probabilidade ≥75% por etapa (clique para filtrar)</p>
+      <div id="chart-funil-forecast" className="bg-white rounded-xl p-5 border border-border shadow-sm">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-foreground mb-1">FUNIL DE FORECAST</h3>
+            <p className="text-xs text-muted-foreground">Oportunidades com probabilidade ≥75% por etapa (clique para filtrar)</p>
+          </div>
+          <div className="flex items-center gap-2"><Top3Hover items={top3Funnel} /><ExportChartButton onClick={() => handleExportChart('chart-funil-forecast', 'funil-forecast')} /></div>
+        </div>
         {forecastFunnelFiltered.length > 0 ? (
           <>
             <div className="space-y-2 mb-4">
@@ -389,9 +486,14 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Valor Previsto vs Fechado */}
-        <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-          <h3 className="text-sm font-bold text-foreground mb-1">Valor Previsto vs Fechado</h3>
-          <p className="text-xs text-muted-foreground mb-4">Evolução mensal (últimos 24 meses)</p>
+        <div id="chart-previsto-fechado" className="bg-white rounded-xl p-5 border border-border shadow-sm">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-foreground mb-1">Valor Previsto vs Fechado</h3>
+              <p className="text-xs text-muted-foreground">Evolução mensal (últimos 24 meses)</p>
+            </div>
+            <div className="flex items-center gap-2"><Top3Hover items={top3Timeline} /><ExportChartButton onClick={() => handleExportChart('chart-previsto-fechado', 'valor-previsto-vs-fechado')} /></div>
+          </div>
           <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={monthlyTimeline} margin={{ left: 10, right: 10 }}>
@@ -400,8 +502,12 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                 <YAxis tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <Tooltip {...tooltipStyle} formatter={(v: number) => [formatCurrency(v)]} />
                 <Legend wrapperStyle={{ fontSize: '12px' }} />
-                <Line type="monotone" dataKey="previsto" stroke="#f59e0b" strokeWidth={2.5} dot={false} name="Previsto" />
-                <Line type="monotone" dataKey="fechado" stroke="#10b981" strokeWidth={2.5} dot={false} name="Fechado" />
+                <Line type="monotone" dataKey="previsto" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} name="Previsto">
+                  <LabelList dataKey="previsto" position="top" fill="#92400e" fontSize={9} formatter={(v: number) => formatCurrency(v)} />
+                </Line>
+                <Line type="monotone" dataKey="fechado" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} name="Fechado">
+                  <LabelList dataKey="fechado" position="bottom" fill="#065f46" fontSize={9} formatter={(v: number) => formatCurrency(v)} />
+                </Line>
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -417,10 +523,14 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
           const totalAll = totalGanhas + totalPerdidas;
           const taxaGeral = totalAll > 0 ? Math.round((totalGanhas / totalAll) * 100) : 0;
           return (
-            <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-              <h3 className="text-sm font-bold text-foreground mb-1">Taxa de Conversão por ETN</h3>
-              <p className="text-xs text-muted-foreground mb-4">Fechada e Ganha vs Fechada e Perdida (% aproveitamento) — respeitando filtros aplicados</p>
-              
+            <div id="chart-taxa-conversao-etn" className="bg-white rounded-xl p-5 border border-border shadow-sm">
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-foreground mb-1">Taxa de Conversão por ETN</h3>
+                  <p className="text-xs text-muted-foreground mb-4">Fechada e Ganha vs Fechada e Perdida (% aproveitamento) — respeitando filtros selecionados</p>
+                </div>
+                <div className="flex items-center gap-2"><Top3Hover items={convData.slice(0, 3).map((d) => ({ label: d.fullName, value: `${d.taxaConversao}% · ${d.ganhas}G/${d.perdidas}P` }))} /><ExportChartButton onClick={() => handleExportChart('chart-taxa-conversao-etn', 'taxa-de-conversao-por-etn')} /></div>
+              </div>
               {/* Resumo geral */}
               <div className="grid grid-cols-3 gap-3 mb-5">
                 <div className="bg-emerald-50 rounded-lg p-3 text-center border border-emerald-100">
@@ -484,15 +594,20 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
       </div>
 
       {/* Item 6: TOP 10 Maiores Recursos X Agendas */}
-      <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-        <h3 className="text-sm font-bold text-foreground mb-1">TOP 10 Maiores Recursos X Agendas</h3>
-        <p className="text-xs text-muted-foreground mb-4">Valor previsto vs quantidade de compromissos por ETN</p>
+      <div id="chart-recursos-agendas" className="bg-white rounded-xl p-5 border border-border shadow-sm">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-foreground mb-1">TOP 10 Maiores Recursos X Agendas</h3>
+            <p className="text-xs text-muted-foreground">Valor previsto vs quantidade de compromissos por ETN</p>
+          </div>
+          <div className="flex items-center gap-2"><Top3Hover items={top3RecursosAgendas} /><ExportChartButton onClick={() => handleExportChart('chart-recursos-agendas', 'top10-recursos-x-agendas')} /></div>
+        </div>
         {etnRecursosAgendas.length > 0 ? (
-          <div style={{ height: Math.max(280, etnRecursosAgendas.length * 35) }}>
+          <div style={{ height: getAdaptiveChartHeight(etnRecursosAgendas.length, recursosMaxLabel, 300, 36) }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={etnRecursosAgendas} layout="vertical" margin={{ left: 10, right: 50 }}>
                 <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
-                <YAxis type="category" dataKey="name" width={170} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
+                <YAxis type="category" dataKey="name" hide width={0} />
                 <Tooltip
                   {...tooltipStyle}
                   formatter={(v: number, name: string) => {
@@ -504,13 +619,16 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                     return item?.fullName || label;
                   }}
                 />
-                <Bar dataKey="valor" name="Valor" radius={[0, 6, 6, 0]} cursor="pointer" onClick={(d: any) => onChartClick('etn', d.fullName || d.name)}>
+                <Bar dataKey="valor" name="Valor" radius={[0, 12, 12, 0]} cursor="pointer" onClick={(d: any) => onChartClick('etn', d.fullName || d.name)}>
                   {etnRecursosAgendas.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
-                  <LabelList dataKey="valor" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
+                  <LabelList dataKey="name" position="insideLeft" fill="#ffffff" fontSize={10} fontWeight={700} />
+                  <LabelList dataKey="valor" position="insideRight" fill="#ffffff" fontSize={10} fontWeight={700} formatter={(v: number) => formatCurrency(v)} />
                 </Bar>
-                <Bar dataKey="agendas" name="Agendas" radius={[0, 6, 6, 0]} fill="#d1d5db" opacity={0.6} />
+                <Bar dataKey="agendas" name="Agendas" radius={[0, 12, 12, 0]} fill="#d1d5db" opacity={0.6}>
+                  <LabelList dataKey="agendas" position="insideRight" fill="#ffffff" fontSize={10} fontWeight={700} formatter={(v: number) => formatNum(v)} />
+                </Bar>
                 <Legend />
               </BarChart>
             </ResponsiveContainer>

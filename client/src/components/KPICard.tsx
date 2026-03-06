@@ -6,6 +6,7 @@ interface Props {
   subtitle?: string;
   icon: ReactNode;
   color?: 'blue' | 'green' | 'amber' | 'red' | 'purple';
+  titleClassName?: string;
 }
 
 const colorMap: Record<string, { bg: string; iconText: string; border: string; accent: string }> = {
@@ -41,7 +42,7 @@ const colorMap: Record<string, { bg: string; iconText: string; border: string; a
   },
 };
 
-function KPICardInner({ title, value, subtitle, icon, color = 'blue' }: Props) {
+function KPICardInner({ title, value, subtitle, icon, color = 'blue', titleClassName }: Props) {
   const c = colorMap[color];
 
   return (
@@ -56,7 +57,7 @@ function KPICardInner({ title, value, subtitle, icon, color = 'blue' }: Props) {
       <p className="text-2xl font-bold font-mono text-foreground tracking-tight">
         {typeof value === 'number' ? value.toLocaleString('pt-BR') : value}
       </p>
-      <p className="text-xs text-muted-foreground mt-1 uppercase tracking-wider font-medium">{title}</p>
+      <p className={`text-xs mt-1 uppercase tracking-wider font-medium ${titleClassName ?? 'text-muted-foreground'}`}>{title}</p>
       {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
     </div>
   );
