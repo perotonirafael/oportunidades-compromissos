@@ -336,12 +336,13 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={pipelineByStage} layout="vertical" margin={{ left: 10, right: 50 }}>
                 <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
-                <YAxis type="category" dataKey="name" width={220} tick={{ fill: '#374151', fontSize: 10 }} axisLine={{ stroke: '#e5e7eb' }} />
+                <YAxis type="category" dataKey="name" hide width={0} />
                 <Tooltip {...tooltipStyle} formatter={(v: number) => [formatCurrency(v), 'Valor Previsto']} labelFormatter={(label: string) => { const item = pipelineByStage.find(d => d.name === label); return item?.fullName || label; }} />
                 <Bar dataKey="value" radius={[0, 12, 12, 0]} cursor="pointer" onClick={(d: any) => onChartClick('etapa', d.fullName || d.name)}>
                   {pipelineByStage.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
+                  <LabelList dataKey="name" position="insideLeft" fill="#ffffff" fontSize={10} fontWeight={700} />
                   <LabelList dataKey="value" position="insideRight" fill="#ffffff" fontSize={10} fontWeight={700} formatter={(v: number) => formatCurrency(v)} />
                 </Bar>
               </BarChart>
