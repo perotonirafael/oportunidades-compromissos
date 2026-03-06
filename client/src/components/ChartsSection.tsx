@@ -340,29 +340,35 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
             <div className="space-y-2 mb-4">
               {forecastFunnelFiltered.map((item, i) => {
                 const maxValue = forecastFunnelFiltered[0]?.value || 1;
-                const widthPct = Math.max(20, (item.value / maxValue) * 100);
+                const widthPct = Math.max(30, (item.value / maxValue) * 100);
                 return (
                   <div
                     key={i}
-                    className="cursor-pointer hover:opacity-80 transition-opacity"
+                    className="group relative cursor-pointer"
                     onClick={() => onChartClick('etapa', item.etapa)}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 hover:opacity-90 transition-opacity">
                       <div
-                        className="rounded-lg py-3 px-4 text-white font-semibold text-sm flex items-center justify-between transition-all"
+                        className="rounded-lg py-3 px-4 text-white font-semibold text-sm flex items-center justify-between transition-all min-w-[230px]"
                         style={{
                           width: `${widthPct}%`,
                           background: FUNNEL_COLORS[i % FUNNEL_COLORS.length],
-                          minWidth: '200px',
                         }}
                       >
-                        <span className="truncate">{item.etapa}</span>
-                        <span className="ml-2 whitespace-nowrap">{formatCurrency(item.value)}</span>
+                        <span className="truncate pr-2">{item.etapa}</span>
+                        <span className="ml-2 whitespace-nowrap shrink-0">{formatCurrency(item.value)}</span>
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-gray-600 whitespace-nowrap">
+                      <div className="flex items-center gap-3 text-xs text-gray-600 whitespace-nowrap flex-wrap">
                         <span className="font-bold">{item.count} ops</span>
                         <span>Prob. média: {item.avgProb}%</span>
                       </div>
+                    </div>
+
+                    <div className="hidden group-hover:block absolute z-20 top-1/2 -translate-y-1/2 left-6 sm:left-20 bg-white border border-gray-200 rounded-2xl p-3 shadow-xl text-xs min-w-[240px] max-w-[320px] pointer-events-none">
+                      <p className="font-bold text-gray-800 mb-1">{item.etapa}</p>
+                      <p className="text-gray-600">Valor: <span className="font-bold text-red-600">{formatCurrency(item.value)}</span></p>
+                      <p className="text-gray-600">Qtd: <span className="font-bold text-gray-800">{formatNum(item.count)}</span> oportunidades</p>
+                      <p className="text-gray-600 border-t border-gray-100 mt-2 pt-2">Probabilidade média: <span className="font-bold text-gray-800">{item.avgProb}%</span></p>
                     </div>
                   </div>
                 );
