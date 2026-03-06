@@ -728,7 +728,13 @@ export default function Home() {
                 icon={<XCircle size={20} />}
                 color="red"
               />
-              <KPICard title="WIN RATE" value={`${filteredKPIs?.winRate ?? '0'}%`} icon={<TrendingUp size={20} />} color="amber" />
+              <KPICard
+                title="TAXA DE CONVERSÃO"
+                value={`${filteredKPIs?.winRate ?? '0'}%`}
+                icon={<TrendingUp size={20} />}
+                color="green"
+                titleClassName="text-emerald-700"
+              />
               <KPICard
                 title="FORECAST (≥75%)"
                 value={`R$ ${((filteredKPIs?.totalForecast ?? 0) / 1e6).toFixed(1)}M`}
