@@ -257,14 +257,11 @@ export default function Home() {
     return 0;
   }, []);
 
-  const isCleanETN = useCallback((name: string) => {
-    const upper = name.trim().toUpperCase();
-    return !upper.includes('OLD') && !upper.includes('INATIVO');
-  }, []);
+  // OLD/INATIVO: Não filtrar dos dados, apenas dos dropdowns de filtro
 
   const top5MissingETNs = useMemo(() => {
-    // Sem filtro de data - mostrar todos os registros, excluindo OLD/INATIVO
-    const filtered = missingAgendas.filter((r: any) => isCleanETN(r.etn));
+    // Sem filtro de data - mostrar todos os registros
+    const filtered = missingAgendas;
     
     const etnMap = new Map<string, { count: number; maxDate: number; maxDateStr: string }>();
     for (const r of filtered) {
@@ -287,8 +284,8 @@ export default function Home() {
   }, [missingAgendas, parseDate]);
 
   const missingAgendasFiltered = useMemo(() => {
-    // Sem filtro de data - mostrar todos os registros, excluindo OLD/INATIVO
-    let filtered = missingAgendas.filter((r: any) => isCleanETN(r.etn));
+    // Sem filtro de data - mostrar todos os registros
+    let filtered = [...missingAgendas];
     
     if (selETNMissing.length === 0 && !missingSearch && missingFilterEtapas.length === 0 && !(chartFilter && chartFilter.field === 'etnMissing')) {
       filtered = filtered.filter((r: any) => top5MissingETNs.includes(r.etn));
@@ -466,7 +463,25 @@ export default function Home() {
     try {
       const cached = await loadFromCache();
       if (cached && cached.result) {
-        setWorkerResult(cached.result);
+        // Aplicar filterOLD ao cache para remover OLD/INATIVO dos filtros
+        const isOLD = (name: string): boolean => {
+          const upper = name.trim().toUpperCase();
+          return upper.includes('OLD') || upper.includes('INATIVO');
+        };
+        const cleanedResult = {
+          ...cached.result,
+          filterOptions: {
+            ...cached.result.filterOptions,
+            representantes: cached.result.filterOptions.representantes?.filter((s: string) => !isOLD(s)) || [],
+            responsaveis: cached.result.filterOptions.responsaveis?.filter((s: string) => !isOLD(s)) || [],
+            etns: cached.result.filterOptions.etns?.filter((s: string) => !isOLD(s)) || [],
+            tipos: cached.result.filterOptions.tipos?.filter((s: string) => !isOLD(s)) || [],
+            contas: cached.result.filterOptions.contas?.filter((s: string) => !isOLD(s)) || [],
+            subtipos: cached.result.filterOptions.subtipos?.filter((s: string) => !isOLD(s)) || [],
+            segmentos: cached.result.filterOptions.segmentos?.filter((s: string) => !isOLD(s)) || [],
+          },
+        };
+        setWorkerResult(cleanedResult);
       } else {
         setError('Cache não encontrado ou corrompido. Faça upload dos arquivos novamente.');
       }
@@ -974,12 +989,8 @@ import {
 
 function MissingAgendaChart({ data, onBarClick, selectedETN }: { data: MissingAgendaRecord[]; onBarClick: (etn: string) => void; selectedETN: string[] }) {
   const chartData = useMemo(() => {
-    // Filtrar OLD/INATIVO dos dados
-    const isClean = (name: string) => {
-      const upper = name.trim().toUpperCase();
-      return !upper.includes('OLD') && !upper.includes('INATIVO');
-    };
-    let filtered = (selectedETN.length > 0 ? data.filter(r => selectedETN.includes(r.etn)) : data).filter(r => isClean(r.etn));
+    // Mostrar todos os dados (OLD/INATIVO aparecem normalmente)
+    let filtered = selectedETN.length > 0 ? data.filter(r => selectedETN.includes(r.etn)) : data;
     const map = new Map<string, number>();
     for (const r of filtered) {
       map.set(r.etn, (map.get(r.etn) || 0) + 1);

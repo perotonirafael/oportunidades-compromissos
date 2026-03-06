@@ -40,11 +40,8 @@ function formatName(name: string): string {
     .join(' ');
 }
 
-// Item 3: Filtrar nomes que contenham OLD ou INATIVO
-function filterOLD(name: string): boolean {
-  const upper = name.trim().toUpperCase();
-  return !upper.includes('OLD') && !upper.includes('INATIVO');
-}
+// OLD/INATIVO: Não filtrar dos gráficos, apenas dos dropdowns de filtro
+// Dados OLD/INATIVO aparecem normalmente nos gráficos e tabelas
 
 interface Props {
   data: ProcessedRecord[];
@@ -168,7 +165,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
       .map(([motivo, total]) => {
         const etnEntries = motivoETNMap.get(motivo) || new Map();
         const topETNs = Array.from(etnEntries.entries())
-          .filter(([name]) => filterOLD(name) && name !== 'Sem Agenda')
+          .filter(([name]) => name !== 'Sem Agenda')
           .sort((a, b) => b[1].value - a[1].value)
           .slice(0, 3)
           .map(([name, d]) => ({ name: formatName(name), value: d.value, count: d.count }));
@@ -185,7 +182,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
   // Item 3: ETN Top 10 filtrado - remover "Sem Agenda" e nomes OLD, padronizar nomes
   const etnTop10Clean = useMemo(() => {
     return etnTop10
-      .filter(e => e.fullName !== 'Sem Agenda' && filterOLD(e.fullName))
+      .filter(e => e.fullName !== 'Sem Agenda')
       .map((e, i) => ({
         ...e,
         name: formatName(e.fullName.length > 22 ? e.fullName.slice(0, 22) : e.fullName),
@@ -413,7 +410,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
 
         {/* Ajuste 3: TOP 10 Taxa de Conversão - Novo estilo com barras de progresso */}
         {(() => {
-          const convData = etnConversionTop10.filter(e => filterOLD(e.fullName));
+          const convData = etnConversionTop10;
           if (convData.length === 0) return null;
           const totalGanhas = convData.reduce((s, d) => s + d.ganhas, 0);
           const totalPerdidas = convData.reduce((s, d) => s + d.perdidas, 0);
@@ -490,10 +487,10 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
       <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
         <h3 className="text-sm font-bold text-foreground mb-1">TOP 10 Maiores Recursos X Agendas</h3>
         <p className="text-xs text-muted-foreground mb-4">Valor previsto vs quantidade de compromissos por ETN</p>
-        {etnRecursosAgendas.filter(e => filterOLD(e.fullName)).length > 0 ? (
-          <div style={{ height: Math.max(280, etnRecursosAgendas.filter(e => filterOLD(e.fullName)).length * 35) }}>
+        {etnRecursosAgendas.length > 0 ? (
+          <div style={{ height: Math.max(280, etnRecursosAgendas.length * 35) }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={etnRecursosAgendas.filter(e => filterOLD(e.fullName))} layout="vertical" margin={{ left: 10, right: 50 }}>
+              <BarChart data={etnRecursosAgendas} layout="vertical" margin={{ left: 10, right: 50 }}>
                 <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <YAxis type="category" dataKey="name" width={170} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <Tooltip
@@ -503,12 +500,12 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                     return [formatNum(v), 'Agendas'];
                   }}
                   labelFormatter={(label: string) => {
-                    const item = etnRecursosAgendas.filter(e => filterOLD(e.fullName)).find(d => d.name === label);
+                    const item = etnRecursosAgendas.find(d => d.name === label);
                     return item?.fullName || label;
                   }}
                 />
                 <Bar dataKey="valor" name="Valor" radius={[0, 6, 6, 0]} cursor="pointer" onClick={(d: any) => onChartClick('etn', d.fullName || d.name)}>
-                  {etnRecursosAgendas.filter(e => filterOLD(e.fullName)).map((_, i) => (
+                  {etnRecursosAgendas.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
                   <LabelList dataKey="valor" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />

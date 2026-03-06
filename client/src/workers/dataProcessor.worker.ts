@@ -224,8 +224,7 @@ function processData(opportunities: any[], actions: any[]) {
     const etapa = trim(opp['Etapa']);
     const subtipoOportunidade = trim(opp['Subtipo de Oportunidade']);
 
-    // ITEM 2: Remover registros com OLD em Responsável
-    if (isOLD(responsavel)) continue;
+    // OLD/INATIVO: Não remover dos dados, apenas dos dropdowns de filtro
 
     const prob = cleanProb(opp['Prob.']);
     const valorPrevisto = parseValue(opp['Valor Previsto']);
@@ -262,8 +261,7 @@ function processData(opportunities: any[], actions: any[]) {
       }
 
       for (const [user, userActions] of Array.from(byUser.entries())) {
-        // ITEM 2: Remover ETNs com OLD
-        if (isOLD(user)) continue;
+        // OLD/INATIVO: Manter nos dados, filtrar apenas nos dropdowns
 
         if (contaId && user !== 'Sem Agenda') {
           if (!etnContaOppMap.has(user)) etnContaOppMap.set(user, new Map());
@@ -389,7 +387,7 @@ function processData(opportunities: any[], actions: any[]) {
   for (const act of validActions) {
     const oppId = trim(act['Oportunidade ID']);
     const user = trim(act['Usuario']) || trim(act['Responsavel']) || trim(act['Usuário Ação']);
-    if (!oppId || !user || isOLD(user)) continue;
+    if (!oppId || !user) continue;
     // Buscar o subtipo da oportunidade
     const opp = oppById.get(oppId);
     if (!opp) continue;
@@ -413,7 +411,6 @@ function processData(opportunities: any[], actions: any[]) {
   const missingAdded = new Set<string>();
 
   for (const [etn, contaMap] of Array.from(etnContaOppMap.entries())) {
-    if (isOLD(etn)) continue;
 
     // Obter os subtipos/produtos que este ETN já trabalhou (em qualquer OP)
     const etnSubtipos = etnSubtipoOppMap.get(etn) || new Map();
@@ -435,7 +432,6 @@ function processData(opportunities: any[], actions: any[]) {
         const thisSeq = extractSequential(thisOppId);
         const thisSubtipo = trim(opp['Subtipo de Oportunidade']);
         const thisResp = trim(opp['Responsável']);
-        if (isOLD(thisResp)) continue;
 
         // OP sem nenhum compromisso do ETN e sequencial maior
         // (Produto/Subtipo é apenas informativo, não cruza por produto)
@@ -578,7 +574,7 @@ function processData(opportunities: any[], actions: any[]) {
   const etnSeen = new Set<string>();
   const etnMap = new Map<string, { count: number; value: number }>();
   for (const r of records) {
-    if (isOLD(r.etn) || r.etn === 'Sem Agenda') continue;
+    if (r.etn === 'Sem Agenda') continue;
     if (r.probNum < 75) continue;
     // ITEM 4: Apenas Proposta e Negociação
     const etapaLower = r.etapa.toLowerCase();
@@ -612,7 +608,7 @@ function processData(opportunities: any[], actions: any[]) {
   const etnConversionMap = new Map<string, { total: number; ganhas: number; perdidas: number; ganhasValor: number; perdidasValor: number }>();
   const etnConversionSeen = new Set<string>();
   for (const r of records) {
-    if (isOLD(r.etn) || r.etn === 'Sem Agenda') continue;
+    if (r.etn === 'Sem Agenda') continue;
     const key = `${r.etn}-${r.oppId}`;
     if (etnConversionSeen.has(key)) continue;
     etnConversionSeen.add(key);
@@ -634,7 +630,7 @@ function processData(opportunities: any[], actions: any[]) {
     etnConversionMap.set(r.etn, e);
   }
   const etnConversionTop10 = Array.from(etnConversionMap.entries())
-    .filter(([name, d]) => d.total > 0 && !isOLD(name)) // Qualquer ETN com ops fechadas, sem OLD/INATIVO
+    .filter(([name, d]) => d.total > 0)
     .map(([name, d]) => ({
       name: name.length > 20 ? name.slice(0, 20) + '...' : name,
       fullName: name,
@@ -651,7 +647,7 @@ function processData(opportunities: any[], actions: any[]) {
   // ITEM 8: TOP 10 Maiores Recursos X Agendas - TODOS os compromissos
   const etnAgendaMap = new Map<string, { valor: number; agendas: number }>();
   for (const r of records) {
-    if (isOLD(r.etn) || r.etn === 'Sem Agenda') continue;
+    if (r.etn === 'Sem Agenda') continue;
     const e = etnAgendaMap.get(r.etn) || { valor: 0, agendas: 0 };
     e.valor += r.valorUnificado;
     e.agendas += r.agenda; // Todos os compromissos

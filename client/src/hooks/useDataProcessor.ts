@@ -99,6 +99,21 @@ function extractSequential(oppId: string): number {
   return nums ? parseInt(nums) : 0;
 }
 
+// Verifica se um nome contém "OLD" ou "INATIVO"
+function isOLD(name: string): boolean {
+  const upper = name.trim().toUpperCase();
+  return upper.includes('OLD') || upper.includes('INATIVO');
+}
+
+// Filtrar OLD/INATIVO dos dropdowns
+function filterOLD(arr: string[]): string[] {
+  const filtered = arr.filter(s => !isOLD(s));
+  if (arr.length > 0 && filtered.length !== arr.length) {
+    console.log(`filterOLD: ${arr.length} → ${filtered.length}`, { original: arr.slice(0, 3), filtered: filtered.slice(0, 3) });
+  }
+  return filtered;
+}
+
 export function useDataProcessor(opportunities: Opportunity[], actions: Action[]) {
   const combinedData = useMemo(() => {
     if (!opportunities.length && !actions.length) return null;
@@ -281,24 +296,21 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
       }
     }
 
-    // Extrair opções de filtro
+      // Extrair opções de filtro
     const filterOptions = {
       years: Array.from(new Set(records.map(r => r.anoPrevisao).filter(Boolean))).sort(),
       months: Array.from(new Set(records.map(r => r.mesPrevisao).filter(Boolean))),
-      representantes: Array.from(new Set(records.map(r => r.representante).filter(Boolean))).sort(),
-      responsaveis: Array.from(new Set(records.map(r => r.responsavel).filter(Boolean))).sort(),
-      etns: Array.from(new Set(records.map(r => r.etn).filter(Boolean))).sort(),
+      representantes: filterOLD(Array.from(new Set(records.map(r => r.representante).filter(Boolean))).sort()),
+      responsaveis: filterOLD(Array.from(new Set(records.map(r => r.responsavel).filter(Boolean))).sort()),
+      etns: filterOLD(Array.from(new Set(records.map(r => r.etn).filter(Boolean))).sort()),
       etapas: Array.from(new Set(records.map(r => r.etapa).filter(Boolean))),
-      probabilidades: Array.from(new Set(records.map(r => r.probabilidade).filter(Boolean))).sort((a, b) => {
-        const aNum = parseInt(a);
-        const bNum = parseInt(b);
-        return aNum - bNum;
-      }),
-      agenda: Array.from(new Set(records.map(r => r.agenda.toString()).filter(Boolean))).sort((a, b) => parseInt(a) - parseInt(b)),
-      contas: Array.from(new Set(records.map(r => r.conta).filter(Boolean))).sort(),
-      tipos: Array.from(new Set(records.map(r => r.tipoOportunidade).filter(Boolean))).sort(),
+      probabilidades: Array.from(new Set(records.map(r => r.probabilidade).filter(Boolean))).sort(),
+      agenda: Array.from(new Set(records.map(r => r.agenda?.toString()).filter(Boolean))).sort((a: string, b: string) => parseInt(a) - parseInt(b)),
+      contas: filterOLD(Array.from(new Set(records.map(r => r.conta).filter(Boolean))).sort()),
+      tipos: filterOLD(Array.from(new Set(records.map(r => r.tipoOportunidade).filter(Boolean))).sort()),
+      subtipos: filterOLD(Array.from(new Set(records.map(r => r.subtipoOportunidade).filter(Boolean))).sort()),
       origens: Array.from(new Set(records.map(r => r.origemOportunidade).filter(Boolean))).sort(),
-      segmentos: Array.from(new Set(records.map(r => r.cnaeSegmento).filter(Boolean))).sort(),
+      segmentos: filterOLD(Array.from(new Set(records.map(r => r.cnaeSegmento).filter(Boolean))).sort()),
     };
 
     // KPIs básicos (deduplicados por oppId)
