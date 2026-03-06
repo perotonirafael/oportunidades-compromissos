@@ -178,7 +178,7 @@ export default function Home() {
     });
   }, [processedData, selYears, selMonths, selReps, selResp, selETN, selStages, selProbs, selAgenda, selAccounts, selTypes, selSubtipos]);
 
-  // Ajuste 2+3: Taxa de Conversão (somente Demonstração Presencial/Remota)
+  // Ajuste 2+3: Taxa de Conversão (Demonstração Presencial/Remota + Fechada Ganha/Perdida)
   const etnConversionTop10 = useMemo(() => {
     if (!filteredData || filteredData.length === 0) return [];
 
@@ -188,37 +188,37 @@ export default function Home() {
       .toLowerCase()
       .trim();
 
-    const demoKeys = new Set<string>();
-    for (const a of actions) {
-      const categoria = normalize((a['Categoria'] || '').toString());
-      const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
-      if (!isDemo) continue;
-
-      const oppId = (a['Oportunidade ID'] || '').toString().trim();
-      const etn = (a['Usuario'] || a['Responsavel'] || a['Usuário Ação'] || '').toString().trim();
-      if (!oppId || !etn) continue;
-      demoKeys.add(`${etn}||${oppId}`);
-    }
-
     const etnMap = new Map<string, { total: number; ganhas: number; perdidas: number; ganhasValor: number; perdidasValor: number }>();
     const seen = new Set<string>();
 
     for (const r of filteredData) {
-      if (r.etn === 'Sem Agenda') continue;
+      if (!r.etn || r.etn === 'Sem Agenda') continue;
 
-      const key = `${r.etn}||${r.oppId}`;
-      if (!demoKeys.has(key) || seen.has(key)) continue;
-      seen.add(key);
+      const categoria = normalize((r.categoriaCompromisso || '').toString());
+      const isDemo = categoria.includes('demonstracao presencial') || categoria.includes('demonstracao remota');
+      if (!isDemo) continue;
 
       const isGanha = r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR';
       const isPerdida = r.etapa === 'Fechada e Perdida';
       if (!isGanha && !isPerdida) continue;
 
+      const key = `${r.etn}||${r.oppId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
       const e = etnMap.get(r.etn) || { total: 0, ganhas: 0, perdidas: 0, ganhasValor: 0, perdidasValor: 0 };
-      e.total++;
       const val = r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto;
-      if (isGanha) { e.ganhas++; e.ganhasValor += val; }
-      if (isPerdida) { e.perdidas++; e.perdidasValor += val; }
+
+      if (isGanha) {
+        e.ganhas++;
+        e.ganhasValor += val;
+      }
+      if (isPerdida) {
+        e.perdidas++;
+        e.perdidasValor += val;
+      }
+      e.total = e.ganhas + e.perdidas;
+
       etnMap.set(r.etn, e);
     }
 
@@ -234,9 +234,9 @@ export default function Home() {
         perdidasValor: d.perdidasValor,
         taxaConversao: d.total > 0 ? Math.round((d.ganhas / d.total) * 100) : 0,
       }))
-      .sort((a, b) => b.taxaConversao - a.taxaConversao || b.total - a.total)
+      .sort((a, b) => b.total - a.total || b.taxaConversao - a.taxaConversao)
       .slice(0, 10);
-  }, [filteredData, actions]);
+  }, [filteredData]);
 
   // Ajuste 2: Recursos X Agendas recalculado a partir de filteredData
   const etnRecursosAgendas = useMemo(() => {

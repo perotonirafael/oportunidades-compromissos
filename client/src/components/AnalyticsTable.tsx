@@ -94,13 +94,13 @@ function AnalyticsTableInner({ data }: Props) {
     v > 0 ? `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '-';
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+    <div className="bg-white rounded-xl border border-emerald-200 shadow-sm overflow-hidden">
+      <div className="p-4 border-b border-emerald-100 bg-gradient-to-r from-emerald-50 to-green-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-bold text-gray-800">
+          <h3 className="text-sm font-bold text-emerald-900">
             Tabela Analítica
           </h3>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-xs text-emerald-700/80 mt-0.5">
             {sorted.length.toLocaleString('pt-BR')} registros {search ? '(filtrados)' : ''}
           </p>
         </div>
@@ -112,7 +112,7 @@ function AnalyticsTableInner({ data }: Props) {
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(0); }}
               placeholder="Buscar..."
-              className="pl-8 pr-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 w-48"
+              className="pl-8 pr-3 py-1.5 text-xs bg-white border border-emerald-200 rounded-lg text-emerald-900 placeholder:text-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 w-48"
             />
           </div>
           <button
@@ -125,14 +125,14 @@ function AnalyticsTableInner({ data }: Props) {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="w-full text-xs whitespace-nowrap">
           <thead>
-            <tr className="border-b border-gray-100 bg-gray-50">
+            <tr className="border-b border-emerald-100 bg-emerald-50">
               {COLUMNS.map(col => (
                 <th
                   key={col.key}
                   onClick={() => handleSort(col.key)}
-                  className="px-3 py-2.5 text-left font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700 transition-colors whitespace-nowrap"
+                  className="px-3 py-2.5 text-left font-semibold text-emerald-800 uppercase tracking-wider cursor-pointer hover:text-emerald-900 transition-colors whitespace-nowrap"
                 >
                   <span className="flex items-center gap-1">
                     {col.label}
@@ -150,15 +150,15 @@ function AnalyticsTableInner({ data }: Props) {
             {paged.map((r: ProcessedRecord, i: number) => (
               <tr
                 key={`${r.oppId}-${r.etn}-${i}`}
-                className="border-b border-gray-50 hover:bg-emerald-50/50 transition-colors"
+                className="border-b border-emerald-50 hover:bg-emerald-50/60 transition-colors"
               >
-                <td className="px-3 py-2 font-mono text-blue-600 font-medium">{r.oppId}</td>
-                <td className="px-3 py-2 truncate max-w-[200px] text-gray-700">{r.conta}</td>
-                <td className="px-3 py-2 truncate text-gray-700">{r.representante}</td>
-                <td className="px-3 py-2 truncate text-gray-700">{r.responsavel}</td>
-                <td className="px-3 py-2 truncate text-gray-700">{r.etn}</td>
-                <td className="px-3 py-2">
-                  <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                <td className="px-3 py-2 font-mono text-emerald-700 font-medium whitespace-nowrap">{r.oppId}</td>
+                <td className="px-3 py-2 truncate max-w-[200px] text-emerald-900 whitespace-nowrap">{r.conta}</td>
+                <td className="px-3 py-2 truncate text-emerald-900 whitespace-nowrap">{r.representante}</td>
+                <td className="px-3 py-2 truncate text-emerald-900 whitespace-nowrap">{r.responsavel}</td>
+                <td className="px-3 py-2 truncate text-emerald-900 whitespace-nowrap">{r.etn}</td>
+                <td className="px-3 py-2 whitespace-nowrap">
+                  <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap ${
                     r.etapa.includes('Ganha') ? 'bg-emerald-100 text-emerald-700' :
                     r.etapa.includes('Perdida') ? 'bg-red-100 text-red-700' :
                     r.etapa.includes('Proposta') ? 'bg-amber-100 text-amber-700' :
@@ -168,12 +168,12 @@ function AnalyticsTableInner({ data }: Props) {
                     {r.etapa}
                   </span>
                 </td>
-                <td className="px-3 py-2 truncate max-w-[150px] text-gray-600">{r.subtipoOportunidade || '-'}</td>
-                <td className="px-3 py-2 font-mono text-gray-600">{r.probabilidade}</td>
-                <td className="px-3 py-2 font-mono text-center text-gray-600">{r.agenda}</td>
-                <td className="px-3 py-2 text-gray-600">{r.mesFech}</td>
-                <td className="px-3 py-2 font-mono text-gray-600">{r.anoPrevisao}</td>
-                <td className="px-3 py-2 font-mono text-right font-medium text-emerald-700">{formatCurrency(r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto)}</td>
+                <td className="px-3 py-2 truncate max-w-[150px] text-emerald-800 whitespace-nowrap">{r.subtipoOportunidade || '-'}</td>
+                <td className="px-3 py-2 font-mono text-emerald-800 whitespace-nowrap">{r.probabilidade}</td>
+                <td className="px-3 py-2 font-mono text-center text-emerald-800 whitespace-nowrap">{r.agenda}</td>
+                <td className="px-3 py-2 text-emerald-800 whitespace-nowrap">{r.mesFech}</td>
+                <td className="px-3 py-2 font-mono text-emerald-800 whitespace-nowrap">{r.anoPrevisao}</td>
+                <td className="px-3 py-2 font-mono text-right font-semibold text-emerald-700 whitespace-nowrap">{formatCurrency(r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto)}</td>
               </tr>
             ))}
           </tbody>
@@ -181,22 +181,22 @@ function AnalyticsTableInner({ data }: Props) {
       </div>
 
       {totalPages > 1 && (
-        <div className="p-3 border-t border-gray-100 flex items-center justify-between bg-gray-50/50">
-          <p className="text-xs text-gray-500">
+        <div className="p-3 border-t border-emerald-100 flex items-center justify-between bg-emerald-50/60">
+          <p className="text-xs text-emerald-800">
             Página {page + 1} de {totalPages}
           </p>
           <div className="flex gap-1">
             <button
               onClick={() => setPage(p => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="px-3 py-1 text-xs rounded-lg bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-30 transition-colors font-medium"
+              className="px-3 py-1 text-xs rounded-lg bg-white border border-emerald-200 text-emerald-800 hover:bg-emerald-50 disabled:opacity-30 transition-colors font-medium"
             >
               Anterior
             </button>
             <button
               onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
-              className="px-3 py-1 text-xs rounded-lg bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-30 transition-colors font-medium"
+              className="px-3 py-1 text-xs rounded-lg bg-white border border-emerald-200 text-emerald-800 hover:bg-emerald-50 disabled:opacity-30 transition-colors font-medium"
             >
               Próxima
             </button>

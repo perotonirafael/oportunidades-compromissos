@@ -6,7 +6,7 @@ interface ExportChartOptions {
 }
 
 function buildSvgMarkupFromElement(element: HTMLElement): { markup: string; width: number; height: number } {
-  const svgElement = element.querySelector('svg');
+  const svgElement = element.querySelector('.recharts-wrapper .recharts-surface, .recharts-responsive-container svg, .recharts-surface') as SVGElement | null;
 
   if (svgElement) {
     const clone = svgElement.cloneNode(true) as SVGElement;
