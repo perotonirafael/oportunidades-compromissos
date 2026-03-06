@@ -16,6 +16,7 @@ import { ETNDetailModal } from '@/components/ETNDetailModal';
 import { ETNComparativeAnalysis } from '@/components/ETNComparativeAnalysis';
 import { DEMO_DATA } from '@/lib/demoData';
 import { saveToCache, loadFromCache, clearCache, getCacheInfo } from '@/hooks/useDataCache';
+import { exportChartAsJpeg } from '@/lib/exportChartAsJpeg';
 
 export default function Home() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
@@ -34,58 +35,8 @@ export default function Home() {
   const [lightOpportunities, setLightOpportunities] = useState<Opportunity[]>([]);
   const [lightActions, setLightActions] = useState<Action[]>([]);
 
-  const handleExportChartAsJpeg = useCallback(async (chartId: string, fileName: string) => {
-    const chartContainer = document.getElementById(chartId);
-    const svgElement = chartContainer?.querySelector('svg');
-    if (!svgElement) return;
-
-    const clone = svgElement.cloneNode(true) as SVGElement;
-    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-
-    const bounds = svgElement.getBoundingClientRect();
-    if (bounds.width > 0 && bounds.height > 0) {
-      clone.setAttribute('width', `${Math.round(bounds.width)}`);
-      clone.setAttribute('height', `${Math.round(bounds.height)}`);
-      clone.setAttribute('viewBox', `0 0 ${Math.round(bounds.width)} ${Math.round(bounds.height)}`);
-    }
-
-    const serialized = new XMLSerializer().serializeToString(clone);
-    const svgBlob = new Blob([serialized], { type: 'image/svg+xml;charset=utf-8' });
-    const svgUrl = URL.createObjectURL(svgBlob);
-
-    const image = new Image();
-    image.decoding = 'async';
-
-    try {
-      await new Promise<void>((resolve, reject) => {
-        image.onload = () => resolve();
-        image.onerror = () => reject(new Error('Falha ao renderizar gráfico para exportação.'));
-        image.src = svgUrl;
-      });
-
-      const width = Math.max(1, Math.round(bounds.width));
-      const height = Math.max(1, Math.round(bounds.height));
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-
-      const context = canvas.getContext('2d');
-      if (!context) return;
-
-      context.fillStyle = '#ffffff';
-      context.fillRect(0, 0, width, height);
-      context.drawImage(image, 0, 0, width, height);
-
-      const jpegUrl = canvas.toDataURL('image/jpeg', 0.92);
-      const link = document.createElement('a');
-      link.href = jpegUrl;
-      link.download = `${fileName}.jpg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } finally {
-      URL.revokeObjectURL(svgUrl);
-    }
+  const handleExportChartAsJpeg = useCallback((chartId: string, fileName: string) => {
+    void exportChartAsJpeg({ elementId: chartId, fileName });
   }, []);
 
   const handleLoadDemo = useCallback(() => {

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, memo } from 'react';
+import { useMemo, memo } from 'react';
 import type { ProcessedRecord } from '@/hooks/useDataProcessor';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -6,6 +6,7 @@ import {
   Treemap,
 } from 'recharts';
 import { Download } from 'lucide-react';
+import { exportChartAsJpeg } from '@/lib/exportChartAsJpeg';
 
 const COLORS = [
   '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6',
@@ -108,81 +109,9 @@ function DateRangeFooter({ data }: { data: ProcessedRecord[] }) {
 }
 
 function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, etnTop10, etnConversionTop10, etnRecursosAgendas, onChartClick, onETNClick }: Props) {
-  const handleExportChart = useCallback(async (chartId: string, fileName: string) => {
-    const chartContainer = document.getElementById(chartId);
-    if (!chartContainer) return;
-
-    const svgElement = chartContainer.querySelector('svg');
-
-    let serialized = '';
-    let width = 0;
-    let height = 0;
-
-    if (svgElement) {
-      const clone = svgElement.cloneNode(true) as SVGElement;
-      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-
-      const bounds = svgElement.getBoundingClientRect();
-      width = Math.max(1, Math.round(bounds.width));
-      height = Math.max(1, Math.round(bounds.height));
-      if (bounds.width > 0 && bounds.height > 0) {
-        clone.setAttribute('width', `${width}`);
-        clone.setAttribute('height', `${height}`);
-        clone.setAttribute('viewBox', `0 0 ${width} ${height}`);
-      }
-
-      serialized = new XMLSerializer().serializeToString(clone);
-    } else {
-      const clone = chartContainer.cloneNode(true) as HTMLElement;
-      clone.querySelectorAll('[data-export-ignore="true"]').forEach(el => el.remove());
-
-      const bounds = chartContainer.getBoundingClientRect();
-      width = Math.max(1, Math.round(bounds.width));
-      height = Math.max(1, Math.round(bounds.height));
-      const content = new XMLSerializer().serializeToString(clone);
-      serialized = `<?xml version="1.0" standalone="no"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
-  <foreignObject width="100%" height="100%">
-    <div xmlns="http://www.w3.org/1999/xhtml">${content}</div>
-  </foreignObject>
-</svg>`;
-    }
-
-    const svgBlob = new Blob([serialized], { type: 'image/svg+xml;charset=utf-8' });
-    const svgUrl = URL.createObjectURL(svgBlob);
-
-    const image = new Image();
-    image.decoding = 'async';
-
-    try {
-      await new Promise<void>((resolve, reject) => {
-        image.onload = () => resolve();
-        image.onerror = () => reject(new Error('Falha ao renderizar gráfico para exportação.'));
-        image.src = svgUrl;
-      });
-
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-
-      const context = canvas.getContext('2d');
-      if (!context) return;
-
-      context.fillStyle = '#ffffff';
-      context.fillRect(0, 0, width, height);
-      context.drawImage(image, 0, 0, width, height);
-
-      const jpegUrl = canvas.toDataURL('image/jpeg', 0.92);
-      const link = document.createElement('a');
-      link.href = jpegUrl;
-      link.download = `${fileName}.jpg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } finally {
-      URL.revokeObjectURL(svgUrl);
-    }
-  }, []);
+  const handleExportChart = (chartId: string, fileName: string) => {
+    void exportChartAsJpeg({ elementId: chartId, fileName });
+  };
 
   // Item 1: Pipeline por Etapa - mostrar valor em R$ (não quantidade)
   const pipelineByStage = useMemo(() => {
