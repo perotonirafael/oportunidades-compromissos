@@ -204,7 +204,7 @@ export default function Home() {
         perdidasValor: d.perdidasValor,
         taxaConversao: d.total > 0 ? Math.round((d.ganhas / d.total) * 100) : 0,
       }))
-      .sort((a, b) => b.total - a.total || b.taxaConversao - a.taxaConversao)
+      .sort((a, b) => b.taxaConversao - a.taxaConversao || b.total - a.total)
       .slice(0, 10);
   }, [filteredData]);
 
