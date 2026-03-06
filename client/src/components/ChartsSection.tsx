@@ -305,7 +305,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={etnTop10Clean} layout="vertical" margin={{ left: 10, right: 50 }}>
                 <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
-                <YAxis type="category" dataKey="name" width={getAdaptiveYAxisWidth(forecastEtnMaxLabel, 170)} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
+                <YAxis type="category" dataKey="name" hide width={0} />
                 <Tooltip
                   {...tooltipStyle}
                   formatter={(v: number, name: string) => {
@@ -324,6 +324,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                   {etnTop10Clean.map((entry, i) => (
                     <Cell key={i} fill={entry.color} />
                   ))}
+                  <LabelList dataKey="name" position="insideLeft" fill="#ffffff" fontSize={10} fontWeight={700} />
                   <LabelList dataKey="value" position="insideRight" fill="#ffffff" fontSize={10} fontWeight={700} formatter={(v: number) => formatCurrency(v)} />
                 </Bar>
               </BarChart>
@@ -381,7 +382,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={lossReasonsWithETN} layout="vertical" margin={{ left: 10, right: 60 }}>
                   <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
-                  <YAxis type="category" dataKey="name" width={getAdaptiveYAxisWidth(motivosMaxLabel, 220)} tick={{ fill: '#374151', fontSize: 10 }} axisLine={{ stroke: '#e5e7eb' }} />
+                  <YAxis type="category" dataKey="name" hide width={0} />
                   <Tooltip
                     {...tooltipStyle}
                     content={({ active, payload }: any) => {
@@ -411,7 +412,8 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                       const colors = ['#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#8b5cf6'];
                       return <Cell key={i} fill={colors[i % colors.length]} />;
                     })}
-                    <LabelList dataKey="value" position="insideRight" fill="#ffffff" fontSize={10} fontWeight={700} formatter={(v: number) => formatCurrency(v)} />
+                    <LabelList dataKey="name" position="insideLeft" fill="#ffffff" fontSize={10} fontWeight={700} />
+                  <LabelList dataKey="value" position="insideRight" fill="#ffffff" fontSize={10} fontWeight={700} formatter={(v: number) => formatCurrency(v)} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -605,7 +607,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={etnRecursosAgendas} layout="vertical" margin={{ left: 10, right: 50 }}>
                 <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
-                <YAxis type="category" dataKey="name" width={getAdaptiveYAxisWidth(recursosMaxLabel, 170)} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
+                <YAxis type="category" dataKey="name" hide width={0} />
                 <Tooltip
                   {...tooltipStyle}
                   formatter={(v: number, name: string) => {
@@ -621,6 +623,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                   {etnRecursosAgendas.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
+                  <LabelList dataKey="name" position="insideLeft" fill="#ffffff" fontSize={10} fontWeight={700} />
                   <LabelList dataKey="valor" position="insideRight" fill="#ffffff" fontSize={10} fontWeight={700} formatter={(v: number) => formatCurrency(v)} />
                 </Bar>
                 <Bar dataKey="agendas" name="Agendas" radius={[0, 12, 12, 0]} fill="#d1d5db" opacity={0.6}>

@@ -1085,7 +1085,7 @@ function MissingAgendaChart({ data, onBarClick, selectedETN, chartId }: { data: 
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 30 }}>
           <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 11 }} allowDecimals={false} axisLine={{ stroke: '#e5e7eb' }} />
-          <YAxis type="category" dataKey="name" width={adaptiveYAxisWidth} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
+          <YAxis type="category" dataKey="name" hide width={0} />
           <Tooltip
             contentStyle={{ background: 'rgba(255,255,255,0.97)', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '12px', color: '#1f2937', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}
             formatter={(v: number) => [v, 'Oportunidades sem agenda']}
@@ -1095,6 +1095,7 @@ function MissingAgendaChart({ data, onBarClick, selectedETN, chartId }: { data: 
             }}
           />
           <Bar dataKey="count" radius={[0, 12, 12, 0]} onClick={(data: any) => onBarClick(data.fullName)}>
+            <LabelList dataKey="name" position="insideLeft" fill="#ffffff" fontSize={10} fontWeight={700} />
             <LabelList dataKey="count" position="insideRight" fill="#ffffff" fontSize={10} fontWeight={700} />
             {chartData.map((_, i) => (
               <Cell key={i} fill={colors[i % colors.length]} style={{ cursor: 'pointer' }} />
