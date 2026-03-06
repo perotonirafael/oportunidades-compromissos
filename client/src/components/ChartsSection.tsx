@@ -264,7 +264,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                     return item?.fullName || label;
                   }}
                 />
-                <Bar dataKey="value" name="Valor" radius={[0, 6, 6, 0]} cursor="pointer" onClick={(d: any) => {
+                <Bar dataKey="value" name="Valor" radius={[0, 12, 12, 0]} cursor="pointer" onClick={(d: any) => {
                   if (onETNClick) onETNClick(d.fullName || d.name);
                   onChartClick('etn', d.fullName || d.name);
                 }}>
@@ -301,7 +301,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                 <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <YAxis type="category" dataKey="name" width={220} tick={{ fill: '#374151', fontSize: 10 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <Tooltip {...tooltipStyle} formatter={(v: number) => [formatCurrency(v), 'Valor Previsto']} labelFormatter={(label: string) => { const item = pipelineByStage.find(d => d.name === label); return item?.fullName || label; }} />
-                <Bar dataKey="value" radius={[0, 6, 6, 0]} cursor="pointer" onClick={(d: any) => onChartClick('etapa', d.fullName || d.name)}>
+                <Bar dataKey="value" radius={[0, 12, 12, 0]} cursor="pointer" onClick={(d: any) => onChartClick('etapa', d.fullName || d.name)}>
                   {pipelineByStage.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
@@ -352,7 +352,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                       );
                     }}
                   />
-                  <Bar dataKey="value" radius={[0, 6, 6, 0]} cursor="pointer" onClick={(d: any) => onChartClick('motivoPerda', d.fullName || d.name)}>
+                  <Bar dataKey="value" radius={[0, 12, 12, 0]} cursor="pointer" onClick={(d: any) => onChartClick('motivoPerda', d.fullName || d.name)}>
                     {lossReasonsWithETN.map((_, i) => {
                       const colors = ['#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#8b5cf6'];
                       return <Cell key={i} fill={colors[i % colors.length]} />;
@@ -446,8 +446,12 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                 <YAxis tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <Tooltip {...tooltipStyle} formatter={(v: number) => [formatCurrency(v)]} />
                 <Legend wrapperStyle={{ fontSize: '12px' }} />
-                <Line type="monotone" dataKey="previsto" stroke="#f59e0b" strokeWidth={2.5} dot={false} name="Previsto" />
-                <Line type="monotone" dataKey="fechado" stroke="#10b981" strokeWidth={2.5} dot={false} name="Fechado" />
+                <Line type="monotone" dataKey="previsto" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} name="Previsto">
+                  <LabelList dataKey="previsto" position="top" fill="#92400e" fontSize={9} formatter={(v: number) => formatCurrency(v)} />
+                </Line>
+                <Line type="monotone" dataKey="fechado" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} name="Fechado">
+                  <LabelList dataKey="fechado" position="bottom" fill="#065f46" fontSize={9} formatter={(v: number) => formatCurrency(v)} />
+                </Line>
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -559,13 +563,15 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                     return item?.fullName || label;
                   }}
                 />
-                <Bar dataKey="valor" name="Valor" radius={[0, 6, 6, 0]} cursor="pointer" onClick={(d: any) => onChartClick('etn', d.fullName || d.name)}>
+                <Bar dataKey="valor" name="Valor" radius={[0, 12, 12, 0]} cursor="pointer" onClick={(d: any) => onChartClick('etn', d.fullName || d.name)}>
                   {etnRecursosAgendas.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
                   <LabelList dataKey="valor" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
                 </Bar>
-                <Bar dataKey="agendas" name="Agendas" radius={[0, 6, 6, 0]} fill="#d1d5db" opacity={0.6} />
+                <Bar dataKey="agendas" name="Agendas" radius={[0, 12, 12, 0]} fill="#d1d5db" opacity={0.6}>
+                  <LabelList dataKey="agendas" position="insideRight" fill="#374151" fontSize={10} formatter={(v: number) => formatNum(v)} />
+                </Bar>
                 <Legend />
               </BarChart>
             </ResponsiveContainer>

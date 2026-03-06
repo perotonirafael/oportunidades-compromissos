@@ -1031,7 +1031,7 @@ export default function Home() {
 
 // Componente de gráfico para Agendas Faltantes
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList,
 } from 'recharts';
 
 function MissingAgendaChart({ data, onBarClick, selectedETN, chartId }: { data: MissingAgendaRecord[]; onBarClick: (etn: string) => void; selectedETN: string[]; chartId?: string }) {
@@ -1064,7 +1064,8 @@ function MissingAgendaChart({ data, onBarClick, selectedETN, chartId }: { data: 
               return item?.fullName || label;
             }}
           />
-          <Bar dataKey="count" radius={[0, 6, 6, 0]} onClick={(data: any) => onBarClick(data.fullName)}>
+          <Bar dataKey="count" radius={[0, 12, 12, 0]} onClick={(data: any) => onBarClick(data.fullName)}>
+            <LabelList dataKey="count" position="right" fill="#374151" fontSize={10} />
             {chartData.map((_, i) => (
               <Cell key={i} fill={colors[i % colors.length]} style={{ cursor: 'pointer' }} />
             ))}
