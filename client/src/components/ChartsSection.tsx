@@ -308,7 +308,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                   {etnTop10Clean.map((entry, i) => (
                     <Cell key={i} fill={entry.color} />
                   ))}
-                  <LabelList dataKey="value" position="insideRight" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
+                  <LabelList dataKey="value" position="insideRight" fill="#ffffff" fontSize={10} fontWeight={700} formatter={(v: number) => formatCurrency(v)} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -342,7 +342,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                   {pipelineByStage.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
-                  <LabelList dataKey="value" position="insideRight" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
+                  <LabelList dataKey="value" position="insideRight" fill="#ffffff" fontSize={10} fontWeight={700} formatter={(v: number) => formatCurrency(v)} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -394,7 +394,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                       const colors = ['#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#8b5cf6'];
                       return <Cell key={i} fill={colors[i % colors.length]} />;
                     })}
-                    <LabelList dataKey="value" position="insideRight" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
+                    <LabelList dataKey="value" position="insideRight" fill="#ffffff" fontSize={10} fontWeight={700} formatter={(v: number) => formatCurrency(v)} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -604,10 +604,10 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                   {etnRecursosAgendas.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
-                  <LabelList dataKey="valor" position="insideRight" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
+                  <LabelList dataKey="valor" position="insideRight" fill="#ffffff" fontSize={10} fontWeight={700} formatter={(v: number) => formatCurrency(v)} />
                 </Bar>
                 <Bar dataKey="agendas" name="Agendas" radius={[0, 12, 12, 0]} fill="#d1d5db" opacity={0.6}>
-                  <LabelList dataKey="agendas" position="insideRight" fill="#374151" fontSize={10} formatter={(v: number) => formatNum(v)} />
+                  <LabelList dataKey="agendas" position="insideRight" fill="#ffffff" fontSize={10} fontWeight={700} formatter={(v: number) => formatNum(v)} />
                 </Bar>
                 <Legend />
               </BarChart>

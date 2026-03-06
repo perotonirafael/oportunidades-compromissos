@@ -1092,7 +1092,7 @@ function MissingAgendaChart({ data, onBarClick, selectedETN, chartId }: { data: 
             }}
           />
           <Bar dataKey="count" radius={[0, 12, 12, 0]} onClick={(data: any) => onBarClick(data.fullName)}>
-            <LabelList dataKey="count" position="insideRight" fill="#374151" fontSize={10} />
+            <LabelList dataKey="count" position="insideRight" fill="#ffffff" fontSize={10} fontWeight={700} />
             {chartData.map((_, i) => (
               <Cell key={i} fill={colors[i % colors.length]} style={{ cursor: 'pointer' }} />
             ))}
