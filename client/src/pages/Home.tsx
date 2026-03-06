@@ -34,7 +34,7 @@ export default function Home() {
   const [lightOpportunities, setLightOpportunities] = useState<Opportunity[]>([]);
   const [lightActions, setLightActions] = useState<Action[]>([]);
 
-  const handleExportChartAsSvg = useCallback((chartId: string, fileName: string) => {
+  const handleExportChartAsJpeg = useCallback(async (chartId: string, fileName: string) => {
     const chartContainer = document.getElementById(chartId);
     const svgElement = chartContainer?.querySelector('svg');
     if (!svgElement) return;
@@ -50,16 +50,42 @@ export default function Home() {
     }
 
     const serialized = new XMLSerializer().serializeToString(clone);
-    const blob = new Blob([serialized], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
+    const svgBlob = new Blob([serialized], { type: 'image/svg+xml;charset=utf-8' });
+    const svgUrl = URL.createObjectURL(svgBlob);
 
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${fileName}.svg`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const image = new Image();
+    image.decoding = 'async';
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error('Falha ao renderizar gráfico para exportação.'));
+        image.src = svgUrl;
+      });
+
+      const width = Math.max(1, Math.round(bounds.width));
+      const height = Math.max(1, Math.round(bounds.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const context = canvas.getContext('2d');
+      if (!context) return;
+
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+
+      const jpegUrl = canvas.toDataURL('image/jpeg', 0.92);
+      const link = document.createElement('a');
+      link.href = jpegUrl;
+      link.download = `${fileName}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } finally {
+      URL.revokeObjectURL(svgUrl);
+    }
   }, []);
 
   const handleLoadDemo = useCallback(() => {
@@ -868,9 +894,9 @@ export default function Home() {
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => handleExportChartAsSvg('chart-missing-agendas', 'agendas-faltantes-por-etn')}
+                        onClick={() => handleExportChartAsJpeg('chart-missing-agendas', 'agendas-faltantes-por-etn')}
                         className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-800 transition-colors"
-                        title="Exportar gráfico em imagem (SVG)"
+                        title="Exportar gráfico em imagem (JPEG)"
                       >
                         <Download size={12} /> Exportar
                       </button>
