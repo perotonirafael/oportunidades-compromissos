@@ -5,28 +5,20 @@ import {
   Cell, LineChart, Line, CartesianGrid, Legend, LabelList,
   Treemap,
 } from 'recharts';
+import {
+  CHART_COLORS,
+  CHART_THEME,
+  StandardChartTooltip,
+  axisStyle,
+  chartTooltipStyle,
+  formatChartCount,
+  formatChartCurrency,
+  formatChartPercent,
+} from '@/components/charts/chartTheme';
 
-const COLORS = [
-  '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6',
-  '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1',
-];
-
-const FUNNEL_COLORS = [
-  '#10b981', '#22c55e', '#84cc16', '#eab308', '#f59e0b',
-  '#f97316', '#ef4444', '#dc2626', '#b91c1c', '#991b1b',
-];
-
-const ETN_COLORS = [
-  '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6',
-  '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1',
-];
-
-const formatCurrency = (v: number) => {
-  if (v >= 1e9) return `R$ ${(v / 1e9).toFixed(1)}B`;
-  if (v >= 1e6) return `R$ ${(v / 1e6).toFixed(1)}M`;
-  if (v >= 1e3) return `R$ ${(v / 1e3).toFixed(0)}K`;
-  return `R$ ${v.toFixed(0)}`;
-};
+const COLORS = CHART_COLORS.categorical;
+const FUNNEL_COLORS = CHART_COLORS.progression;
+const ETN_COLORS = CHART_COLORS.categorical;
 
 const formatNum = (v: number) => v.toLocaleString('pt-BR');
 
@@ -55,17 +47,6 @@ interface Props {
   onETNClick?: (etn: string) => void;
 }
 
-const tooltipStyle = {
-  contentStyle: {
-    background: 'rgba(255, 255, 255, 0.97)',
-    border: '1px solid #e5e7eb',
-    borderRadius: '10px',
-    fontSize: '12px',
-    color: '#1f2937',
-    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-  },
-};
-
 // Componente de rodapé com intervalo de datas (Item 9)
 function DateRangeFooter({ data }: { data: ProcessedRecord[] }) {
   const range = useMemo(() => {
@@ -85,7 +66,7 @@ function DateRangeFooter({ data }: { data: ProcessedRecord[] }) {
   }, [data]);
 
   return (
-    <p className="text-[10px] text-gray-400 text-center mt-2 pt-1 border-t border-gray-100">
+    <p className={CHART_THEME.footerClassName}>
       Período dos filtros aplicados: {range}
     </p>
   );
@@ -218,19 +199,19 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
   return (
     <div className="space-y-6">
       {/* Item 3: ETN Top 10 - PRIMEIRO GRÁFICO */}
-      <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-        <h3 className="text-sm font-bold text-foreground mb-1">FORECAST por ETN</h3>
-        <p className="text-xs text-muted-foreground mb-4">Valor por ETN (Proposta e Negociação, prob. ≥75%) - clique para ver detalhes</p>
+      <div className={CHART_THEME.cardClassName}>
+        <h3 className={CHART_THEME.titleClassName}>FORECAST por ETN</h3>
+        <p className={CHART_THEME.subtitleClassName}>Valor por ETN (Proposta e Negociação, prob. ≥75%) - clique para ver detalhes</p>
         {etnTop10Clean.length > 0 ? (
           <div style={{ height: Math.max(280, etnTop10Clean.length * 35) }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={etnTop10Clean} layout="vertical" margin={{ left: 10, right: 50 }}>
-                <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
-                <YAxis type="category" dataKey="name" width={170} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
+                <XAxis type="number" tickFormatter={formatChartCurrency} tick={axisStyle.xTick} axisLine={axisStyle.axisLine} />
+                <YAxis type="category" dataKey="name" width={170} tick={axisStyle.yTick} axisLine={axisStyle.axisLine} />
                 <Tooltip
-                  {...tooltipStyle}
+                  {...chartTooltipStyle}
                   formatter={(v: number, name: string) => {
-                    if (name === 'Valor') return [formatCurrency(v), 'Valor Previsto'];
+                    if (name === 'Valor') return [formatChartCurrency(v), 'Valor Previsto'];
                     return [formatNum(v), name];
                   }}
                   labelFormatter={(label: string) => {
@@ -245,7 +226,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                   {etnTop10Clean.map((entry, i) => (
                     <Cell key={i} fill={entry.color} />
                   ))}
-                  <LabelList dataKey="value" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
+                  <LabelList dataKey="value" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatChartCurrency(v)} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -261,20 +242,20 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
       {/* Item 1: Pipeline por Etapa + Item 4: Motivos de Perda + Item 5: Taxa Conversão + Item 6: Recursos X Agendas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Pipeline por Etapa - Item 1: valor em R$, gráfico maior */}
-        <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-          <h3 className="text-sm font-bold text-foreground mb-1">Pipeline por Etapa</h3>
-          <p className="text-xs text-muted-foreground mb-4">Valor previsto de oportunidades abertas (clique para filtrar)</p>
+        <div className={CHART_THEME.cardClassName}>
+          <h3 className={CHART_THEME.titleClassName}>Pipeline por Etapa</h3>
+          <p className={CHART_THEME.subtitleClassName}>Valor previsto de oportunidades abertas (clique para filtrar)</p>
           <div style={{ height: Math.max(300, pipelineByStage.length * 50) }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={pipelineByStage} layout="vertical" margin={{ left: 10, right: 50 }}>
-                <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
-                <YAxis type="category" dataKey="name" width={220} tick={{ fill: '#374151', fontSize: 10 }} axisLine={{ stroke: '#e5e7eb' }} />
-                <Tooltip {...tooltipStyle} formatter={(v: number) => [formatCurrency(v), 'Valor Previsto']} labelFormatter={(label: string) => { const item = pipelineByStage.find(d => d.name === label); return item?.fullName || label; }} />
+                <XAxis type="number" tickFormatter={formatChartCurrency} tick={axisStyle.xTick} axisLine={axisStyle.axisLine} />
+                <YAxis type="category" dataKey="name" width={220} tick={axisStyle.yTick} axisLine={axisStyle.axisLine} />
+                <Tooltip {...chartTooltipStyle} formatter={(v: number) => [formatChartCurrency(v), 'Valor Previsto']} labelFormatter={(label: string) => { const item = pipelineByStage.find(d => d.name === label); return item?.fullName || label; }} />
                 <Bar dataKey="value" radius={[0, 6, 6, 0]} cursor="pointer" onClick={(d: any) => onChartClick('etapa', d.fullName || d.name)}>
                   {pipelineByStage.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
-                  <LabelList dataKey="value" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
+                  <LabelList dataKey="value" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatChartCurrency(v)} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -284,30 +265,30 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
 
         {/* Item 4: Top 10 Motivos de Perda com ETNs */}
         {lossReasonsWithETN.length > 0 && (
-          <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-            <h3 className="text-sm font-bold text-foreground mb-1">Top 10 Motivos de Perda</h3>
-            <p className="text-xs text-muted-foreground mb-4">Principais causas e ETNs com mais perdas (clique para filtrar)</p>
+          <div className={CHART_THEME.cardClassName}>
+            <h3 className={CHART_THEME.titleClassName}>Top 10 Motivos de Perda</h3>
+            <p className={CHART_THEME.subtitleClassName}>Principais causas e ETNs com mais perdas (clique para filtrar)</p>
             <div style={{ height: Math.max(320, lossReasonsWithETN.length * 55) }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={lossReasonsWithETN} layout="vertical" margin={{ left: 10, right: 60 }}>
-                  <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
-                  <YAxis type="category" dataKey="name" width={220} tick={{ fill: '#374151', fontSize: 10 }} axisLine={{ stroke: '#e5e7eb' }} />
+                  <XAxis type="number" tickFormatter={formatChartCurrency} tick={axisStyle.xTick} axisLine={axisStyle.axisLine} />
+                  <YAxis type="category" dataKey="name" width={220} tick={axisStyle.yTick} axisLine={axisStyle.axisLine} />
                   <Tooltip
-                    {...tooltipStyle}
+                    {...chartTooltipStyle}
                     content={({ active, payload }: any) => {
                       if (!active || !payload?.length) return null;
                       const d = payload[0].payload;
                       return (
                         <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-lg text-xs">
                           <p className="font-bold text-gray-800 mb-1">{d.fullName}</p>
-                          <p className="text-gray-600">Valor: <span className="font-bold text-red-600">{formatCurrency(d.value)}</span></p>
+                          <p className="text-gray-600">Valor: <span className="font-bold text-red-600">{formatChartCurrency(d.value)}</span></p>
                           <p className="text-gray-600 mb-2">Qtd: <span className="font-bold">{d.count}</span> oportunidades</p>
                           {d.topETNs?.length > 0 && (
                             <>
                               <p className="font-semibold text-gray-700 border-t pt-1 mt-1">ETNs com mais perdas:</p>
                               {d.topETNs.map((etn: any, i: number) => (
                                 <p key={i} className="text-gray-600 pl-2">
-                                  {i + 1}. {etn.name}: <span className="font-bold text-red-600">{formatCurrency(etn.value)}</span> ({etn.count} ops)
+                                  {i + 1}. {etn.name}: <span className="font-bold text-red-600">{formatChartCurrency(etn.value)}</span> ({etn.count} ops)
                                 </p>
                               ))}
                             </>
@@ -321,7 +302,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                       const colors = ['#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#8b5cf6'];
                       return <Cell key={i} fill={colors[i % colors.length]} />;
                     })}
-                    <LabelList dataKey="value" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
+                    <LabelList dataKey="value" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatChartCurrency(v)} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -332,9 +313,9 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
       </div>
 
       {/* Item 10: FUNIL DE FORECAST - Funnel Chart estilo, linha inteira */}
-      <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-        <h3 className="text-sm font-bold text-foreground mb-1">FUNIL DE FORECAST</h3>
-        <p className="text-xs text-muted-foreground mb-4">Oportunidades com probabilidade ≥75% por etapa (clique para filtrar)</p>
+      <div className={CHART_THEME.cardClassName}>
+        <h3 className={CHART_THEME.titleClassName}>FUNIL DE FORECAST</h3>
+        <p className={CHART_THEME.subtitleClassName}>Oportunidades com probabilidade ≥75% por etapa (clique para filtrar)</p>
         {forecastFunnelFiltered.length > 0 ? (
           <>
             <div className="space-y-2 mb-4">
@@ -356,17 +337,17 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                         }}
                       >
                         <span className="truncate pr-2">{item.etapa}</span>
-                        <span className="ml-2 whitespace-nowrap shrink-0">{formatCurrency(item.value)}</span>
+                        <span className="ml-2 whitespace-nowrap shrink-0">{formatChartCurrency(item.value)}</span>
                       </div>
                       <div className="flex items-center gap-3 text-xs text-gray-600 whitespace-nowrap flex-wrap">
-                        <span className="font-bold">{item.count} ops</span>
-                        <span>Prob. média: {item.avgProb}%</span>
+                        <span className="font-bold">{formatChartCount(item.count, 'ops')}</span>
+                        <span>Prob. média: {formatChartPercent(item.avgProb)}</span>
                       </div>
                     </div>
 
                     <div className="hidden group-hover:block absolute z-20 top-1/2 -translate-y-1/2 left-6 sm:left-20 bg-white border border-gray-200 rounded-2xl p-3 shadow-xl text-xs min-w-[240px] max-w-[320px] pointer-events-none">
                       <p className="font-bold text-gray-800 mb-1">{item.etapa}</p>
-                      <p className="text-gray-600">Valor: <span className="font-bold text-red-600">{formatCurrency(item.value)}</span></p>
+                      <p className="text-gray-600">Valor: <span className="font-bold text-red-600">{formatChartCurrency(item.value)}</span></p>
                       <p className="text-gray-600">Qtd: <span className="font-bold text-gray-800">{formatNum(item.count)}</span> oportunidades</p>
                       <p className="text-gray-600 border-t border-gray-100 mt-2 pt-2">Probabilidade média: <span className="font-bold text-gray-800">{item.avgProb}%</span></p>
                     </div>
@@ -380,7 +361,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                 <div key={i} className="flex items-center gap-1.5 text-xs whitespace-nowrap">
                   <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: FUNNEL_COLORS[i % FUNNEL_COLORS.length] }} />
                   <span className="text-gray-700">{item.etapa}</span>
-                  <span className="font-mono font-bold text-emerald-700">{formatCurrency(item.value)}</span>
+                  <span className="font-mono font-bold text-emerald-700">{formatChartCurrency(item.value)}</span>
                 </div>
               ))}
             </div>
@@ -395,16 +376,16 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Valor Previsto vs Fechado */}
-        <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-          <h3 className="text-sm font-bold text-foreground mb-1">Valor Previsto vs Fechado</h3>
-          <p className="text-xs text-muted-foreground mb-4">Evolução mensal (últimos 24 meses)</p>
+        <div className={CHART_THEME.cardClassName}>
+          <h3 className={CHART_THEME.titleClassName}>Valor Previsto vs Fechado</h3>
+          <p className={CHART_THEME.subtitleClassName}>Evolução mensal (últimos 24 meses)</p>
           <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={monthlyTimeline} margin={{ left: 10, right: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 10 }} interval="preserveStartEnd" axisLine={{ stroke: '#e5e7eb' }} />
-                <YAxis tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
-                <Tooltip {...tooltipStyle} formatter={(v: number) => [formatCurrency(v)]} />
+                <XAxis dataKey="name" tick={axisStyle.xTick} interval="preserveStartEnd" axisLine={axisStyle.axisLine} />
+                <YAxis tickFormatter={formatChartCurrency} tick={axisStyle.yTick} axisLine={axisStyle.axisLine} />
+                <Tooltip {...chartTooltipStyle} formatter={(v: number) => [formatChartCurrency(v)]} />
                 <Legend wrapperStyle={{ fontSize: '12px' }} />
                 <Line type="monotone" dataKey="previsto" stroke="#f59e0b" strokeWidth={2.5} dot={false} name="Previsto" />
                 <Line type="monotone" dataKey="fechado" stroke="#10b981" strokeWidth={2.5} dot={false} name="Fechado" />
@@ -423,9 +404,9 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
           const totalAll = totalGanhas + totalPerdidas;
           const taxaGeral = totalAll > 0 ? Math.round((totalGanhas / totalAll) * 100) : 0;
           return (
-            <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-              <h3 className="text-sm font-bold text-foreground mb-1">Taxa de Conversão por ETN</h3>
-              <p className="text-xs text-muted-foreground mb-4">Fechada e Ganha vs Fechada e Perdida (% aproveitamento) — respeitando filtros aplicados</p>
+            <div className={CHART_THEME.cardClassName}>
+              <h3 className={CHART_THEME.titleClassName}>Taxa de Conversão por ETN</h3>
+              <p className={CHART_THEME.subtitleClassName}>Fechada e Ganha vs Fechada e Perdida (% aproveitamento) — respeitando filtros aplicados</p>
               
               {/* Resumo geral */}
               <div className="grid grid-cols-3 gap-3 mb-5">
@@ -477,8 +458,8 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                     </div>
                     {/* Tooltip com valores */}
                     <div className="flex items-center justify-between mt-0.5">
-                      <span className="text-[9px] text-gray-400">{formatCurrency(d.ganhasValor)} ganhas</span>
-                      <span className="text-[9px] text-gray-400">{formatCurrency(d.perdidasValor)} perdidas</span>
+                      <span className="text-[9px] text-gray-400">{formatChartCurrency(d.ganhasValor)} ganhas</span>
+                      <span className="text-[9px] text-gray-400">{formatChartCurrency(d.perdidasValor)} perdidas</span>
                     </div>
                   </div>
                 ))}
@@ -490,19 +471,19 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
       </div>
 
       {/* Item 6: TOP 10 Maiores Recursos X Agendas */}
-      <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-        <h3 className="text-sm font-bold text-foreground mb-1">TOP 10 Maiores Recursos X Agendas</h3>
-        <p className="text-xs text-muted-foreground mb-4">Valor previsto vs quantidade de compromissos por ETN</p>
+      <div className={CHART_THEME.cardClassName}>
+        <h3 className={CHART_THEME.titleClassName}>TOP 10 Maiores Recursos X Agendas</h3>
+        <p className={CHART_THEME.subtitleClassName}>Valor previsto vs quantidade de compromissos por ETN</p>
         {etnRecursosAgendas.length > 0 ? (
           <div style={{ height: Math.max(280, etnRecursosAgendas.length * 35) }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={etnRecursosAgendas} layout="vertical" margin={{ left: 10, right: 50 }}>
-                <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
-                <YAxis type="category" dataKey="name" width={170} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
+                <XAxis type="number" tickFormatter={formatChartCurrency} tick={axisStyle.xTick} axisLine={axisStyle.axisLine} />
+                <YAxis type="category" dataKey="name" width={170} tick={axisStyle.yTick} axisLine={axisStyle.axisLine} />
                 <Tooltip
-                  {...tooltipStyle}
+                  {...chartTooltipStyle}
                   formatter={(v: number, name: string) => {
-                    if (name === 'Valor') return [formatCurrency(v), 'Valor Previsto'];
+                    if (name === 'Valor') return [formatChartCurrency(v), 'Valor Previsto'];
                     return [formatNum(v), 'Agendas'];
                   }}
                   labelFormatter={(label: string) => {
@@ -514,7 +495,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                   {etnRecursosAgendas.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
-                  <LabelList dataKey="valor" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
+                  <LabelList dataKey="valor" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatChartCurrency(v)} />
                 </Bar>
                 <Bar dataKey="agendas" name="Agendas" radius={[0, 6, 6, 0]} fill="#d1d5db" opacity={0.6} />
                 <Legend />
