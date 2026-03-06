@@ -1,7 +1,7 @@
 import {
   Upload, AlertCircle, TrendingUp, Target, Zap, DollarSign,
   Loader, BarChart3, Trophy, XCircle, FileText, RotateCcw,
-  Calendar, AlertTriangle, Search, Database, Trash2, Clock, ChevronDown,
+  Calendar, AlertTriangle, Search, Database, Trash2, Clock, ChevronDown, Download,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { useDataProcessor, type Opportunity, type Action, type ProcessedRecord, type MissingAgendaRecord } from '@/hooks/useDataProcessor';
@@ -33,6 +33,34 @@ export default function Home() {
   const [useWorkerOnly, setUseWorkerOnly] = useState(false);
   const [lightOpportunities, setLightOpportunities] = useState<Opportunity[]>([]);
   const [lightActions, setLightActions] = useState<Action[]>([]);
+
+  const handleExportChartAsSvg = useCallback((chartId: string, fileName: string) => {
+    const chartContainer = document.getElementById(chartId);
+    const svgElement = chartContainer?.querySelector('svg');
+    if (!svgElement) return;
+
+    const clone = svgElement.cloneNode(true) as SVGElement;
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+
+    const bounds = svgElement.getBoundingClientRect();
+    if (bounds.width > 0 && bounds.height > 0) {
+      clone.setAttribute('width', `${Math.round(bounds.width)}`);
+      clone.setAttribute('height', `${Math.round(bounds.height)}`);
+      clone.setAttribute('viewBox', `0 0 ${Math.round(bounds.width)} ${Math.round(bounds.height)}`);
+    }
+
+    const serialized = new XMLSerializer().serializeToString(clone);
+    const blob = new Blob([serialized], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${fileName}.svg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, []);
 
   const handleLoadDemo = useCallback(() => {
     setOpportunities([]);
@@ -832,18 +860,28 @@ export default function Home() {
                 </div>
 
                 <div className="bg-white rounded-xl p-5 border border-border shadow-sm mb-4">
-                  <div className="flex justify-between items-center mb-4">
+                  <div className="flex justify-between items-start mb-4 gap-3">
                     <div>
                       <h3 className="text-sm font-bold text-foreground mb-1">Agendas Faltantes por ETN</h3>
                       <p className="text-xs text-muted-foreground">Clique na barra para filtrar a tabela abaixo</p>
                     </div>
-                    <div className="w-56">
-                      <MultiSelectDropdown
-                        label="Filtrar ETN"
-                        options={filterOptions.etns}
-                        selected={selETNMissing}
-                        onChange={setSelETNMissing}
-                      />
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleExportChartAsSvg('chart-missing-agendas', 'agendas-faltantes-por-etn')}
+                        className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-800 transition-colors"
+                        title="Exportar gráfico em imagem (SVG)"
+                      >
+                        <Download size={12} /> Exportar
+                      </button>
+                      <div className="w-56">
+                        <MultiSelectDropdown
+                          label="Filtrar ETN"
+                          options={filterOptions.etns}
+                          selected={selETNMissing}
+                          onChange={setSelETNMissing}
+                        />
+                      </div>
                     </div>
                   </div>
                   <MissingAgendaChart 
@@ -853,6 +891,7 @@ export default function Home() {
                       setSelectedETNDetail(etn);
                     }}
                     selectedETN={selETNMissing}
+                    chartId="chart-missing-agendas"
                   />
                 </div>
 
@@ -1018,7 +1057,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
 
-function MissingAgendaChart({ data, onBarClick, selectedETN }: { data: MissingAgendaRecord[]; onBarClick: (etn: string) => void; selectedETN: string[] }) {
+function MissingAgendaChart({ data, onBarClick, selectedETN, chartId }: { data: MissingAgendaRecord[]; onBarClick: (etn: string) => void; selectedETN: string[]; chartId?: string }) {
   const chartData = useMemo(() => {
     // Mostrar todos os dados (OLD/INATIVO aparecem normalmente)
     let filtered = selectedETN.length > 0 ? data.filter(r => selectedETN.includes(r.etn)) : data;
@@ -1035,7 +1074,7 @@ function MissingAgendaChart({ data, onBarClick, selectedETN }: { data: MissingAg
   const colors = ['#f59e0b', '#f97316', '#ef4444', '#ec4899', '#8b5cf6', '#6366f1', '#3b82f6', '#06b6d4', '#14b8a6', '#10b981', '#84cc16', '#eab308', '#d946ef', '#0ea5e9', '#22d3ee'];
 
   return (
-    <div style={{ height: 300 }}>
+    <div id={chartId} style={{ height: 300 }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 30 }}>
           <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 11 }} allowDecimals={false} axisLine={{ stroke: '#e5e7eb' }} />

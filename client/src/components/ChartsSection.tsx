@@ -1,10 +1,11 @@
-import { useMemo, memo } from 'react';
+import { useCallback, useMemo, memo } from 'react';
 import type { ProcessedRecord } from '@/hooks/useDataProcessor';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   Cell, LineChart, Line, CartesianGrid, Legend, LabelList,
   Treemap,
 } from 'recharts';
+import { Download } from 'lucide-react';
 
 const COLORS = [
   '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6',
@@ -66,6 +67,21 @@ const tooltipStyle = {
   },
 };
 
+
+function ExportChartButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-export-ignore="true"
+      className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-800 transition-colors"
+      title="Exportar gráfico em imagem (SVG)"
+    >
+      <Download size={12} /> Exportar
+    </button>
+  );
+}
+
 // Componente de rodapé com intervalo de datas (Item 9)
 function DateRangeFooter({ data }: { data: ProcessedRecord[] }) {
   const range = useMemo(() => {
@@ -92,6 +108,52 @@ function DateRangeFooter({ data }: { data: ProcessedRecord[] }) {
 }
 
 function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, etnTop10, etnConversionTop10, etnRecursosAgendas, onChartClick, onETNClick }: Props) {
+  const handleExportChart = useCallback((chartId: string, fileName: string) => {
+    const chartContainer = document.getElementById(chartId);
+    if (!chartContainer) return;
+
+    const svgElement = chartContainer.querySelector('svg');
+
+    let serialized = '';
+
+    if (svgElement) {
+      const clone = svgElement.cloneNode(true) as SVGElement;
+      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+
+      const bounds = svgElement.getBoundingClientRect();
+      if (bounds.width > 0 && bounds.height > 0) {
+        clone.setAttribute('width', `${Math.round(bounds.width)}`);
+        clone.setAttribute('height', `${Math.round(bounds.height)}`);
+        clone.setAttribute('viewBox', `0 0 ${Math.round(bounds.width)} ${Math.round(bounds.height)}`);
+      }
+
+      serialized = new XMLSerializer().serializeToString(clone);
+    } else {
+      const clone = chartContainer.cloneNode(true) as HTMLElement;
+      clone.querySelectorAll('[data-export-ignore="true"]').forEach(el => el.remove());
+
+      const bounds = chartContainer.getBoundingClientRect();
+      const content = new XMLSerializer().serializeToString(clone);
+      serialized = `<?xml version="1.0" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${Math.max(1, Math.round(bounds.width))}" height="${Math.max(1, Math.round(bounds.height))}">
+  <foreignObject width="100%" height="100%">
+    <div xmlns="http://www.w3.org/1999/xhtml">${content}</div>
+  </foreignObject>
+</svg>`;
+    }
+
+    const blob = new Blob([serialized], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${fileName}.svg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, []);
+
   // Item 1: Pipeline por Etapa - mostrar valor em R$ (não quantidade)
   const pipelineByStage = useMemo(() => {
     const map = new Map<string, { count: number; value: number }>();
@@ -218,9 +280,14 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
   return (
     <div className="space-y-6">
       {/* Item 3: ETN Top 10 - PRIMEIRO GRÁFICO */}
-      <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-        <h3 className="text-sm font-bold text-foreground mb-1">FORECAST por ETN</h3>
-        <p className="text-xs text-muted-foreground mb-4">Valor por ETN (Proposta e Negociação, prob. ≥75%) - clique para ver detalhes</p>
+      <div id="chart-forecast-etn" className="bg-white rounded-xl p-5 border border-border shadow-sm">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-foreground mb-1">FORECAST por ETN</h3>
+            <p className="text-xs text-muted-foreground">Valor por ETN (Proposta e Negociação, prob. ≥75%) - clique para ver detalhes</p>
+          </div>
+          <ExportChartButton onClick={() => handleExportChart('chart-forecast-etn', 'forecast-por-etn')} />
+        </div>
         {etnTop10Clean.length > 0 ? (
           <div style={{ height: Math.max(280, etnTop10Clean.length * 35) }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -261,9 +328,14 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
       {/* Item 1: Pipeline por Etapa + Item 4: Motivos de Perda + Item 5: Taxa Conversão + Item 6: Recursos X Agendas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Pipeline por Etapa - Item 1: valor em R$, gráfico maior */}
-        <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-          <h3 className="text-sm font-bold text-foreground mb-1">Pipeline por Etapa</h3>
-          <p className="text-xs text-muted-foreground mb-4">Valor previsto de oportunidades abertas (clique para filtrar)</p>
+        <div id="chart-pipeline-etapa" className="bg-white rounded-xl p-5 border border-border shadow-sm">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-foreground mb-1">Pipeline por Etapa</h3>
+              <p className="text-xs text-muted-foreground">Valor previsto de oportunidades abertas (clique para filtrar)</p>
+            </div>
+            <ExportChartButton onClick={() => handleExportChart('chart-pipeline-etapa', 'pipeline-por-etapa')} />
+          </div>
           <div style={{ height: Math.max(300, pipelineByStage.length * 50) }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={pipelineByStage} layout="vertical" margin={{ left: 10, right: 50 }}>
@@ -284,9 +356,14 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
 
         {/* Item 4: Top 10 Motivos de Perda com ETNs */}
         {lossReasonsWithETN.length > 0 && (
-          <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-            <h3 className="text-sm font-bold text-foreground mb-1">Top 10 Motivos de Perda</h3>
-            <p className="text-xs text-muted-foreground mb-4">Principais causas e ETNs com mais perdas (clique para filtrar)</p>
+          <div id="chart-motivos-perda" className="bg-white rounded-xl p-5 border border-border shadow-sm">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-foreground mb-1">Top 10 Motivos de Perda</h3>
+                <p className="text-xs text-muted-foreground">Principais causas e ETNs com mais perdas (clique para filtrar)</p>
+              </div>
+              <ExportChartButton onClick={() => handleExportChart('chart-motivos-perda', 'motivos-de-perda')} />
+            </div>
             <div style={{ height: Math.max(320, lossReasonsWithETN.length * 55) }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={lossReasonsWithETN} layout="vertical" margin={{ left: 10, right: 60 }}>
@@ -332,9 +409,14 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
       </div>
 
       {/* Item 10: FUNIL DE FORECAST - Funnel Chart estilo, linha inteira */}
-      <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-        <h3 className="text-sm font-bold text-foreground mb-1">FUNIL DE FORECAST</h3>
-        <p className="text-xs text-muted-foreground mb-4">Oportunidades com probabilidade ≥75% por etapa (clique para filtrar)</p>
+      <div id="chart-funil-forecast" className="bg-white rounded-xl p-5 border border-border shadow-sm">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-foreground mb-1">FUNIL DE FORECAST</h3>
+            <p className="text-xs text-muted-foreground">Oportunidades com probabilidade ≥75% por etapa (clique para filtrar)</p>
+          </div>
+          <ExportChartButton onClick={() => handleExportChart('chart-funil-forecast', 'funil-forecast')} />
+        </div>
         {forecastFunnelFiltered.length > 0 ? (
           <>
             <div className="space-y-2 mb-4">
@@ -389,9 +471,14 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Valor Previsto vs Fechado */}
-        <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-          <h3 className="text-sm font-bold text-foreground mb-1">Valor Previsto vs Fechado</h3>
-          <p className="text-xs text-muted-foreground mb-4">Evolução mensal (últimos 24 meses)</p>
+        <div id="chart-previsto-fechado" className="bg-white rounded-xl p-5 border border-border shadow-sm">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-foreground mb-1">Valor Previsto vs Fechado</h3>
+              <p className="text-xs text-muted-foreground">Evolução mensal (últimos 24 meses)</p>
+            </div>
+            <ExportChartButton onClick={() => handleExportChart('chart-previsto-fechado', 'valor-previsto-vs-fechado')} />
+          </div>
           <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={monthlyTimeline} margin={{ left: 10, right: 10 }}>
@@ -417,10 +504,14 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
           const totalAll = totalGanhas + totalPerdidas;
           const taxaGeral = totalAll > 0 ? Math.round((totalGanhas / totalAll) * 100) : 0;
           return (
-            <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-              <h3 className="text-sm font-bold text-foreground mb-1">Taxa de Conversão por ETN</h3>
-              <p className="text-xs text-muted-foreground mb-4">Fechada e Ganha vs Fechada e Perdida (% aproveitamento) — respeitando filtros aplicados</p>
-              
+            <div id="chart-taxa-conversao-etn" className="bg-white rounded-xl p-5 border border-border shadow-sm">
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-foreground mb-1">Taxa de Conversão por ETN</h3>
+                  <p className="text-xs text-muted-foreground mb-4">Fechada e Ganha vs Fechada e Perdida (% aproveitamento) — respeitando filtros selecionados</p>
+                </div>
+                <ExportChartButton onClick={() => handleExportChart('chart-taxa-conversao-etn', 'taxa-de-conversao-por-etn')} />
+              </div>
               {/* Resumo geral */}
               <div className="grid grid-cols-3 gap-3 mb-5">
                 <div className="bg-emerald-50 rounded-lg p-3 text-center border border-emerald-100">
@@ -484,9 +575,14 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
       </div>
 
       {/* Item 6: TOP 10 Maiores Recursos X Agendas */}
-      <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-        <h3 className="text-sm font-bold text-foreground mb-1">TOP 10 Maiores Recursos X Agendas</h3>
-        <p className="text-xs text-muted-foreground mb-4">Valor previsto vs quantidade de compromissos por ETN</p>
+      <div id="chart-recursos-agendas" className="bg-white rounded-xl p-5 border border-border shadow-sm">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-foreground mb-1">TOP 10 Maiores Recursos X Agendas</h3>
+            <p className="text-xs text-muted-foreground">Valor previsto vs quantidade de compromissos por ETN</p>
+          </div>
+          <ExportChartButton onClick={() => handleExportChart('chart-recursos-agendas', 'top10-recursos-x-agendas')} />
+        </div>
         {etnRecursosAgendas.length > 0 ? (
           <div style={{ height: Math.max(280, etnRecursosAgendas.length * 35) }}>
             <ResponsiveContainer width="100%" height="100%">
