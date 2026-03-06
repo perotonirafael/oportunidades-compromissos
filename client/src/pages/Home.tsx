@@ -347,6 +347,17 @@ export default function Home() {
     return filtered;
   }, [missingAgendas, chartFilter, selETNMissing, missingFilterEtapas, missingSearch, top5MissingETNs, parseDate]);
 
+  const top3MissingAgendas = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of missingAgendasFiltered) {
+      map.set(r.etn, (map.get(r.etn) || 0) + 1);
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([label, count]) => ({ label, count }));
+  }, [missingAgendasFiltered]);
+
   // ETN Top 10 filtrado - ITEM 4: apenas Proposta e Negociação com prob >= 75%
   const etnTop10Filtered = useMemo(() => {
     const map = new Map<string, { count: number; value: number }>();
@@ -843,6 +854,22 @@ export default function Home() {
                       <p className="text-xs text-muted-foreground">Clique na barra para filtrar a tabela abaixo</p>
                     </div>
                     <div className="flex items-center gap-2">
+                      <div className="relative group">
+                        <button
+                          type="button"
+                          className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700"
+                        >
+                          Top 3
+                        </button>
+                        <div className="pointer-events-none absolute right-0 top-full z-20 mt-1 hidden w-64 rounded-xl border border-emerald-200 bg-white p-3 text-xs shadow-xl group-hover:block">
+                          <p className="mb-1 font-bold text-emerald-800">Top 3 ETNs sem agenda</p>
+                          {top3MissingAgendas.map((item, i) => (
+                            <p key={`${item.label}-${i}`} className="text-gray-700">
+                              {i + 1}. {item.label}: <span className="font-semibold text-emerald-700">{item.count}</span>
+                            </p>
+                          ))}
+                        </div>
+                      </div>
                       <button
                         type="button"
                         onClick={() => handleExportChartAsJpeg('chart-missing-agendas', 'agendas-faltantes-por-etn')}
@@ -1065,7 +1092,7 @@ function MissingAgendaChart({ data, onBarClick, selectedETN, chartId }: { data: 
             }}
           />
           <Bar dataKey="count" radius={[0, 12, 12, 0]} onClick={(data: any) => onBarClick(data.fullName)}>
-            <LabelList dataKey="count" position="right" fill="#374151" fontSize={10} />
+            <LabelList dataKey="count" position="insideRight" fill="#374151" fontSize={10} />
             {chartData.map((_, i) => (
               <Cell key={i} fill={colors[i % colors.length]} style={{ cursor: 'pointer' }} />
             ))}

@@ -83,6 +83,30 @@ function ExportChartButton({ onClick }: { onClick: () => void }) {
   );
 }
 
+
+function Top3Hover({ items }: { items: { label: string; value: string }[] }) {
+  if (!items.length) return null;
+
+  return (
+    <div className="relative group" data-export-ignore="true">
+      <button
+        type="button"
+        className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700"
+      >
+        Top 3
+      </button>
+      <div className="pointer-events-none absolute right-0 top-full z-20 mt-1 hidden w-64 rounded-xl border border-emerald-200 bg-white p-3 text-xs shadow-xl group-hover:block">
+        <p className="mb-1 font-bold text-emerald-800">Top 3</p>
+        {items.map((item, i) => (
+          <p key={`${item.label}-${i}`} className="text-gray-700">
+            {i + 1}. {item.label}: <span className="font-semibold text-emerald-700">{item.value}</span>
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // Componente de rodapé com intervalo de datas (Item 9)
 function DateRangeFooter({ data }: { data: ProcessedRecord[] }) {
   const range = useMemo(() => {
@@ -234,6 +258,19 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
       .sort((a, b) => b.value - a.value);
   }, [data]);
 
+  const top3ForecastEtn = etnTop10Clean.slice(0, 3).map((d) => ({ label: d.fullName, value: formatCurrency(d.value) }));
+  const top3Pipeline = pipelineByStage.slice(0, 3).map((d) => ({ label: d.fullName, value: formatCurrency(d.value) }));
+  const top3Motivos = lossReasonsWithETN.slice(0, 3).map((d) => ({ label: d.fullName, value: formatCurrency(d.value) }));
+  const top3Funnel = forecastFunnelFiltered.slice(0, 3).map((d) => ({ label: d.etapa, value: formatCurrency(d.value) }));
+  const top3Timeline = [...monthlyTimeline]
+    .sort((a, b) => b.previsto - a.previsto)
+    .slice(0, 3)
+    .map((d) => ({ label: d.name, value: formatCurrency(d.previsto) }));
+  const top3RecursosAgendas = [...etnRecursosAgendas]
+    .sort((a, b) => b.valor - a.valor)
+    .slice(0, 3)
+    .map((d) => ({ label: d.fullName, value: `${formatCurrency(d.valor)} · ${formatNum(d.agendas)} agendas` }));
+
   if (!data.length) return null;
 
   return (
@@ -245,7 +282,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
             <h3 className="text-sm font-bold text-foreground mb-1">FORECAST por ETN</h3>
             <p className="text-xs text-muted-foreground">Valor por ETN (Proposta e Negociação, prob. ≥75%) - clique para ver detalhes</p>
           </div>
-          <ExportChartButton onClick={() => handleExportChart('chart-forecast-etn', 'forecast-por-etn')} />
+          <div className="flex items-center gap-2"><Top3Hover items={top3ForecastEtn} /><ExportChartButton onClick={() => handleExportChart('chart-forecast-etn', 'forecast-por-etn')} /></div>
         </div>
         {etnTop10Clean.length > 0 ? (
           <div style={{ height: Math.max(280, etnTop10Clean.length * 35) }}>
@@ -271,7 +308,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                   {etnTop10Clean.map((entry, i) => (
                     <Cell key={i} fill={entry.color} />
                   ))}
-                  <LabelList dataKey="value" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
+                  <LabelList dataKey="value" position="insideRight" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -293,7 +330,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
               <h3 className="text-sm font-bold text-foreground mb-1">Pipeline por Etapa</h3>
               <p className="text-xs text-muted-foreground">Valor previsto de oportunidades abertas (clique para filtrar)</p>
             </div>
-            <ExportChartButton onClick={() => handleExportChart('chart-pipeline-etapa', 'pipeline-por-etapa')} />
+            <div className="flex items-center gap-2"><Top3Hover items={top3Pipeline} /><ExportChartButton onClick={() => handleExportChart('chart-pipeline-etapa', 'pipeline-por-etapa')} /></div>
           </div>
           <div style={{ height: Math.max(300, pipelineByStage.length * 50) }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -305,7 +342,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                   {pipelineByStage.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
-                  <LabelList dataKey="value" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
+                  <LabelList dataKey="value" position="insideRight" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -321,7 +358,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                 <h3 className="text-sm font-bold text-foreground mb-1">Top 10 Motivos de Perda</h3>
                 <p className="text-xs text-muted-foreground">Principais causas e ETNs com mais perdas (clique para filtrar)</p>
               </div>
-              <ExportChartButton onClick={() => handleExportChart('chart-motivos-perda', 'motivos-de-perda')} />
+              <div className="flex items-center gap-2"><Top3Hover items={top3Motivos} /><ExportChartButton onClick={() => handleExportChart('chart-motivos-perda', 'motivos-de-perda')} /></div>
             </div>
             <div style={{ height: Math.max(320, lossReasonsWithETN.length * 55) }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -357,7 +394,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                       const colors = ['#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#8b5cf6'];
                       return <Cell key={i} fill={colors[i % colors.length]} />;
                     })}
-                    <LabelList dataKey="value" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
+                    <LabelList dataKey="value" position="insideRight" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -374,7 +411,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
             <h3 className="text-sm font-bold text-foreground mb-1">FUNIL DE FORECAST</h3>
             <p className="text-xs text-muted-foreground">Oportunidades com probabilidade ≥75% por etapa (clique para filtrar)</p>
           </div>
-          <ExportChartButton onClick={() => handleExportChart('chart-funil-forecast', 'funil-forecast')} />
+          <div className="flex items-center gap-2"><Top3Hover items={top3Funnel} /><ExportChartButton onClick={() => handleExportChart('chart-funil-forecast', 'funil-forecast')} /></div>
         </div>
         {forecastFunnelFiltered.length > 0 ? (
           <>
@@ -436,7 +473,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
               <h3 className="text-sm font-bold text-foreground mb-1">Valor Previsto vs Fechado</h3>
               <p className="text-xs text-muted-foreground">Evolução mensal (últimos 24 meses)</p>
             </div>
-            <ExportChartButton onClick={() => handleExportChart('chart-previsto-fechado', 'valor-previsto-vs-fechado')} />
+            <div className="flex items-center gap-2"><Top3Hover items={top3Timeline} /><ExportChartButton onClick={() => handleExportChart('chart-previsto-fechado', 'valor-previsto-vs-fechado')} /></div>
           </div>
           <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -473,7 +510,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                   <h3 className="text-sm font-bold text-foreground mb-1">Taxa de Conversão por ETN</h3>
                   <p className="text-xs text-muted-foreground mb-4">Fechada e Ganha vs Fechada e Perdida (% aproveitamento) — respeitando filtros selecionados</p>
                 </div>
-                <ExportChartButton onClick={() => handleExportChart('chart-taxa-conversao-etn', 'taxa-de-conversao-por-etn')} />
+                <div className="flex items-center gap-2"><Top3Hover items={convData.slice(0, 3).map((d) => ({ label: d.fullName, value: `${d.taxaConversao}% · ${d.ganhas}G/${d.perdidas}P` }))} /><ExportChartButton onClick={() => handleExportChart('chart-taxa-conversao-etn', 'taxa-de-conversao-por-etn')} /></div>
               </div>
               {/* Resumo geral */}
               <div className="grid grid-cols-3 gap-3 mb-5">
@@ -544,7 +581,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
             <h3 className="text-sm font-bold text-foreground mb-1">TOP 10 Maiores Recursos X Agendas</h3>
             <p className="text-xs text-muted-foreground">Valor previsto vs quantidade de compromissos por ETN</p>
           </div>
-          <ExportChartButton onClick={() => handleExportChart('chart-recursos-agendas', 'top10-recursos-x-agendas')} />
+          <div className="flex items-center gap-2"><Top3Hover items={top3RecursosAgendas} /><ExportChartButton onClick={() => handleExportChart('chart-recursos-agendas', 'top10-recursos-x-agendas')} /></div>
         </div>
         {etnRecursosAgendas.length > 0 ? (
           <div style={{ height: Math.max(280, etnRecursosAgendas.length * 35) }}>
@@ -567,7 +604,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                   {etnRecursosAgendas.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
-                  <LabelList dataKey="valor" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
+                  <LabelList dataKey="valor" position="insideRight" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
                 </Bar>
                 <Bar dataKey="agendas" name="Agendas" radius={[0, 12, 12, 0]} fill="#d1d5db" opacity={0.6}>
                   <LabelList dataKey="agendas" position="insideRight" fill="#374151" fontSize={10} formatter={(v: number) => formatNum(v)} />
