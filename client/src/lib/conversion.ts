@@ -29,13 +29,8 @@ const normalize = (v: string) =>
 
 
 const CONVERSION_CATEGORIAS_VALIDAS = new Set([
-  'analise de aderencia',
-  'analise de rfp/rfi',
-  'analise de rfp / rfi',
   'demonstracao presencial',
   'demonstracao remota',
-  'edital',
-  'termo de referencia',
 ]);
 
 export function buildDemoConversionByETN(
