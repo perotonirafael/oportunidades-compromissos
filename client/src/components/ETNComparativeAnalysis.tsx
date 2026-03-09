@@ -5,6 +5,7 @@ import {
   Cell, LineChart, Line, CartesianGrid, Legend, Funnel, FunnelChart,
 } from 'recharts';
 import { TrendingUp, DollarSign, AlertCircle, Zap, BarChart3 } from 'lucide-react';
+import { buildEligibleCommitmentIndex, isLostStage, isWonStage } from '@/lib/conversionRules';
 
 const COLORS = [
   '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6',
@@ -66,37 +67,50 @@ interface Props {
 export function ETNComparativeAnalysis({ data, actions }: Props) {
   // 1. Matriz de Performance ETN (Taxa de Conversão, Valor Médio, Ciclo, Agendas/Op)
   const performanceMatrix = useMemo(() => {
+    const eligibleCommitmentIndex = buildEligibleCommitmentIndex(actions);
+
     const etnMap = new Map<string, {
       total: number;
       won: number;
+      closedTotal: number;
       wonValue: number;
       lostValue: number;
       totalValue: number;
-      agendas: number;
-      daysInStage: number[];
     }>();
 
-    // Processar oportunidades
+    const seenByEtnOpp = new Set<string>();
+
+    // Processar oportunidades por ETN + Oportunidade (sem duplicar)
     for (const r of data) {
+      if (r.etn === 'Sem Agenda') continue;
+      const key = `${r.etn}||${r.oppId}`;
+      if (seenByEtnOpp.has(key)) continue;
+      seenByEtnOpp.add(key);
+
       if (!etnMap.has(r.etn)) {
-        etnMap.set(r.etn, { total: 0, won: 0, wonValue: 0, lostValue: 0, totalValue: 0, agendas: 0, daysInStage: [] });
+        etnMap.set(r.etn, { total: 0, won: 0, closedTotal: 0, wonValue: 0, lostValue: 0, totalValue: 0 });
       }
       const stats = etnMap.get(r.etn)!;
       stats.total++;
       stats.totalValue += (r.valorUnificado ?? r.valorPrevisto);
-      if (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR') {
+
+      if (!eligibleCommitmentIndex.eligibleKeysByEtnOpp.has(key)) continue;
+
+      if (isWonStage(r.etapa)) {
         stats.won++;
+        stats.closedTotal++;
         stats.wonValue += (r.valorUnificado ?? r.valorFechado);
-      } else if (r.etapa === 'Fechada e Perdida') {
+      } else if (isLostStage(r.etapa)) {
+        stats.closedTotal++;
         stats.lostValue += (r.valorUnificado ?? r.valorPrevisto);
       }
-      stats.agendas += r.agenda;
     }
 
     // Processar ações para contar agendas por ETN
     const agendasByETN = new Map<string, number>();
     for (const a of actions) {
-      const etn = (a['Usuário'] || a['Usuario'] || '').trim();
+      const etn = (a['Usuário'] || a['Usuario'] || a['Responsavel'] || a['Usuário Ação'] || '').trim();
+      if (!etn) continue;
       agendasByETN.set(etn, (agendasByETN.get(etn) || 0) + 1);
     }
 
@@ -105,14 +119,14 @@ export function ETNComparativeAnalysis({ data, actions }: Props) {
         etn,
         total: stats.total,
         won: stats.won,
-        winRate: stats.total > 0 ? ((stats.won / stats.total) * 100).toFixed(1) : '0',
+        winRate: stats.closedTotal > 0 ? ((stats.won / stats.closedTotal) * 100).toFixed(1) : '0',
         wonValue: stats.wonValue,
         lostValue: stats.lostValue,
         avgValue: stats.total > 0 ? (stats.totalValue / stats.total).toFixed(0) : '0',
         agendas: agendasByETN.get(etn) || 0,
         agendaPerOp: stats.total > 0 ? ((agendasByETN.get(etn) || 0) / stats.total).toFixed(2) : '0',
-        valuePerAgenda: (agendasByETN.get(etn) || 0) > 0 
-          ? (stats.wonValue / (agendasByETN.get(etn) || 1)).toFixed(0) 
+        valuePerAgenda: (agendasByETN.get(etn) || 0) > 0
+          ? (stats.wonValue / (agendasByETN.get(etn) || 1)).toFixed(0)
           : '0',
       }))
       .sort((a, b) => parseFloat(b.winRate) - parseFloat(a.winRate));

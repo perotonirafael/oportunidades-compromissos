@@ -2,6 +2,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { X, TrendingUp, Award, Target, Calendar, Trophy, XCircle, DollarSign, Search, Filter, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, Cell, PieChart, Pie } from 'recharts';
 import { KPICard } from './KPICard';
+import { buildEligibleCommitmentIndex, summarizeClosedEligible } from '@/lib/conversionRules';
 
 interface ProcessedRecord {
   oppId: string;
@@ -92,10 +93,12 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
   const etnActions = useMemo(() => {
     if (!actions.length) return [];
     return actions.filter(a => {
-      const user = trim(a['Usuario']) || trim(a['Responsavel']) || trim(a['Usuário Ação']);
+      const user = trim(a['Usuario']) || trim(a['Usuário']) || trim(a['Responsavel']) || trim(a['Usuário Ação']) || trim(a['Usuario Acao']);
       return user === etn;
     });
   }, [etn, actions]);
+
+  const eligibleCommitmentIndex = useMemo(() => buildEligibleCommitmentIndex(etnActions), [etnActions]);
 
   // Anos e meses disponíveis para filtro (Item 1)
   const anosDisponiveis = useMemo(() => {
@@ -131,21 +134,25 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
   const kpis = useMemo(() => {
     const totalOps = uniqueOps.length;
 
-    // Base de fechamento (não depende de demonstração)
-    const ganhasOps = uniqueOps.filter(r => r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR');
-    const perdidasOps = uniqueOps.filter(r => r.etapa === 'Fechada e Perdida');
-    const ganhas = ganhasOps.length;
-    const perdidas = perdidasOps.length;
-    const ganhasValor = ganhasOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorFechadoReconhecido ?? r.valorFechado), 0);
-    const perdidasValor = perdidasOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto), 0);
-    const closedTotal = ganhas + perdidas;
-    const winRate = closedTotal > 0 ? ((ganhas / closedTotal) * 100).toFixed(1) : '0';
+    // Base de fechamento (somente oportunidades com compromisso elegível)
+    const closedSummary = summarizeClosedEligible(uniqueOps, eligibleCommitmentIndex.eligibleOppIds);
     const valorTotal = uniqueOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto), 0);
     const valorMedio = totalOps > 0 ? valorTotal / totalOps : 0;
     const totalAgendas = etnDataFiltered.reduce((sum, r) => sum + r.agenda, 0);
 
-    return { totalOps, ganhas, perdidas, ganhasValor, perdidasValor, winRate, valorTotal, valorMedio, totalAgendas, closedTotal };
-  }, [etnDataFiltered, uniqueOps]);
+    return {
+      totalOps,
+      ganhas: closedSummary.ganhas,
+      perdidas: closedSummary.perdidas,
+      ganhasValor: closedSummary.ganhasValor,
+      perdidasValor: closedSummary.perdidasValor,
+      winRate: closedSummary.winRate,
+      valorTotal,
+      valorMedio,
+      totalAgendas,
+      closedTotal: closedSummary.closedTotal,
+    };
+  }, [eligibleCommitmentIndex.eligibleOppIds, etnDataFiltered, uniqueOps]);
 
   const conversionChartData = useMemo(() => ([
     { name: 'Conversão', ganhas: kpis.ganhas, perdidas: kpis.perdidas },
