@@ -92,3 +92,20 @@ export function buildDemoConversionByETN(
 
   return summary;
 }
+
+
+export function buildDemoOppIdSet(actions: Array<Record<string, any>>): Set<string> {
+  const demoOppIds = new Set<string>();
+
+  for (const action of actions || []) {
+    const categoria = normalize((action['Categoria'] || '').toString());
+    const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
+    if (!isDemo) continue;
+
+    const oppId = (action['Oportunidade ID'] || '').toString().trim();
+    if (!oppId) continue;
+    demoOppIds.add(oppId);
+  }
+
+  return demoOppIds;
+}
