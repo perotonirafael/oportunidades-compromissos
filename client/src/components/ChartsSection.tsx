@@ -440,9 +440,9 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
               {/* Lista de ETNs com barras de progresso */}
               <div className="space-y-3">
                 {convData.map((d, i) => (
-                  <div key={d.fullName} className="group">
+                  <div key={d.fullName} className="group cursor-pointer hover:bg-gray-50 rounded-lg p-1 -m-1 transition-colors" onClick={() => onETNClick?.(d.fullName)}>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-gray-700 truncate max-w-[200px]" title={d.fullName}>
+                      <span className="text-xs font-medium text-gray-700 truncate max-w-[200px] hover:text-emerald-700 hover:underline" title={`Clique para ver desempenho de ${d.fullName}`}>
                         {i + 1}. {d.fullName}
                       </span>
                       <div className="flex items-center gap-2">

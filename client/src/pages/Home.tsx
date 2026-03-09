@@ -173,26 +173,41 @@ export default function Home() {
     });
   }, [processedData, selYears, selMonths, selReps, selResp, selETN, selStages, selProbs, selAgenda, selAccounts, selTypes, selSubtipos]);
 
-  // Ajuste 2+3: Taxa de Conversão (somente Demonstração Presencial/Remota)
+  // Ajuste: Taxa de Conversão por ETN (somente Demonstração Presencial/Remota)
+  // Quando actions está disponível (upload direto ou demo), calcular localmente.
+  // Quando actions está vazio (cache), usar o etnConversionTop10 pré-calculado pelo worker.
   const etnConversionTop10 = useMemo(() => {
     if (!filteredData || filteredData.length === 0) return [];
 
+    // Função auxiliar de normalização
     const normalize = (v: string) => v
       .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
+      .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
       .trim();
 
-    const demoKeys = new Set<string>();
-    for (const a of actions) {
-      const categoria = normalize((a['Categoria'] || '').toString());
-      const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
-      if (!isDemo) continue;
+    // Construir set de OppIds que têm demonstração (Presencial ou Remota)
+    const demoOppIds = new Set<string>();
 
-      const oppId = (a['Oportunidade ID'] || '').toString().trim();
-      const etn = (a['Usuario'] || a['Responsavel'] || a['Usuário Ação'] || '').toString().trim();
-      if (!oppId || !etn) continue;
-      demoKeys.add(`${etn}||${oppId}`);
+    if (actions.length > 0) {
+      // Upload direto ou demo: usar actions
+      for (const a of actions) {
+        const categoria = normalize((a['Categoria'] || '').toString());
+        const isDemo = categoria.includes('demonstracao') && (categoria.includes('presencial') || categoria.includes('remota'));
+        if (!isDemo) continue;
+        const oppId = (a['Oportunidade ID'] || '').toString().trim();
+        if (!oppId) continue;
+        demoOppIds.add(oppId);
+      }
+    } else {
+      // Cache: varrer TODOS os records para encontrar quais OPs têm demo
+      for (const r of filteredData) {
+        if (!r.categoriaCompromisso) continue;
+        const catNorm = normalize(r.categoriaCompromisso);
+        if (catNorm.includes('demonstracao') && (catNorm.includes('presencial') || catNorm.includes('remota'))) {
+          demoOppIds.add(r.oppId);
+        }
+      }
     }
 
     const etnMap = new Map<string, { total: number; ganhas: number; perdidas: number; ganhasValor: number; perdidasValor: number }>();
@@ -200,15 +215,17 @@ export default function Home() {
 
     for (const r of filteredData) {
       if (r.etn === 'Sem Agenda') continue;
-
       const key = `${r.etn}||${r.oppId}`;
-      if (!demoKeys.has(key) || seen.has(key)) continue;
-      seen.add(key);
+      if (seen.has(key)) continue;
 
       const isGanha = r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR';
       const isPerdida = r.etapa === 'Fechada e Perdida';
       if (!isGanha && !isPerdida) continue;
 
+      // Verificar se a OP tem demonstração (usando oppId apenas)
+      if (!demoOppIds.has(r.oppId)) continue;
+
+      seen.add(key);
       const e = etnMap.get(r.etn) || { total: 0, ganhas: 0, perdidas: 0, ganhasValor: 0, perdidasValor: 0 };
       e.total++;
       const val = r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto;
@@ -216,6 +233,7 @@ export default function Home() {
       if (isPerdida) { e.perdidas++; e.perdidasValor += val; }
       etnMap.set(r.etn, e);
     }
+
 
     return Array.from(etnMap.entries())
       .filter(([, d]) => d.total > 0)
@@ -229,9 +247,9 @@ export default function Home() {
         perdidasValor: d.perdidasValor,
         taxaConversao: d.total > 0 ? Math.round((d.ganhas / d.total) * 100) : 0,
       }))
-      .sort((a, b) => b.taxaConversao - a.taxaConversao || b.total - a.total)
+      .sort((a, b) => b.total - a.total || b.taxaConversao - a.taxaConversao)
       .slice(0, 10);
-  }, [filteredData, actions]);
+  }, [filteredData, actions, selYears, selMonths, selReps, selResp, selETN, selStages, selProbs, selAccounts, selTypes, selSubtipos]);
 
   // Ajuste 2: Recursos X Agendas recalculado a partir de filteredData
   const etnRecursosAgendas = useMemo(() => {
@@ -383,9 +401,34 @@ export default function Home() {
   // KPIs filtrados - ITEM 10: usar valorUnificado
   const filteredKPIs = useMemo(() => {
     if (!kpis) return null;
+    const normalizeKPI = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+    // Construir set de OPs com demonstração (para Taxa de Conversão)
+    const demoOppKeys = new Set<string>();
+    if (actions.length > 0) {
+      for (const a of actions) {
+        const cat = normalizeKPI((a['Categoria'] || '').toString());
+        if (cat.includes('demonstracao') && (cat.includes('presencial') || cat.includes('remota'))) {
+          const oppId = (a['Oportunidade ID'] || '').toString().trim();
+          if (oppId) demoOppKeys.add(oppId);
+        }
+      }
+    } else {
+      // Cache: usar categoriaCompromisso dos records
+      for (const r of filteredData) {
+        if (!r.categoriaCompromisso) continue;
+        const cat = normalizeKPI(r.categoriaCompromisso);
+        if (cat.includes('demonstracao') && (cat.includes('presencial') || cat.includes('remota'))) {
+          demoOppKeys.add(r.oppId);
+        }
+      }
+    }
+
     const seenOps = new Set<string>();
     const seenGanhas = new Set<string>();
     const seenPerdidas = new Set<string>();
+    const seenGanhasDemo = new Set<string>();
+    const seenPerdidasDemo = new Set<string>();
     let totalAgendas = 0;
     let totalForecast = 0;
     let ganhasValor = 0;
@@ -397,10 +440,12 @@ export default function Home() {
         if (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR') {
           seenGanhas.add(r.oppId);
           ganhasValor += (r.valorUnificado ?? r.valorFechadoReconhecido ?? r.valorFechado);
+          if (demoOppKeys.has(r.oppId)) seenGanhasDemo.add(r.oppId);
         }
         if (r.etapa === 'Fechada e Perdida') {
           seenPerdidas.add(r.oppId);
           perdidasValor += (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto);
+          if (demoOppKeys.has(r.oppId)) seenPerdidasDemo.add(r.oppId);
         }
       }
       totalAgendas += r.agenda;
@@ -409,7 +454,9 @@ export default function Home() {
       }
     }
 
-    const winRate = seenGanhas.size + seenPerdidas.size > 0 ? ((seenGanhas.size / (seenGanhas.size + seenPerdidas.size)) * 100).toFixed(1) : '0';
+    // Taxa de Conversão: apenas OPs com Demo Presencial/Remota
+    const totalDemo = seenGanhasDemo.size + seenPerdidasDemo.size;
+    const winRate = totalDemo > 0 ? ((seenGanhasDemo.size / totalDemo) * 100).toFixed(1) : '0';
     return {
       totalOps: seenOps.size,
       ganhas: seenGanhas.size,
@@ -420,7 +467,7 @@ export default function Home() {
       ganhasValor,
       perdidasValor,
     };
-  }, [kpis, filteredData]);
+  }, [kpis, filteredData, actions]);
 
   const handleChartClick = useCallback((field: string, value: string) => {
     setChartFilter({ field, value });

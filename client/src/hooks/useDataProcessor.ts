@@ -305,7 +305,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
       etns: filterOLD(Array.from(new Set(records.map(r => r.etn).filter(Boolean))).sort()),
       etapas: Array.from(new Set(records.map(r => r.etapa).filter(Boolean))),
       probabilidades: Array.from(new Set(records.map(r => r.probabilidade).filter(Boolean))).sort(),
-      agenda: Array.from(new Set(records.map(r => r.agenda?.toString()).filter(Boolean))).sort((a: string, b: string) => parseInt(a) - parseInt(b)),
+      agenda: Array.from(new Set(records.map(r => (r.agenda != null ? r.agenda.toString() : '')).filter(Boolean))).sort((a: string, b: string) => parseInt(a) - parseInt(b)),
       contas: filterOLD(Array.from(new Set(records.map(r => r.conta).filter(Boolean))).sort()),
       tipos: filterOLD(Array.from(new Set(records.map(r => r.tipoOportunidade).filter(Boolean))).sort()),
       subtipos: filterOLD(Array.from(new Set(records.map(r => r.subtipoOportunidade).filter(Boolean))).sort()),

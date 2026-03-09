@@ -127,29 +127,101 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
     return Array.from(oppMap.values());
   }, [etnDataFiltered]);
 
+  // 7 tipos de compromisso que qualificam uma OP para KPIs de Fechada e Ganha/Perdida no modal
+  const QUALIFYING_CATEGORIES = new Set([
+    'demonstracao presencial',
+    'demonstracao remota',
+    'analise de aderencia',
+    'etn apoio',
+    'analise de rfp/rfi',
+    'termo de referencia',
+    'edital',
+  ]);
+
+  // Conjunto de OPs que possuem pelo menos 1 compromisso dos 7 tipos qualificadores
+  const qualifiedOppIds = useMemo(() => {
+    const qualified = new Set<string>();
+    // Primeiro: verificar via actions (planilha de compromissos)
+    if (etnActions.length > 0) {
+      for (const a of etnActions) {
+        const cat = normalize(trim(a['Categoria']));
+        if (QUALIFYING_CATEGORIES.has(cat)) {
+          const oppId = trim(a['Oportunidade ID']);
+          if (oppId) qualified.add(oppId);
+        }
+      }
+    }
+    // Fallback: verificar via categoriaCompromisso dos records
+    if (qualified.size === 0) {
+      for (const r of etnData) {
+        const catNorm = normalize(r.categoriaCompromisso || '');
+        if (QUALIFYING_CATEGORIES.has(catNorm)) {
+          qualified.add(r.oppId);
+        }
+      }
+    }
+    return qualified;
+  }, [etnActions, etnData]);
+
+  // Conjunto de OPs com Demo Presencial/Remota (para Taxa de Conversão)
+  const demoOppIds = useMemo(() => {
+    const demoSet = new Set<string>();
+    if (etnActions.length > 0) {
+      for (const a of etnActions) {
+        const cat = normalize(trim(a['Categoria']));
+        if (cat.includes('demonstracao') && (cat.includes('presencial') || cat.includes('remota'))) {
+          const oppId = trim(a['Oportunidade ID']);
+          if (oppId) demoSet.add(oppId);
+        }
+      }
+    }
+    if (demoSet.size === 0) {
+      for (const r of etnData) {
+        const catNorm = normalize(r.categoriaCompromisso || '');
+        if (catNorm.includes('demonstracao') && (catNorm.includes('presencial') || catNorm.includes('remota'))) {
+          demoSet.add(r.oppId);
+        }
+      }
+    }
+    return demoSet;
+  }, [etnActions, etnData]);
+
   // KPIs
   const kpis = useMemo(() => {
     const totalOps = uniqueOps.length;
 
-    // Base de fechamento (não depende de demonstração)
-    const ganhasOps = uniqueOps.filter(r => r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR');
-    const perdidasOps = uniqueOps.filter(r => r.etapa === 'Fechada e Perdida');
+    // Fechada e Ganha/Perdida: apenas OPs com pelo menos 1 compromisso dos 7 tipos
+    const ganhasOps = uniqueOps.filter(r =>
+      (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR') && qualifiedOppIds.has(r.oppId)
+    );
+    const perdidasOps = uniqueOps.filter(r =>
+      r.etapa === 'Fechada e Perdida' && qualifiedOppIds.has(r.oppId)
+    );
     const ganhas = ganhasOps.length;
     const perdidas = perdidasOps.length;
     const ganhasValor = ganhasOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorFechadoReconhecido ?? r.valorFechado), 0);
     const perdidasValor = perdidasOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto), 0);
-    const closedTotal = ganhas + perdidas;
-    const winRate = closedTotal > 0 ? ((ganhas / closedTotal) * 100).toFixed(1) : '0';
+
+    // Taxa de Conversão: apenas OPs com Demo Presencial/Remota
+    const ganhasDemo = uniqueOps.filter(r =>
+      (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR') && demoOppIds.has(r.oppId)
+    ).length;
+    const perdidasDemo = uniqueOps.filter(r =>
+      r.etapa === 'Fechada e Perdida' && demoOppIds.has(r.oppId)
+    ).length;
+    const closedDemo = ganhasDemo + perdidasDemo;
+    const winRate = closedDemo > 0 ? ((ganhasDemo / closedDemo) * 100).toFixed(1) : '0';
+
     const valorTotal = uniqueOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto), 0);
     const valorMedio = totalOps > 0 ? valorTotal / totalOps : 0;
     const totalAgendas = etnDataFiltered.reduce((sum, r) => sum + r.agenda, 0);
 
-    return { totalOps, ganhas, perdidas, ganhasValor, perdidasValor, winRate, valorTotal, valorMedio, totalAgendas, closedTotal };
-  }, [etnDataFiltered, uniqueOps]);
+    return { totalOps, ganhas, perdidas, ganhasValor, perdidasValor, winRate, valorTotal, valorMedio, totalAgendas, closedTotal: ganhas + perdidas, ganhasDemo, perdidasDemo };
+  }, [etnDataFiltered, uniqueOps, qualifiedOppIds, demoOppIds]);
 
   const conversionChartData = useMemo(() => ([
-    { name: 'Conversão', ganhas: kpis.ganhas, perdidas: kpis.perdidas },
-  ]), [kpis.ganhas, kpis.perdidas]);
+    { name: 'Conversão', ganhas: kpis.ganhasDemo ?? kpis.ganhas, perdidas: kpis.perdidasDemo ?? kpis.perdidas },
+  ]), [kpis.ganhas, kpis.perdidas, kpis.ganhasDemo, kpis.perdidasDemo]);
 
   // Gráfico: Distribuição por Etapa
   const etapaDistribution = useMemo(() => {
