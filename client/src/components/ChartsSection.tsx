@@ -411,7 +411,6 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
         {/* Top 5 Taxa de Conversão - Novo estilo com barras de progresso */}
         {(() => {
           const convData = etnConversionTop10;
-          if (convData.length === 0) return null;
           const totalGanhas = convData.reduce((s, d) => s + d.ganhas, 0);
           const totalPerdidas = convData.reduce((s, d) => s + d.perdidas, 0);
           const totalAll = totalGanhas + totalPerdidas;
@@ -437,6 +436,12 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                 </div>
               </div>
 
+              {convData.length === 0 ? (
+                <div className="h-[180px] flex items-center justify-center text-sm text-muted-foreground border border-dashed rounded-lg">
+                  Nenhum ETN com conversão para Demonstração Remota/Presencial nos filtros atuais
+                </div>
+              ) : (
+              <>
               {/* Lista de ETNs com barras de progresso */}
               <div className="space-y-3">
                 {convData.map((d, i) => (
@@ -477,6 +482,8 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                   </div>
                 ))}
               </div>
+              </>
+              )}
               <DateRangeFooter data={data} />
             </div>
           );
