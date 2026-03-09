@@ -1,6 +1,7 @@
 // Web Worker para parsing CSV/XLSX + processamento de dados
 // Tudo roda fora da thread principal para não travar a UI
 import * as XLSX from 'xlsx';
+import { CONVERSION_DEMO_CATEGORIES, KPI_BASE_CATEGORIES, hasAnyValidCategory, hasOnlyAllowedCategories, normalizeText, toNormalizedCategorySet } from '../lib/kpiFilters';
 
 const MONTH_NAMES: Record<number, string> = {
   1: 'Janeiro', 2: 'Fevereiro', 3: 'Março', 4: 'Abril',
@@ -165,10 +166,6 @@ function readFileBuffer(buffer: ArrayBuffer): string {
 // ====== PROCESSAMENTO DE DADOS ======
 
 // Categorias com reconhecimento integral (100%)
-function normalizeStr(s: string): string {
-  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-}
-
 const CATEGORIAS_100_NORMALIZED = new Set([
   'analise de aderencia',
   'analise de rfp/rfi',
@@ -179,10 +176,13 @@ const CATEGORIAS_100_NORMALIZED = new Set([
 ]);
 
 const CATEGORIA_APOIO_NORMALIZED = 'etn apoio';
+const KPI_BASE_CATEGORY_SET = toNormalizedCategorySet(KPI_BASE_CATEGORIES);
+const CONVERSION_DEMO_CATEGORY_SET = toNormalizedCategorySet(CONVERSION_DEMO_CATEGORIES);
+
 
 function getReconhecimentoPercentual(categoria: string): number {
   if (!categoria) return 0;
-  const catNorm = normalizeStr(categoria);
+  const catNorm = normalizeText(categoria);
   if (CATEGORIAS_100_NORMALIZED.has(catNorm)) return 100;
   if (catNorm === CATEGORIA_APOIO_NORMALIZED) return 25;
   return 0;
@@ -520,24 +520,47 @@ function processData(opportunities: any[], actions: any[]) {
   // KPIs básicos
   const seenOps = new Set<string>();
   let totalAgendas = 0;
+
+  const categoriesByOpp = new Map<string, string[]>();
+  for (const act of validActions) {
+    const oppId = trim(act['Oportunidade ID']) || trim(act['ID Oportunidade']);
+    const categoria = trim(act['Categoria']);
+    if (!oppId || !categoria) continue;
+    if (!categoriesByOpp.has(oppId)) categoriesByOpp.set(oppId, []);
+    categoriesByOpp.get(oppId)!.push(categoria);
+  }
+
   let totalGanhas = 0;
   let totalGanhasValor = 0;
   let totalPerdidas = 0;
   let totalPerdidasValor = 0;
+  let conversaoGanhas = 0;
+  let conversaoPerdidas = 0;
+
   for (const r of records) {
     if (!seenOps.has(r.oppId)) {
       seenOps.add(r.oppId);
-      if (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR') {
+      const oppCategories = categoriesByOpp.get(r.oppId) || [];
+      const hasBaseCategory = hasAnyValidCategory(oppCategories, KPI_BASE_CATEGORY_SET);
+      const hasDemoCategory = hasOnlyAllowedCategories(oppCategories, CONVERSION_DEMO_CATEGORY_SET);
+
+      if (hasBaseCategory && (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR')) {
         totalGanhas++;
         totalGanhasValor += r.valorUnificado;
-      } else if (r.etapa === 'Fechada e Perdida') {
+      } else if (hasBaseCategory && r.etapa === 'Fechada e Perdida') {
         totalPerdidas++;
         totalPerdidasValor += r.valorUnificado;
+      }
+
+      if (hasDemoCategory && (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR')) {
+        conversaoGanhas++;
+      } else if (hasDemoCategory && r.etapa === 'Fechada e Perdida') {
+        conversaoPerdidas++;
       }
     }
     totalAgendas += r.agenda;
   }
-  const totalConversao = totalGanhas + totalPerdidas > 0 ? Math.round((totalGanhas / (totalGanhas + totalPerdidas)) * 100) : 0;
+  const totalConversao = conversaoGanhas + conversaoPerdidas > 0 ? Math.round((conversaoGanhas / (conversaoGanhas + conversaoPerdidas)) * 100) : 0;
 
   // Funnel data
   const funnelSeen = new Set<string>();
@@ -608,17 +631,22 @@ function processData(opportunities: any[], actions: any[]) {
 
   // ITEM 7: TOP 10 Taxa de Conversão (somente Demonstração Presencial/Remota)
   // Ganhas / (Ganhas + Perdidas) considerando apenas oportunidades com demo presencial/remota
-  const demoOppByEtn = new Set<string>();
+  const categoriesByEtnOpp = new Map<string, string[]>();
   for (const act of validActions) {
-    // Tentar vários nomes possíveis para o campo de usuário
     const user = trim(act['Usuario']) || trim(act['Responsavel']) || trim(act['Usuário']) || trim(act['Usuário Ação']) || trim(act['Usuario Acao']);
     const oppId = trim(act['Oportunidade ID']) || trim(act['ID Oportunidade']);
     const categoria = trim(act['Categoria']) || '';
-    const categoriaNorm = normalizeStr(categoria);
-    // Verificar se contém "demonstracao" E ("presencial" OU "remota")
-    const isDemo = categoriaNorm.includes('demonstracao') && (categoriaNorm.includes('presencial') || categoriaNorm.includes('remota'));
-    if (!user || !oppId || !isDemo) continue;
-    demoOppByEtn.add(`${user}||${oppId}`);
+    if (!user || !oppId || !categoria) continue;
+    const key = `${user}||${oppId}`;
+    if (!categoriesByEtnOpp.has(key)) categoriesByEtnOpp.set(key, []);
+    categoriesByEtnOpp.get(key)!.push(categoria);
+  }
+
+  const demoOppByEtn = new Set<string>();
+  for (const [key, categories] of Array.from(categoriesByEtnOpp.entries())) {
+    if (hasOnlyAllowedCategories(categories, CONVERSION_DEMO_CATEGORY_SET)) {
+      demoOppByEtn.add(key);
+    }
   }
 
   const etnConversionMap = new Map<string, { total: number; ganhas: number; perdidas: number; ganhasValor: number; perdidasValor: number }>();

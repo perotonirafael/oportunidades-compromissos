@@ -2,6 +2,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { X, TrendingUp, Award, Target, Calendar, Trophy, XCircle, DollarSign, Search, Filter, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, Cell, PieChart, Pie } from 'recharts';
 import { KPICard } from './KPICard';
+import { CONVERSION_DEMO_CATEGORIES, KPI_BASE_CATEGORIES, hasAnyValidCategory, hasOnlyAllowedCategories, parsePtBrDate, resolveCommitmentPlotDate, toNormalizedCategorySet } from '@/lib/kpiFilters';
 
 interface ProcessedRecord {
   oppId: string;
@@ -65,13 +66,6 @@ function trim(val: any): string {
   return val ? val.toString().trim() : '';
 }
 
-function normalize(val: string): string {
-  return (val || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
-}
 
 export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailModalProps) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -124,24 +118,44 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
     for (const r of etnDataFiltered) {
       if (!oppMap.has(r.oppId)) oppMap.set(r.oppId, r);
     }
-    const demoOppIds = new Set<string>();
-    for (const a of etnActions) {
-      const categoria = normalize(trim(a['Categoria']));
-      const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
-      if (!isDemo) continue;
-      const oppId = trim(a['Oportunidade ID']);
-      if (oppId) demoOppIds.add(oppId);
+
+    const kpiBaseCategorySet = toNormalizedCategorySet(KPI_BASE_CATEGORIES);
+    const conversionDemoCategorySet = toNormalizedCategorySet(CONVERSION_DEMO_CATEGORIES);
+    const categoriesByOpp = new Map<string, string[]>();
+
+    for (const action of etnActions) {
+      const oppId = trim(action['Oportunidade ID']) || trim(action['ID Oportunidade']);
+      const categoria = trim(action['Categoria']);
+      if (!oppId || !categoria) continue;
+      if (!categoriesByOpp.has(oppId)) categoriesByOpp.set(oppId, []);
+      categoriesByOpp.get(oppId)!.push(categoria);
     }
 
     const uniqueOps = Array.from(oppMap.values());
     const totalOps = uniqueOps.length;
-    const ganhasOps = uniqueOps.filter(r => demoOppIds.has(r.oppId) && (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR'));
-    const perdidasOps = uniqueOps.filter(r => demoOppIds.has(r.oppId) && r.etapa === 'Fechada e Perdida');
+    const ganhasOps = uniqueOps.filter((r) => {
+      const categories = categoriesByOpp.get(r.oppId) || [];
+      return hasAnyValidCategory(categories, kpiBaseCategorySet) && (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR');
+    });
+    const perdidasOps = uniqueOps.filter((r) => {
+      const categories = categoriesByOpp.get(r.oppId) || [];
+      return hasAnyValidCategory(categories, kpiBaseCategorySet) && r.etapa === 'Fechada e Perdida';
+    });
+
+    const conversionGanhas = uniqueOps.filter((r) => {
+      const categories = categoriesByOpp.get(r.oppId) || [];
+      return hasOnlyAllowedCategories(categories, conversionDemoCategorySet) && (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR');
+    }).length;
+    const conversionPerdidas = uniqueOps.filter((r) => {
+      const categories = categoriesByOpp.get(r.oppId) || [];
+      return hasOnlyAllowedCategories(categories, conversionDemoCategorySet) && r.etapa === 'Fechada e Perdida';
+    }).length;
+
     const ganhas = ganhasOps.length;
     const perdidas = perdidasOps.length;
     const ganhasValor = ganhasOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorFechadoReconhecido ?? r.valorFechado), 0);
     const perdidasValor = perdidasOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto), 0);
-    const winRate = ganhas + perdidas > 0 ? ((ganhas / (ganhas + perdidas)) * 100).toFixed(1) : '0';
+    const winRate = conversionGanhas + conversionPerdidas > 0 ? ((conversionGanhas / (conversionGanhas + conversionPerdidas)) * 100).toFixed(1) : '0';
     const valorTotal = uniqueOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto), 0);
     const valorMedio = totalOps > 0 ? valorTotal / totalOps : 0;
     const totalAgendas = etnDataFiltered.reduce((sum, r) => sum + r.agenda, 0);
@@ -186,23 +200,20 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
   // Item 4: Evolução de Compromissos - usar dados da planilha de compromissos
   const compromissosTimeline = useMemo(() => {
     const map = new Map<string, number>();
+    const now = new Date();
 
     if (etnActions.length > 0) {
-      // Usar datas da planilha de compromissos
-      for (const a of etnActions) {
-        const dateStr = trim(a['Data']) || trim(a['Data Início']) || trim(a['Data da Ação']);
-        if (!dateStr) continue;
-        const parts = dateStr.split('/');
-        if (parts.length >= 3) {
-          const mesNum = parseInt(parts[1].replace(/[^0-9]/g, ''));
-          const anoStr = parts[2].replace(/[^0-9]/g, '');
-          const anoNum = parseInt(anoStr);
-          if (mesNum >= 1 && mesNum <= 12 && anoStr.length === 4 && anoNum >= 2000 && anoNum <= 2100) {
-            const monthName = MONTH_ORDER[mesNum - 1];
-            const key = `${anoStr}-${monthName}`;
-            map.set(key, (map.get(key) || 0) + 1);
-          }
-        }
+      for (const action of etnActions) {
+        const scheduledDate = parsePtBrDate(trim(action['Data']) || trim(action['Data Início']) || trim(action['Data da Ação']));
+        const plotDate = resolveCommitmentPlotDate(action, now);
+        if (!plotDate) continue;
+        if (scheduledDate && scheduledDate > now && plotDate > now) continue;
+        if (plotDate > now) continue;
+
+        const monthName = MONTH_ORDER[plotDate.getMonth()];
+        const year = String(plotDate.getFullYear());
+        const key = `${year}-${monthName}`;
+        map.set(key, (map.get(key) || 0) + 1);
       }
     }
 
