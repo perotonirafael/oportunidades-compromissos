@@ -1,9 +1,8 @@
-import { useMemo, memo } from 'react';
+import { useMemo, memo, useState } from 'react';
 import type { ProcessedRecord } from '@/hooks/useDataProcessor';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   Cell, LineChart, Line, CartesianGrid, Legend, LabelList,
-  Treemap,
 } from 'recharts';
 
 const COLORS = [
@@ -29,6 +28,44 @@ const formatCurrency = (v: number) => {
 };
 
 const formatNum = (v: number) => v.toLocaleString('pt-BR');
+
+
+const MAX_CONVERSION_PAGE_SIZE = 5;
+
+function AdaptivePipelineLabel(props: any) {
+  const { x = 0, y = 0, width = 0, height = 0, value, payload } = props;
+  const fullName = payload?.fullName || payload?.name || '';
+  const stageName = String(fullName);
+  const stageValue = formatCurrency(Number(value || 0));
+  const minHeight = 18;
+  if (height < minHeight || width < 40) return null;
+
+  const pad = 8;
+  const textY = y + height / 2 + 4;
+  const nameMaxChars = Math.max(0, Math.floor((width - 90) / 6));
+  const canShowName = width >= 140 && nameMaxChars >= 6;
+  const canShowValue = width >= 78;
+  const truncatedName = canShowName
+    ? (stageName.length > nameMaxChars ? `${stageName.slice(0, Math.max(3, nameMaxChars - 1))}…` : stageName)
+    : '';
+
+  if (!canShowName && !canShowValue) return null;
+
+  return (
+    <g>
+      {canShowName && (
+        <text x={x + pad} y={textY} fill="#ffffff" fontSize={10} fontWeight={600}>
+          {truncatedName}
+        </text>
+      )}
+      {canShowValue && (
+        <text x={x + width - pad} y={textY} fill="#ffffff" fontSize={10} fontWeight={700} textAnchor="end">
+          {stageValue}
+        </text>
+      )}
+    </g>
+  );
+}
 
 // Item 3: Padronizar nome - Primeira letra maiúscula, nome e sobrenome
 function formatName(name: string): string {
@@ -85,13 +122,14 @@ function DateRangeFooter({ data }: { data: ProcessedRecord[] }) {
   }, [data]);
 
   return (
-    <p className="text-[10px] text-gray-400 text-center mt-2 pt-1 border-t border-gray-100">
+    <p className="text-[10px] text-gray-400 text-center mt-2">
       Período dos filtros aplicados: {range}
     </p>
   );
 }
 
 function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, etnTop10, etnConversionTop10, etnRecursosAgendas, onChartClick, onETNClick }: Props) {
+  const [conversionPage, setConversionPage] = useState(0);
   // Item 1: Pipeline por Etapa - mostrar valor em R$ (não quantidade)
   const pipelineByStage = useMemo(() => {
     const map = new Map<string, { count: number; value: number }>();
@@ -105,8 +143,28 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
       e.value += (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto);
       map.set(r.etapa, e);
     }
+    const stageTopEtnMap = new Map<string, Map<string, { value: number; count: number }>>();
+    for (const r of data) {
+      if (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR' || r.etapa === 'Fechada e Perdida') continue;
+      const etapa = r.etapa;
+      const etn = r.etn || 'Sem ETN';
+      if (!stageTopEtnMap.has(etapa)) stageTopEtnMap.set(etapa, new Map());
+      const etnMap = stageTopEtnMap.get(etapa)!;
+      const current = etnMap.get(etn) || { value: 0, count: 0 };
+      current.value += (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto);
+      current.count += 1;
+      etnMap.set(etn, current);
+    }
+
     return Array.from(map.entries())
-      .map(([name, d]) => ({ name: name.length > 22 ? name.slice(0, 22) + '…' : name, fullName: name, ...d }))
+      .map(([name, d]) => {
+        const topETNs = Array.from((stageTopEtnMap.get(name) || new Map()).entries())
+          .sort((a, b) => b[1].value - a[1].value)
+          .slice(0, 3)
+          .map(([etnName, etnData]) => ({ name: formatName(etnName), value: etnData.value, count: etnData.count }));
+
+        return { name: name.length > 22 ? name.slice(0, 22) + '…' : name, fullName: name, ...d, topETNs };
+      })
       .sort((a, b) => b.value - a.value);
   }, [data]);
 
@@ -264,17 +322,40 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
         <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
           <h3 className="text-sm font-bold text-foreground mb-1">Pipeline por Etapa</h3>
           <p className="text-xs text-muted-foreground mb-4">Valor previsto de oportunidades abertas (clique para filtrar)</p>
-          <div style={{ height: Math.max(300, pipelineByStage.length * 50) }}>
+          <div style={{ height: Math.max(320, pipelineByStage.length * 54) }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={pipelineByStage} layout="vertical" margin={{ left: 10, right: 50 }}>
+              <BarChart data={pipelineByStage} layout="vertical" barCategoryGap={10} margin={{ left: 10, right: 40, top: 4, bottom: 4 }}>
                 <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <YAxis type="category" dataKey="name" width={220} tick={{ fill: '#374151', fontSize: 10 }} axisLine={{ stroke: '#e5e7eb' }} />
-                <Tooltip {...tooltipStyle} formatter={(v: number) => [formatCurrency(v), 'Valor Previsto']} labelFormatter={(label: string) => { const item = pipelineByStage.find(d => d.name === label); return item?.fullName || label; }} />
-                <Bar dataKey="value" radius={[0, 6, 6, 0]} cursor="pointer" onClick={(d: any) => onChartClick('etapa', d.fullName || d.name)}>
+                <Tooltip
+                  {...tooltipStyle}
+                  content={({ active, payload }: any) => {
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0].payload;
+                    return (
+                      <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-lg text-xs max-w-[320px]">
+                        <p className="font-bold text-gray-800 mb-1">{d.fullName}</p>
+                        <p className="text-gray-600">Valor: <span className="font-bold text-emerald-600">{formatCurrency(d.value)}</span></p>
+                        <p className="text-gray-600 mb-2">Qtd: <span className="font-bold">{formatNum(d.count)}</span> oportunidades</p>
+                        {d.topETNs?.length > 0 && (
+                          <>
+                            <p className="font-semibold text-gray-700 border-t pt-1 mt-1">Top 3 ETNs:</p>
+                            {d.topETNs.map((etn: any, i: number) => (
+                              <p key={i} className="text-gray-600 pl-2">
+                                {i + 1}. {etn.name}: <span className="font-bold text-emerald-600">{formatCurrency(etn.value)}</span> ({etn.count} ops)
+                              </p>
+                            ))}
+                          </>
+                        )}
+                      </div>
+                    );
+                  }}
+                />
+                <Bar dataKey="value" radius={[0, 6, 6, 0]} minPointSize={6} barSize={28} cursor="pointer" onClick={(d: any) => onChartClick('etapa', d.fullName || d.name)}>
                   {pipelineByStage.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
-                  <LabelList dataKey="value" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
+                  <LabelList dataKey="value" content={<AdaptivePipelineLabel />} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -392,16 +473,16 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
         <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
           <h3 className="text-sm font-bold text-foreground mb-1">Valor Previsto vs Fechado</h3>
           <p className="text-xs text-muted-foreground mb-4">Evolução mensal (últimos 24 meses)</p>
-          <div style={{ height: 280 }}>
+          <div style={{ height: 320 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={monthlyTimeline} margin={{ left: 10, right: 10 }}>
+              <LineChart data={monthlyTimeline} margin={{ left: 6, right: 6, top: 8, bottom: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                 <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 10 }} interval="preserveStartEnd" axisLine={{ stroke: '#e5e7eb' }} />
                 <YAxis tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <Tooltip {...tooltipStyle} formatter={(v: number) => [formatCurrency(v)]} />
                 <Legend wrapperStyle={{ fontSize: '12px' }} />
-                <Line type="monotone" dataKey="previsto" stroke="#f59e0b" strokeWidth={2.5} dot={false} name="Previsto" />
-                <Line type="monotone" dataKey="fechado" stroke="#10b981" strokeWidth={2.5} dot={false} name="Fechado" />
+                <Line type="monotone" dataKey="previsto" stroke="#f59e0b" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} name="Previsto" />
+                <Line type="monotone" dataKey="fechado" stroke="#10b981" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} name="Fechado" />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -410,8 +491,11 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
 
         {/* Ajuste 3: TOP 10 Taxa de Conversão - Novo estilo com barras de progresso */}
         {(() => {
-          const convData = etnConversionTop10;
+          const convData = [...etnConversionTop10].sort((a, b) => b.taxaConversao - a.taxaConversao || b.total - a.total);
           if (convData.length === 0) return null;
+          const pageCount = Math.ceil(convData.length / MAX_CONVERSION_PAGE_SIZE);
+          const safePage = Math.min(conversionPage, Math.max(0, pageCount - 1));
+          const pagedData = convData.slice(safePage * MAX_CONVERSION_PAGE_SIZE, (safePage + 1) * MAX_CONVERSION_PAGE_SIZE);
           const totalGanhas = convData.reduce((s, d) => s + d.ganhas, 0);
           const totalPerdidas = convData.reduce((s, d) => s + d.perdidas, 0);
           const totalAll = totalGanhas + totalPerdidas;
@@ -439,11 +523,11 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
 
               {/* Lista de ETNs com barras de progresso */}
               <div className="space-y-3">
-                {convData.map((d, i) => (
-                  <div key={d.fullName} className="group">
+                {pagedData.map((d, i) => (
+                  <div key={d.fullName} className="group cursor-pointer" onClick={() => onChartClick('etn', d.fullName)}>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-medium text-gray-700 truncate max-w-[200px]" title={d.fullName}>
-                        {i + 1}. {d.fullName}
+                        {safePage * MAX_CONVERSION_PAGE_SIZE + i + 1}. {d.fullName}
                       </span>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] text-green-600 font-medium">{d.ganhas}G</span>
@@ -477,6 +561,22 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                   </div>
                 ))}
               </div>
+
+              {pageCount > 1 && (
+                <div className="mt-4 flex items-center justify-end gap-2">
+                  <button
+                    className="text-xs px-2 py-1 border rounded disabled:opacity-40"
+                    onClick={() => setConversionPage((p) => Math.max(0, p - 1))}
+                    disabled={safePage === 0}
+                  >Anterior</button>
+                  <span className="text-xs text-gray-500">Página {safePage + 1} de {pageCount}</span>
+                  <button
+                    className="text-xs px-2 py-1 border rounded disabled:opacity-40"
+                    onClick={() => setConversionPage((p) => Math.min(pageCount - 1, p + 1))}
+                    disabled={safePage >= pageCount - 1}
+                  >Próxima</button>
+                </div>
+              )}
               <DateRangeFooter data={data} />
             </div>
           );
@@ -488,9 +588,9 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
         <h3 className="text-sm font-bold text-foreground mb-1">TOP 10 Maiores Recursos X Agendas</h3>
         <p className="text-xs text-muted-foreground mb-4">Valor previsto vs quantidade de compromissos por ETN</p>
         {etnRecursosAgendas.length > 0 ? (
-          <div style={{ height: Math.max(280, etnRecursosAgendas.length * 35) }}>
+          <div style={{ height: Math.max(300, etnRecursosAgendas.length * 44) }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={etnRecursosAgendas} layout="vertical" margin={{ left: 10, right: 50 }}>
+              <BarChart data={etnRecursosAgendas} layout="vertical" barCategoryGap={10} margin={{ left: 10, right: 50 }}>
                 <XAxis type="number" tickFormatter={formatCurrency} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <YAxis type="category" dataKey="name" width={170} tick={{ fill: '#374151', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
                 <Tooltip
@@ -504,13 +604,13 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                     return item?.fullName || label;
                   }}
                 />
-                <Bar dataKey="valor" name="Valor" radius={[0, 6, 6, 0]} cursor="pointer" onClick={(d: any) => onChartClick('etn', d.fullName || d.name)}>
+                <Bar dataKey="valor" name="Valor" radius={[0, 6, 6, 0]} barSize={22} cursor="pointer" onClick={(d: any) => onChartClick('etn', d.fullName || d.name)}>
                   {etnRecursosAgendas.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
                   <LabelList dataKey="valor" position="right" fill="#374151" fontSize={10} formatter={(v: number) => formatCurrency(v)} />
                 </Bar>
-                <Bar dataKey="agendas" name="Agendas" radius={[0, 6, 6, 0]} fill="#d1d5db" opacity={0.6} />
+                <Bar dataKey="agendas" name="Agendas" radius={[0, 6, 6, 0]} barSize={22} fill="#d1d5db" opacity={0.6} />
                 <Legend />
               </BarChart>
             </ResponsiveContainer>
