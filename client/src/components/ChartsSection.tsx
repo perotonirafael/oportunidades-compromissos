@@ -421,7 +421,6 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
               <p className="text-xs text-muted-foreground mb-2">Fechada e Ganha vs Fechada e Perdida usando compromissos de Demonstracao Remota/Presencial — respeitando filtros aplicados</p>
               <ul className="text-[10px] text-muted-foreground list-disc pl-4 mb-4 space-y-0.5">
                 <li>Ligação entre planilhas: compromisso <strong>Oportunidade ID</strong> = oportunidade <strong>Oportunidade ID</strong>.</li>
-                <li>Numerador: oportunidades fechadas em <strong>Fechada e Ganha</strong> (inclui TR) com demonstração.</li>
                 <li>Denominador: <strong>Ganhas + Perdidas</strong> com demonstração, por ETN.</li>
               </ul>
 
