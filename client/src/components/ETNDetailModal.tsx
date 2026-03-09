@@ -92,10 +92,22 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
   const etnActions = useMemo(() => {
     if (!actions.length) return [];
     return actions.filter(a => {
-      const user = trim(a['Usuario']) || trim(a['Responsavel']) || trim(a['Usuário Ação']);
+      const user = trim(a['Usuario']) || trim(a['Usuário']) || trim(a['Responsavel']) || trim(a['Usuário Ação']) || trim(a['Usuario Acao']);
       return user === etn;
     });
   }, [etn, actions]);
+
+  const demoOppIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const a of etnActions) {
+      const categoria = normalize(trim(a['Categoria']));
+      const isDemo = categoria.includes('demonstracao') && (categoria.includes('presencial') || categoria.includes('remota'));
+      if (!isDemo) continue;
+      const oppId = trim(a['Oportunidade ID']) || trim(a['ID Oportunidade']);
+      if (oppId) ids.add(oppId);
+    }
+    return ids;
+  }, [etnActions]);
 
   // Anos e meses disponíveis para filtro (Item 1)
   const anosDisponiveis = useMemo(() => {
@@ -131,9 +143,10 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
   const kpis = useMemo(() => {
     const totalOps = uniqueOps.length;
 
-    // Base de fechamento (não depende de demonstração)
-    const ganhasOps = uniqueOps.filter(r => r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR');
-    const perdidasOps = uniqueOps.filter(r => r.etapa === 'Fechada e Perdida');
+    // Base de fechamento (somente oportunidades com demonstração presencial/remota)
+    const closedDemoOps = uniqueOps.filter(r => demoOppIds.has(r.oppId));
+    const ganhasOps = closedDemoOps.filter(r => r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR');
+    const perdidasOps = closedDemoOps.filter(r => r.etapa === 'Fechada e Perdida');
     const ganhas = ganhasOps.length;
     const perdidas = perdidasOps.length;
     const ganhasValor = ganhasOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorFechadoReconhecido ?? r.valorFechado), 0);
@@ -145,7 +158,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
     const totalAgendas = etnDataFiltered.reduce((sum, r) => sum + r.agenda, 0);
 
     return { totalOps, ganhas, perdidas, ganhasValor, perdidasValor, winRate, valorTotal, valorMedio, totalAgendas, closedTotal };
-  }, [etnDataFiltered, uniqueOps]);
+  }, [demoOppIds, etnDataFiltered, uniqueOps]);
 
   const conversionChartData = useMemo(() => ([
     { name: 'Conversão', ganhas: kpis.ganhas, perdidas: kpis.perdidas },

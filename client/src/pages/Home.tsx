@@ -186,11 +186,11 @@ export default function Home() {
     const demoKeys = new Set<string>();
     for (const a of actions) {
       const categoria = normalize((a['Categoria'] || '').toString());
-      const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
+      const isDemo = categoria.includes('demonstracao') && (categoria.includes('presencial') || categoria.includes('remota'));
       if (!isDemo) continue;
 
-      const oppId = (a['Oportunidade ID'] || '').toString().trim();
-      const etn = (a['Usuario'] || a['Responsavel'] || a['Usuário Ação'] || '').toString().trim();
+      const oppId = (a['Oportunidade ID'] || a['ID Oportunidade'] || '').toString().trim();
+      const etn = (a['Usuario'] || a['Usuário'] || a['Responsavel'] || a['Usuário Ação'] || a['Usuario Acao'] || '').toString().trim();
       if (!oppId || !etn) continue;
       demoKeys.add(`${etn}||${oppId}`);
     }
