@@ -2,6 +2,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { X, TrendingUp, Award, Target, Calendar, Trophy, XCircle, DollarSign, Search, Filter, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, Cell, PieChart, Pie } from 'recharts';
 import { KPICard } from './KPICard';
+import { buildDemoConversionByETN } from '@/lib/conversion';
 
 interface ProcessedRecord {
   oppId: string;
@@ -73,6 +74,24 @@ function normalize(val: string): string {
     .trim();
 }
 
+
+function FunnelStyleStageLabel(props: any) {
+  const { x = 0, y = 0, width = 0, height = 0, value } = props;
+  if (height < 26) return null;
+  return (
+    <text
+      x={x + width / 2}
+      y={y + 14}
+      textAnchor="middle"
+      fill="#ffffff"
+      fontSize={10}
+      fontWeight={700}
+    >
+      {value}
+    </text>
+  );
+}
+
 export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailModalProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEtapa, setFilterEtapa] = useState('');
@@ -124,30 +143,39 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
     for (const r of etnDataFiltered) {
       if (!oppMap.has(r.oppId)) oppMap.set(r.oppId, r);
     }
-    const demoOppIds = new Set<string>();
-    for (const a of etnActions) {
-      const categoria = normalize(trim(a['Categoria']));
-      const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
-      if (!isDemo) continue;
-      const oppId = trim(a['Oportunidade ID']);
-      if (oppId) demoOppIds.add(oppId);
-    }
+
+    const conversionMap = buildDemoConversionByETN(etnDataFiltered, actions, {
+      year: filterAno || undefined,
+      month: filterMes || undefined,
+    });
+
+    const conversion = conversionMap.get(etn) || {
+      total: 0,
+      ganhas: 0,
+      perdidas: 0,
+      ganhasValor: 0,
+      perdidasValor: 0,
+      taxaConversao: 0,
+    };
 
     const uniqueOps = Array.from(oppMap.values());
     const totalOps = uniqueOps.length;
-    const ganhasOps = uniqueOps.filter(r => demoOppIds.has(r.oppId) && (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR'));
-    const perdidasOps = uniqueOps.filter(r => demoOppIds.has(r.oppId) && r.etapa === 'Fechada e Perdida');
-    const ganhas = ganhasOps.length;
-    const perdidas = perdidasOps.length;
-    const ganhasValor = ganhasOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorFechadoReconhecido ?? r.valorFechado), 0);
-    const perdidasValor = perdidasOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto), 0);
-    const winRate = ganhas + perdidas > 0 ? ((ganhas / (ganhas + perdidas)) * 100).toFixed(1) : '0';
     const valorTotal = uniqueOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto), 0);
     const valorMedio = totalOps > 0 ? valorTotal / totalOps : 0;
     const totalAgendas = etnDataFiltered.reduce((sum, r) => sum + r.agenda, 0);
 
-    return { totalOps, ganhas, perdidas, ganhasValor, perdidasValor, winRate, valorTotal, valorMedio, totalAgendas };
-  }, [etnDataFiltered, etnActions]);
+    return {
+      totalOps,
+      ganhas: conversion.ganhas,
+      perdidas: conversion.perdidas,
+      ganhasValor: conversion.ganhasValor,
+      perdidasValor: conversion.perdidasValor,
+      winRate: conversion.taxaConversao.toFixed(1),
+      valorTotal,
+      valorMedio,
+      totalAgendas,
+    };
+  }, [etnDataFiltered, actions, filterAno, filterMes, etn]);
 
   // Gráfico: Distribuição por Etapa
   const etapaDistribution = useMemo(() => {
@@ -501,13 +529,13 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
                   <XAxis dataKey="etapa" angle={-40} textAnchor="end" height={150} tick={{ fontSize: 9, fill: '#6b7280' }} interval={0} />
                   <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} allowDecimals={false} />
                   <Tooltip contentStyle={{ background: 'rgba(255,255,255,0.97)', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '12px' }} />
-                  <Bar dataKey="count" radius={[6, 6, 0, 0]} name="Oportunidades" cursor="pointer" onClick={(d: any) => handleChartClick('etapa', d.etapa)}>
+                  <Bar dataKey="count" radius={[6, 6, 0, 0]} minPointSize={8} name="Oportunidades" cursor="pointer" onClick={(d: any) => handleChartClick('etapa', d.etapa)}>
                     {etapaDistribution.map((entry, i) => {
                       const color = entry.etapa.includes('Ganha') ? '#10b981' : entry.etapa.includes('Perdida') ? '#ef4444' : COLORS[i % COLORS.length];
                       const isActive = chartFilter?.type === 'etapa' && chartFilter?.value === entry.etapa;
                       return <Cell key={i} fill={color} opacity={chartFilter?.type === 'etapa' && !isActive ? 0.3 : 1} />;
                     })}
-                    <LabelList dataKey="count" position="top" fill="#374151" fontSize={11} />
+                    <LabelList dataKey="count" content={<FunnelStyleStageLabel />} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
