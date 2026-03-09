@@ -129,7 +129,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
       const categoria = normalize(trim(a['Categoria']));
       const isDemo = categoria.includes('demonstracao') && (categoria.includes('presencial') || categoria.includes('remota'));
       if (!isDemo) continue;
-      const oppId = trim(a['oportunidade']) || trim(a['Oportunidade ID']) || trim(a['ID Oportunidade']);
+      const oppId = trim(a['Oportunidade ID']) || trim(a['ID Oportunidade']) || trim(a['oportunidade']);
       if (oppId) demoOppIds.add(oppId);
     }
 

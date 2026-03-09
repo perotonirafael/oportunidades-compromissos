@@ -173,7 +173,7 @@ export default function Home() {
     });
   }, [processedData, selYears, selMonths, selReps, selResp, selETN, selStages, selProbs, selAgenda, selAccounts, selTypes, selSubtipos]);
 
-  // Taxa de Conversão (Top 5 ETNs) com vínculo compromisso.oportunidade -> oportunidade.Oportunidade ID
+  // Taxa de Conversão (Top 5 ETNs) com vínculo por Oportunidade ID entre planilhas
   // Considera apenas categorias: Demonstracao Remota e Demonstracao Presencial
   const etnConversionTop10 = useMemo(() => {
     if (!filteredData || filteredData.length === 0) return [];
@@ -184,16 +184,15 @@ export default function Home() {
       .toLowerCase()
       .trim();
 
-    const demoKeys = new Set<string>();
+    const demoOppIds = new Set<string>();
     for (const a of actions) {
       const categoria = normalize((a['Categoria'] || '').toString());
       const isDemo = categoria.includes('demonstracao') && (categoria.includes('presencial') || categoria.includes('remota'));
       if (!isDemo) continue;
 
-      const oppId = (a['oportunidade'] || a['Oportunidade ID'] || a['ID Oportunidade'] || '').toString().trim();
-      const etn = (a['Usuario'] || a['Responsavel'] || a['Usuário Ação'] || a['Usuário'] || a['Usuario Acao'] || '').toString().trim();
-      if (!oppId || !etn) continue;
-      demoKeys.add(`${etn}||${oppId}`);
+      const oppId = (a['Oportunidade ID'] || a['ID Oportunidade'] || a['oportunidade'] || '').toString().trim();
+      if (!oppId) continue;
+      demoOppIds.add(oppId);
     }
 
     const etnMap = new Map<string, { total: number; ganhas: number; perdidas: number; ganhasValor: number; perdidasValor: number }>();
@@ -202,9 +201,8 @@ export default function Home() {
     for (const r of filteredData) {
       if (r.etn === 'Sem Agenda') continue;
 
-      const key = `${r.etn}||${r.oppId}`;
-      if (!demoKeys.has(key) || seen.has(key)) continue;
-      seen.add(key);
+      if (!demoOppIds.has(r.oppId) || seen.has(r.oppId)) continue;
+      seen.add(r.oppId);
 
       const isGanha = r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR';
       const isPerdida = r.etapa === 'Fechada e Perdida';
