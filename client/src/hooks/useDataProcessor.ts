@@ -93,6 +93,12 @@ function trim(val: any): string {
   return val ? val.toString().trim() : '';
 }
 
+function normalizeOpportunityId(val: any): string {
+  const raw = trim(val);
+  if (!raw) return '';
+  return raw.split('.')[0].trim();
+}
+
 // Extrair número sequencial do ID da oportunidade (ex: "OPP001" → 1, "12345" → 12345)
 function extractSequential(oppId: string): number {
   const nums = oppId.replace(/[^0-9]/g, '');
@@ -121,7 +127,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
     // INDEX: Ações agrupadas APENAS por Oportunidade ID
     const actionsByOppId = new Map<string, Action[]>();
     for (const act of actions) {
-      const oppId = trim(act['Oportunidade ID']);
+      const oppId = normalizeOpportunityId(act['Oportunidade ID']);
       if (oppId) {
         if (!actionsByOppId.has(oppId)) actionsByOppId.set(oppId, []);
         actionsByOppId.get(oppId)!.push(act);
@@ -135,7 +141,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
     const records: ProcessedRecord[] = [];
 
     for (const opp of opportunities) {
-      const oppId = trim(opp['Oportunidade ID']);
+      const oppId = normalizeOpportunityId(opp['Oportunidade ID']);
       const contaId = trim(opp['Conta ID']);
       const conta = trim(opp['Conta']);
       const { month, year, monthNum } = parseDate(trim(opp['Previsão de Fechamento']));
@@ -241,7 +247,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
     const missingAgendas: MissingAgendaRecord[] = [];
     const oppById = new Map<string, Opportunity>();
     for (const opp of opportunities) {
-      oppById.set(trim(opp['Oportunidade ID']), opp);
+      oppById.set(normalizeOpportunityId(opp['Oportunidade ID']), opp);
     }
 
     const oppsByContaId = new Map<string, Opportunity[]>();
@@ -268,7 +274,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
 
         const allOppsForConta = oppsByContaId.get(contaId) || [];
         for (const opp of allOppsForConta) {
-          const thisOppId = trim(opp['Oportunidade ID']);
+          const thisOppId = normalizeOpportunityId(opp['Oportunidade ID']);
           const thisSeq = extractSequential(thisOppId);
 
           // NOVA LÓGICA: Só considerar oportunidades com sequencial MAIOR que a original

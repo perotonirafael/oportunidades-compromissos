@@ -183,13 +183,18 @@ export default function Home() {
       .toLowerCase()
       .trim();
 
+    const normalizeOpportunityId = (id: any): string => {
+      if (!id) return '';
+      return String(id).split('.')[0].trim();
+    };
+
     const demoKeys = new Set<string>();
     for (const a of actions) {
       const categoria = normalize((a['Categoria'] || '').toString());
       const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
       if (!isDemo) continue;
 
-      const oppId = (a['Oportunidade ID'] || '').toString().trim();
+      const oppId = normalizeOpportunityId(a['Oportunidade ID']);
       const etn = (a['Usuario'] || a['Responsavel'] || a['Usuário Ação'] || '').toString().trim();
       if (!oppId || !etn) continue;
       demoKeys.add(`${etn}||${oppId}`);

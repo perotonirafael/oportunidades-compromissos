@@ -48,6 +48,12 @@ function trim(val: any): string {
   return val ? val.toString().trim() : '';
 }
 
+function normalizeOpportunityId(val: any): string {
+  const raw = trim(val);
+  if (!raw) return '';
+  return raw.split('.')[0].trim();
+}
+
 function splitSubtipos(raw: string): string[] {
   return String(raw || '').split(/[;,]/).map(s => s.trim()).filter(Boolean);
 }
@@ -204,7 +210,7 @@ function processData(opportunities: any[], actions: any[]) {
   // INDEX: Ações agrupadas por Oportunidade ID (usando apenas ações válidas)
   const actionsByOppId = new Map<string, any[]>();
   for (const act of validActions) {
-    const oppId = trim(act['Oportunidade ID']);
+    const oppId = normalizeOpportunityId(act['Oportunidade ID']);
     if (oppId) {
       if (!actionsByOppId.has(oppId)) actionsByOppId.set(oppId, []);
       actionsByOppId.get(oppId)!.push(act);
@@ -218,7 +224,7 @@ function processData(opportunities: any[], actions: any[]) {
   const records: any[] = [];
 
   for (const opp of opportunities) {
-    const oppId = trim(opp['Oportunidade ID']);
+    const oppId = normalizeOpportunityId(opp['Oportunidade ID']);
     const contaId = trim(opp['Conta ID']);
     const conta = trim(opp['Conta']);
     const responsavel = trim(opp['Responsável']);
@@ -373,7 +379,7 @@ function processData(opportunities: any[], actions: any[]) {
   const missingAgendas: any[] = [];
   const oppById = new Map<string, any>();
   for (const opp of opportunities) {
-    oppById.set(trim(opp['Oportunidade ID']), opp);
+    oppById.set(normalizeOpportunityId(opp['Oportunidade ID']), opp);
   }
 
   const oppsByContaId = new Map<string, any[]>();
@@ -412,7 +418,7 @@ function processData(opportunities: any[], actions: any[]) {
 
       const allOppsForConta = oppsByContaId.get(contaId) || [];
       for (const opp of allOppsForConta) {
-        const thisOppId = trim(opp['Oportunidade ID']);
+        const thisOppId = normalizeOpportunityId(opp['Oportunidade ID']);
         const thisSeq = extractSequential(thisOppId);
         const thisSubtipo = trim(opp['Subtipo de Oportunidade']);
         const thisSubtipos = splitSubtipos(thisSubtipo);
@@ -612,7 +618,7 @@ function processData(opportunities: any[], actions: any[]) {
   for (const act of validActions) {
     // Tentar vários nomes possíveis para o campo de usuário
     const user = trim(act['Usuario']) || trim(act['Responsavel']) || trim(act['Usuário']) || trim(act['Usuário Ação']) || trim(act['Usuario Acao']);
-    const oppId = trim(act['Oportunidade ID']) || trim(act['ID Oportunidade']);
+    const oppId = normalizeOpportunityId(act['Oportunidade ID']) || normalizeOpportunityId(act['ID Oportunidade']);
     const categoria = trim(act['Categoria']) || '';
     const categoriaNorm = normalizeStr(categoria);
     // Verificar se contém "demonstracao" E ("presencial" OU "remota")
