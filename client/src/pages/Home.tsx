@@ -177,19 +177,20 @@ export default function Home() {
   const etnConversionTop10 = useMemo(() => {
     if (!filteredData || filteredData.length === 0) return [];
 
-    const normalize = (v: string) => v
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .toLowerCase()
-      .trim();
+    const normalizeOpportunityId = (id: any): string => {
+      if (!id) return '';
+      return String(id).split('.')[0].trim();
+    };
+
+    const normalizeStage = (stage: any): string => String(stage || '').trim().toLowerCase();
 
     const demoKeys = new Set<string>();
     for (const a of actions) {
-      const categoria = normalize((a['Categoria'] || '').toString());
+      const categoria = String(a['Categoria'] || '').trim().toLowerCase();
       const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
       if (!isDemo) continue;
 
-      const oppId = (a['Oportunidade ID'] || '').toString().trim();
+      const oppId = normalizeOpportunityId(a['Oportunidade ID']);
       const etn = (a['Usuario'] || a['Responsavel'] || a['Usuário Ação'] || '').toString().trim();
       if (!oppId || !etn) continue;
       demoKeys.add(`${etn}||${oppId}`);
@@ -205,8 +206,9 @@ export default function Home() {
       if (!demoKeys.has(key) || seen.has(key)) continue;
       seen.add(key);
 
-      const isGanha = r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR';
-      const isPerdida = r.etapa === 'Fechada e Perdida';
+      const etapa = normalizeStage(r.etapa);
+      const isGanha = etapa === 'fechada e ganha';
+      const isPerdida = etapa === 'fechada e perdida';
       if (!isGanha && !isPerdida) continue;
 
       const e = etnMap.get(r.etn) || { total: 0, ganhas: 0, perdidas: 0, ganhasValor: 0, perdidasValor: 0 };
@@ -391,20 +393,23 @@ export default function Home() {
     let ganhasValor = 0;
     let perdidasValor = 0;
 
+    const normalizeStage = (stage: any): string => String(stage || '').trim().toLowerCase();
+
     for (const r of filteredData) {
+      const etapa = normalizeStage(r.etapa);
       if (!seenOps.has(r.oppId)) {
         seenOps.add(r.oppId);
-        if (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR') {
+        if (etapa === 'fechada e ganha') {
           seenGanhas.add(r.oppId);
           ganhasValor += (r.valorUnificado ?? r.valorFechadoReconhecido ?? r.valorFechado);
         }
-        if (r.etapa === 'Fechada e Perdida') {
+        if (etapa === 'fechada e perdida') {
           seenPerdidas.add(r.oppId);
           perdidasValor += (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto);
         }
       }
       totalAgendas += r.agenda;
-      if (r.probNum >= 75 && r.etapa !== 'Fechada e Ganha' && r.etapa !== 'Fechada e Ganha TR' && r.etapa !== 'Fechada e Perdida') {
+      if (r.probNum >= 75 && etapa !== 'fechada e ganha' && etapa !== 'fechada e perdida') {
         totalForecast += (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto);
       }
     }

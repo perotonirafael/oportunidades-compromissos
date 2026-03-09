@@ -34,6 +34,10 @@ const tooltipStyle = {
   },
 };
 
+
+const normalizeOpportunityId = (rawId: any): string => String(rawId || '').split('.')[0].trim();
+const normalizeEtapa = (etapa: any): string => String(etapa || '').trim().toLowerCase();
+
 function DateRangeFooter({ data }: { data: ProcessedRecord[] }) {
   const range = useMemo(() => {
     let minYM = Infinity, maxYM = 0;
@@ -84,10 +88,11 @@ export function ETNComparativeAnalysis({ data, actions }: Props) {
       const stats = etnMap.get(r.etn)!;
       stats.total++;
       stats.totalValue += (r.valorUnificado ?? r.valorPrevisto);
-      if (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR') {
+      const etapa = normalizeEtapa(r.etapa);
+      if (etapa === 'fechada e ganha') {
         stats.won++;
         stats.wonValue += (r.valorUnificado ?? r.valorFechado);
-      } else if (r.etapa === 'Fechada e Perdida') {
+      } else if (etapa === 'fechada e perdida') {
         stats.lostValue += (r.valorUnificado ?? r.valorPrevisto);
       }
       stats.agendas += r.agenda;
@@ -131,8 +136,8 @@ export function ETNComparativeAnalysis({ data, actions }: Props) {
       const key = `${month}/${year}`;
 
       // Verificar se a ação está dentro dos dados filtrados
-      const oppId = (a['Oportunidade ID'] || '').trim();
-      const oppInData = data.some(r => r.oppId === oppId);
+      const oppId = normalizeOpportunityId(a['Oportunidade ID']);
+      const oppInData = data.some(r => normalizeOpportunityId(r.oppId) === oppId);
       if (!oppInData) continue;
 
       if (!etnMonthlyMap.has(etn)) {
@@ -172,7 +177,7 @@ export function ETNComparativeAnalysis({ data, actions }: Props) {
   const valueWonByETN = useMemo(() => {
     const etnMap = new Map<string, number>();
     for (const r of data) {
-      if (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR') {
+      if (normalizeEtapa(r.etapa) === 'fechada e ganha') {
         etnMap.set(r.etn, (etnMap.get(r.etn) || 0) + (r.valorUnificado ?? r.valorFechado));
       }
     }
@@ -187,7 +192,7 @@ export function ETNComparativeAnalysis({ data, actions }: Props) {
   const valueLostByETN = useMemo(() => {
     const etnMap = new Map<string, number>();
     for (const r of data) {
-      if (r.etapa === 'Fechada e Perdida') {
+      if (normalizeEtapa(r.etapa) === 'fechada e perdida') {
         etnMap.set(r.etn, (etnMap.get(r.etn) || 0) + (r.valorUnificado ?? r.valorPrevisto));
       }
     }
@@ -202,7 +207,8 @@ export function ETNComparativeAnalysis({ data, actions }: Props) {
   const valueAtRiskByETN = useMemo(() => {
     const etnMap = new Map<string, number>();
     for (const r of data) {
-      if (r.etapa !== 'Fechada e Ganha' && r.etapa !== 'Fechada e Ganha TR' && r.etapa !== 'Fechada e Perdida') {
+      const etapa = normalizeEtapa(r.etapa);
+      if (etapa !== 'fechada e ganha' && etapa !== 'fechada e perdida') {
         etnMap.set(r.etn, (etnMap.get(r.etn) || 0) + (r.valorUnificado ?? r.valorPrevisto));
       }
     }
@@ -226,7 +232,7 @@ export function ETNComparativeAnalysis({ data, actions }: Props) {
       const stage = r.etapa;
       if (stageMap.has(stage)) {
         const s = stageMap.get(stage)!;
-        s.value += (r.valorUnificado ?? (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR' ? r.valorFechado : r.valorPrevisto));
+        s.value += (r.valorUnificado ?? (normalizeEtapa(r.etapa) === 'fechada e ganha' ? r.valorFechado : r.valorPrevisto));
         s.count++;
       }
     }

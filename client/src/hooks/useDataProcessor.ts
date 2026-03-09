@@ -93,6 +93,20 @@ function trim(val: any): string {
   return val ? val.toString().trim() : '';
 }
 
+function normalizeOpportunityId(val: any): string {
+  const raw = trim(val);
+  if (!raw) return '';
+  return raw.split('.')[0].trim();
+}
+
+function normalizeCategoria(val: any): string {
+  return String(val || '').trim().toLowerCase();
+}
+
+function normalizeEtapa(val: any): string {
+  return String(val || '').trim().toLowerCase();
+}
+
 // Extrair número sequencial do ID da oportunidade (ex: "OPP001" → 1, "12345" → 12345)
 function extractSequential(oppId: string): number {
   const nums = oppId.replace(/[^0-9]/g, '');
@@ -121,7 +135,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
     // INDEX: Ações agrupadas APENAS por Oportunidade ID
     const actionsByOppId = new Map<string, Action[]>();
     for (const act of actions) {
-      const oppId = trim(act['Oportunidade ID']);
+      const oppId = normalizeOpportunityId(act['Oportunidade ID']);
       if (oppId) {
         if (!actionsByOppId.has(oppId)) actionsByOppId.set(oppId, []);
         actionsByOppId.get(oppId)!.push(act);
@@ -135,7 +149,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
     const records: ProcessedRecord[] = [];
 
     for (const opp of opportunities) {
-      const oppId = trim(opp['Oportunidade ID']);
+      const oppId = normalizeOpportunityId(opp['Oportunidade ID']);
       const contaId = trim(opp['Conta ID']);
       const conta = trim(opp['Conta']);
       const { month, year, monthNum } = parseDate(trim(opp['Previsão de Fechamento']));
@@ -241,7 +255,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
     const missingAgendas: MissingAgendaRecord[] = [];
     const oppById = new Map<string, Opportunity>();
     for (const opp of opportunities) {
-      oppById.set(trim(opp['Oportunidade ID']), opp);
+      oppById.set(normalizeOpportunityId(opp['Oportunidade ID']), opp);
     }
 
     const oppsByContaId = new Map<string, Opportunity[]>();
@@ -268,7 +282,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
 
         const allOppsForConta = oppsByContaId.get(contaId) || [];
         for (const opp of allOppsForConta) {
-          const thisOppId = trim(opp['Oportunidade ID']);
+          const thisOppId = normalizeOpportunityId(opp['Oportunidade ID']);
           const thisSeq = extractSequential(thisOppId);
 
           // NOVA LÓGICA: Só considerar oportunidades com sequencial MAIOR que a original
@@ -408,7 +422,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
     const motivoMap = new Map<string, number>();
     
     for (const r of records) {
-      if (r.etapa !== 'Fechada e Perdida') continue;
+      if (normalizeEtapa(r.etapa) !== 'fechada e perdida') continue;
       const motivo = r.motivoPerda || 'Sem motivo';
       motivoMap.set(motivo, (motivoMap.get(motivo) || 0) + r.valorPrevisto);
     }
@@ -429,15 +443,16 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
     for (const r of records) {
       if (seen.has(r.oppId)) continue;
       // Filtrar apenas oportunidades com Demonstração Presencial/Remota (normalizado sem acentos)
-      const catNorm = (r.categoriaCompromisso || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      const hasDemo = catNorm.includes('demonstracao presencial') || catNorm.includes('demonstracao remota');
+      const categoria = normalizeCategoria(r.categoriaCompromisso);
+      const hasDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
       if (!hasDemo) continue;
       
       seen.add(r.oppId);
       const e = etnMap.get(r.etn) || { total: 0, ganhas: 0, perdidas: 0 };
       e.total++;
-      if (r.etapa === 'Fechada e Ganha') e.ganhas++;
-      if (r.etapa === 'Fechada e Perdida') e.perdidas++;
+      const etapa = normalizeEtapa(r.etapa);
+      if (etapa === 'fechada e ganha') e.ganhas++;
+      if (etapa === 'fechada e perdida') e.perdidas++;
       etnMap.set(r.etn, e);
     }
     
