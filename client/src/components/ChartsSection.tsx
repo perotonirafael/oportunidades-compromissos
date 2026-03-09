@@ -408,19 +408,22 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
           <DateRangeFooter data={data} />
         </div>
 
-        {/* Ajuste 3: TOP 10 Taxa de Conversão - Novo estilo com barras de progresso */}
+        {/* Top 5 Taxa de Conversão - Novo estilo com barras de progresso */}
         {(() => {
           const convData = etnConversionTop10;
-          if (convData.length === 0) return null;
           const totalGanhas = convData.reduce((s, d) => s + d.ganhas, 0);
           const totalPerdidas = convData.reduce((s, d) => s + d.perdidas, 0);
           const totalAll = totalGanhas + totalPerdidas;
           const taxaGeral = totalAll > 0 ? Math.round((totalGanhas / totalAll) * 100) : 0;
           return (
             <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-              <h3 className="text-sm font-bold text-foreground mb-1">Taxa de Conversão por ETN</h3>
-              <p className="text-xs text-muted-foreground mb-4">Fechada e Ganha vs Fechada e Perdida (% aproveitamento) — respeitando filtros aplicados</p>
-              
+              <h3 className="text-sm font-bold text-foreground mb-1">Top 5 Taxa de Conversão por ETN</h3>
+              <p className="text-xs text-muted-foreground mb-2">Fechada e Ganha vs Fechada e Perdida usando compromissos de Demonstracao Remota/Presencial — respeitando filtros aplicados</p>
+              <ul className="text-[10px] text-muted-foreground list-disc pl-4 mb-4 space-y-0.5">
+                <li>Ligação entre planilhas: compromisso <strong>Oportunidade ID</strong> = oportunidade <strong>Oportunidade ID</strong>.</li>
+                <li>Denominador: <strong>Ganhas + Perdidas</strong> com demonstração, por ETN.</li>
+              </ul>
+
               {/* Resumo geral */}
               <div className="grid grid-cols-3 gap-3 mb-5">
                 <div className="bg-emerald-50 rounded-lg p-3 text-center border border-emerald-100">
@@ -437,6 +440,12 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                 </div>
               </div>
 
+              {convData.length === 0 ? (
+                <div className="h-[180px] flex items-center justify-center text-sm text-muted-foreground border border-dashed rounded-lg">
+                  Nenhum ETN com conversão para Demonstração Remota/Presencial nos filtros atuais
+                </div>
+              ) : (
+              <>
               {/* Lista de ETNs com barras de progresso */}
               <div className="space-y-3">
                 {convData.map((d, i) => (
@@ -477,6 +486,8 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
                   </div>
                 ))}
               </div>
+              </>
+              )}
               <DateRangeFooter data={data} />
             </div>
           );

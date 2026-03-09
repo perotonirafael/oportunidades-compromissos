@@ -173,8 +173,9 @@ export default function Home() {
     });
   }, [processedData, selYears, selMonths, selReps, selResp, selETN, selStages, selProbs, selAgenda, selAccounts, selTypes, selSubtipos]);
 
-  // Ajuste 2+3: Taxa de Conversão (somente Demonstração Presencial/Remota)
-  const etnConversionTop10 = useMemo(() => {
+  // Taxa de Conversão (Top 5 ETNs) com vínculo por Oportunidade ID entre planilhas
+  // Considera apenas categorias: Demonstracao Remota e Demonstracao Presencial
+  const etnConversionAll = useMemo(() => {
     if (!filteredData || filteredData.length === 0) return [];
 
     const normalize = (v: string) => v
@@ -183,16 +184,15 @@ export default function Home() {
       .toLowerCase()
       .trim();
 
-    const demoKeys = new Set<string>();
+    const demoOppIds = new Set<string>();
     for (const a of actions) {
       const categoria = normalize((a['Categoria'] || '').toString());
-      const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
+      const isDemo = categoria.includes('demonstracao') && (categoria.includes('presencial') || categoria.includes('remota'));
       if (!isDemo) continue;
 
-      const oppId = (a['Oportunidade ID'] || '').toString().trim();
-      const etn = (a['Usuario'] || a['Responsavel'] || a['Usuário Ação'] || '').toString().trim();
-      if (!oppId || !etn) continue;
-      demoKeys.add(`${etn}||${oppId}`);
+      const oppId = (a['Oportunidade ID'] || a['ID Oportunidade'] || a['oportunidade'] || '').toString().trim();
+      if (!oppId) continue;
+      demoOppIds.add(oppId);
     }
 
     const etnMap = new Map<string, { total: number; ganhas: number; perdidas: number; ganhasValor: number; perdidasValor: number }>();
@@ -201,13 +201,13 @@ export default function Home() {
     for (const r of filteredData) {
       if (r.etn === 'Sem Agenda') continue;
 
-      const key = `${r.etn}||${r.oppId}`;
-      if (!demoKeys.has(key) || seen.has(key)) continue;
-      seen.add(key);
+      if (!demoOppIds.has(r.oppId) || seen.has(r.oppId)) continue;
 
       const isGanha = r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR';
       const isPerdida = r.etapa === 'Fechada e Perdida';
       if (!isGanha && !isPerdida) continue;
+
+      seen.add(r.oppId);
 
       const e = etnMap.get(r.etn) || { total: 0, ganhas: 0, perdidas: 0, ganhasValor: 0, perdidasValor: 0 };
       e.total++;
@@ -229,10 +229,19 @@ export default function Home() {
         perdidasValor: d.perdidasValor,
         taxaConversao: d.total > 0 ? Math.round((d.ganhas / d.total) * 100) : 0,
       }))
-      .sort((a, b) => b.taxaConversao - a.taxaConversao || b.total - a.total)
-      .slice(0, 10);
+      .sort((a, b) => b.taxaConversao - a.taxaConversao || b.total - a.total);
   }, [filteredData, actions]);
 
+
+
+  const etnConversionTop10 = useMemo(() => etnConversionAll.slice(0, 5), [etnConversionAll]);
+
+  const conversionKPIWinRate = useMemo(() => {
+    const totalGanhas = etnConversionAll.reduce((sum, item) => sum + item.ganhas, 0);
+    const totalPerdidas = etnConversionAll.reduce((sum, item) => sum + item.perdidas, 0);
+    const total = totalGanhas + totalPerdidas;
+    return total > 0 ? ((totalGanhas / total) * 100).toFixed(1) : '0';
+  }, [etnConversionAll]);
   // Ajuste 2: Recursos X Agendas recalculado a partir de filteredData
   const etnRecursosAgendas = useMemo(() => {
     if (!filteredData || filteredData.length === 0) return [];
@@ -728,7 +737,7 @@ export default function Home() {
                 icon={<XCircle size={20} />}
                 color="red"
               />
-              <KPICard title="TAXA DE CONVERSÃO" value={`${filteredKPIs?.winRate ?? '0'}%`} icon={<TrendingUp size={20} />} color="amber" />
+              <KPICard title="TAXA DE CONVERSÃO" value={`${conversionKPIWinRate}%`} subtitle="(Ganhas / (Ganhas + Perdidas)) por Oportunidade ID" icon={<TrendingUp size={20} />} color="amber" />
               <KPICard
                 title="FORECAST (≥75%)"
                 value={`R$ ${((filteredKPIs?.totalForecast ?? 0) / 1e6).toFixed(1)}M`}

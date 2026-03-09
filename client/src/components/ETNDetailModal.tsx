@@ -92,7 +92,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
   const etnActions = useMemo(() => {
     if (!actions.length) return [];
     return actions.filter(a => {
-      const user = trim(a['Usuario']) || trim(a['Responsavel']) || trim(a['Usuário Ação']);
+      const user = trim(a['Usuario']) || trim(a['Responsavel']) || trim(a['Usuário Ação']) || trim(a['Usuário']) || trim(a['Usuario Acao']);
       return user === etn;
     });
   }, [etn, actions]);
@@ -127,9 +127,9 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
     const demoOppIds = new Set<string>();
     for (const a of etnActions) {
       const categoria = normalize(trim(a['Categoria']));
-      const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
+      const isDemo = categoria.includes('demonstracao') && (categoria.includes('presencial') || categoria.includes('remota'));
       if (!isDemo) continue;
-      const oppId = trim(a['Oportunidade ID']);
+      const oppId = trim(a['Oportunidade ID']) || trim(a['ID Oportunidade']) || trim(a['oportunidade']);
       if (oppId) demoOppIds.add(oppId);
     }
 
@@ -473,7 +473,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
             <div onClick={() => handleKPIClick('perdidas')} className={`cursor-pointer transition-all ${activeKPIFilter === 'perdidas' ? 'ring-2 ring-red-500 rounded-xl' : ''}`}>
               <KPICard title="Fechada e Perdida" value={kpis.perdidas.toString()} subtitle={formatCurrency(kpis.perdidasValor)} icon={<XCircle size={18} />} color="red" />
             </div>
-            <KPICard title="Taxa de Conversão" value={`${kpis.winRate}%`} icon={<TrendingUp size={18} />} color="amber" />
+            <KPICard title="Taxa de Conversão" value={`${kpis.winRate}%`} subtitle="Demo (Remota/Presencial) vinculada por Oportunidade ID" icon={<TrendingUp size={18} />} color="amber" />
             <KPICard title="Total de Agendas" value={kpis.totalAgendas.toString()} icon={<Calendar size={18} />} color="purple" />
 
           </div>
