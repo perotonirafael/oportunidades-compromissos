@@ -173,7 +173,8 @@ export default function Home() {
     });
   }, [processedData, selYears, selMonths, selReps, selResp, selETN, selStages, selProbs, selAgenda, selAccounts, selTypes, selSubtipos]);
 
-  // Ajuste 2+3: Taxa de Conversão (somente Demonstração Presencial/Remota)
+  // Taxa de Conversão (Top 5 ETNs) com vínculo compromisso.oportunidade -> oportunidade.Oportunidade ID
+  // Considera apenas categorias: Demonstracao Remota e Demonstracao Presencial
   const etnConversionTop10 = useMemo(() => {
     if (!filteredData || filteredData.length === 0) return [];
 
@@ -189,7 +190,7 @@ export default function Home() {
       const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
       if (!isDemo) continue;
 
-      const oppId = (a['Oportunidade ID'] || '').toString().trim();
+      const oppId = (a['oportunidade'] || a['Oportunidade ID'] || a['ID Oportunidade'] || '').toString().trim();
       const etn = (a['Usuario'] || a['Responsavel'] || a['Usuário Ação'] || '').toString().trim();
       if (!oppId || !etn) continue;
       demoKeys.add(`${etn}||${oppId}`);
@@ -230,7 +231,7 @@ export default function Home() {
         taxaConversao: d.total > 0 ? Math.round((d.ganhas / d.total) * 100) : 0,
       }))
       .sort((a, b) => b.taxaConversao - a.taxaConversao || b.total - a.total)
-      .slice(0, 10);
+      .slice(0, 5);
   }, [filteredData, actions]);
 
   // Ajuste 2: Recursos X Agendas recalculado a partir de filteredData

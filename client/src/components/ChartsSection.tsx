@@ -408,7 +408,7 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
           <DateRangeFooter data={data} />
         </div>
 
-        {/* Ajuste 3: TOP 10 Taxa de Conversão - Novo estilo com barras de progresso */}
+        {/* Top 5 Taxa de Conversão - Novo estilo com barras de progresso */}
         {(() => {
           const convData = etnConversionTop10;
           if (convData.length === 0) return null;
@@ -418,8 +418,8 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
           const taxaGeral = totalAll > 0 ? Math.round((totalGanhas / totalAll) * 100) : 0;
           return (
             <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-              <h3 className="text-sm font-bold text-foreground mb-1">Taxa de Conversão por ETN</h3>
-              <p className="text-xs text-muted-foreground mb-4">Fechada e Ganha vs Fechada e Perdida (% aproveitamento) — respeitando filtros aplicados</p>
+              <h3 className="text-sm font-bold text-foreground mb-1">Top 5 Taxa de Conversão por ETN</h3>
+              <p className="text-xs text-muted-foreground mb-4">Fechada e Ganha vs Fechada e Perdida usando compromissos de Demonstracao Remota/Presencial — respeitando filtros aplicados</p>
               
               {/* Resumo geral */}
               <div className="grid grid-cols-3 gap-3 mb-5">
