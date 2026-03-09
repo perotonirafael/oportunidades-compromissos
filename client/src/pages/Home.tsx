@@ -183,16 +183,15 @@ export default function Home() {
       .toLowerCase()
       .trim();
 
-    const demoKeys = new Set<string>();
+    const demoOppIds = new Set<string>();
     for (const a of actions) {
       const categoria = normalize((a['Categoria'] || '').toString());
       const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
       if (!isDemo) continue;
 
       const oppId = (a['Oportunidade ID'] || '').toString().trim();
-      const etn = (a['Usuario'] || a['Responsavel'] || a['Usuário Ação'] || '').toString().trim();
-      if (!oppId || !etn) continue;
-      demoKeys.add(`${etn}||${oppId}`);
+      if (!oppId) continue;
+      demoOppIds.add(oppId);
     }
 
     const etnMap = new Map<string, { total: number; ganhas: number; perdidas: number; ganhasValor: number; perdidasValor: number }>();
@@ -201,8 +200,11 @@ export default function Home() {
     for (const r of filteredData) {
       if (r.etn === 'Sem Agenda') continue;
 
-      const key = `${r.etn}||${r.oppId}`;
-      if (!demoKeys.has(key) || seen.has(key)) continue;
+      const oppId = (r.oppId || '').toString().trim();
+      if (!demoOppIds.has(oppId)) continue;
+
+      const key = `${r.etn}||${oppId}`;
+      if (seen.has(key)) continue;
       seen.add(key);
 
       const isGanha = r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR';

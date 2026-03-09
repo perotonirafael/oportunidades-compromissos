@@ -411,7 +411,18 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
         {/* Ajuste 3: TOP 10 Taxa de Conversão - Novo estilo com barras de progresso */}
         {(() => {
           const convData = etnConversionTop10;
-          if (convData.length === 0) return null;
+          if (convData.length === 0) {
+            return (
+              <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
+                <h3 className="text-sm font-bold text-foreground mb-1">Taxa de Conversão por ETN</h3>
+                <p className="text-xs text-muted-foreground mb-4">Fechada e Ganha vs Fechada e Perdida (% aproveitamento) — respeitando filtros aplicados</p>
+                <div className="h-[220px] flex items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50">
+                  <p className="text-xs text-muted-foreground">Sem dados de conversão para os filtros atuais.</p>
+                </div>
+                <DateRangeFooter data={data} />
+              </div>
+            );
+          }
           const totalGanhas = convData.reduce((s, d) => s + d.ganhas, 0);
           const totalPerdidas = convData.reduce((s, d) => s + d.perdidas, 0);
           const totalAll = totalGanhas + totalPerdidas;

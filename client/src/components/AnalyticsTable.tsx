@@ -94,13 +94,13 @@ function AnalyticsTableInner({ data }: Props) {
     v > 0 ? `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '-';
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+    <div className="bg-white rounded-xl border border-emerald-200 shadow-sm overflow-hidden">
+      <div className="p-4 border-b border-emerald-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-gradient-to-r from-emerald-50 to-green-50">
         <div>
-          <h3 className="text-sm font-bold text-gray-800">
+          <h3 className="text-sm font-bold text-emerald-900">
             Tabela Analítica
           </h3>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-xs text-emerald-700 mt-0.5">
             {sorted.length.toLocaleString('pt-BR')} registros {search ? '(filtrados)' : ''}
           </p>
         </div>
@@ -112,7 +112,7 @@ function AnalyticsTableInner({ data }: Props) {
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(0); }}
               placeholder="Buscar..."
-              className="pl-8 pr-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 w-48"
+              className="pl-8 pr-3 py-1.5 text-xs bg-white border border-emerald-200 rounded-lg text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 w-48"
             />
           </div>
           <button
@@ -127,19 +127,19 @@ function AnalyticsTableInner({ data }: Props) {
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
-            <tr className="border-b border-gray-100 bg-gray-50">
+            <tr className="bg-gradient-to-r from-emerald-50 to-green-50 border-b border-emerald-200">
               {COLUMNS.map(col => (
                 <th
                   key={col.key}
                   onClick={() => handleSort(col.key)}
-                  className="px-3 py-2.5 text-left font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700 transition-colors whitespace-nowrap"
+                  className="px-3 py-2.5 text-left font-bold text-emerald-900 uppercase tracking-wider cursor-pointer hover:text-emerald-700 transition-colors whitespace-nowrap"
                 >
                   <span className="flex items-center gap-1">
                     {col.label}
                     {sortKey === col.key ? (
                       sortDir === 'asc' ? <ArrowUp size={12} className="text-emerald-500" /> : <ArrowDown size={12} className="text-emerald-500" />
                     ) : (
-                      <ArrowUpDown size={12} className="opacity-30" />
+                      <ArrowUpDown size={12} className="opacity-40" />
                     )}
                   </span>
                 </th>
@@ -150,7 +150,7 @@ function AnalyticsTableInner({ data }: Props) {
             {paged.map((r: ProcessedRecord, i: number) => (
               <tr
                 key={`${r.oppId}-${r.etn}-${i}`}
-                className="border-b border-gray-50 hover:bg-emerald-50/50 transition-colors"
+                className="border-b border-emerald-100/70 hover:bg-emerald-50/60 transition-colors"
               >
                 <td className="px-3 py-2 font-mono text-blue-600 font-medium">{r.oppId}</td>
                 <td className="px-3 py-2 truncate max-w-[200px] text-gray-700">{r.conta}</td>
@@ -181,22 +181,22 @@ function AnalyticsTableInner({ data }: Props) {
       </div>
 
       {totalPages > 1 && (
-        <div className="p-3 border-t border-gray-100 flex items-center justify-between bg-gray-50/50">
-          <p className="text-xs text-gray-500">
+        <div className="p-3 border-t border-emerald-200 flex items-center justify-between bg-emerald-50/70">
+          <p className="text-xs text-emerald-700 font-medium">
             Página {page + 1} de {totalPages}
           </p>
           <div className="flex gap-1">
             <button
               onClick={() => setPage(p => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="px-3 py-1 text-xs rounded-lg bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-30 transition-colors font-medium"
+              className="px-3 py-1 text-xs rounded-lg bg-emerald-200 text-emerald-900 hover:bg-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-semibold"
             >
               Anterior
             </button>
             <button
               onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
-              className="px-3 py-1 text-xs rounded-lg bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-30 transition-colors font-medium"
+              className="px-3 py-1 text-xs rounded-lg bg-emerald-200 text-emerald-900 hover:bg-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-semibold"
             >
               Próxima
             </button>
