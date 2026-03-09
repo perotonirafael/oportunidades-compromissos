@@ -57,6 +57,8 @@ const formatCurrency = (v: number) => {
 };
 
 const MONTH_ORDER = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const CLOSED_WON_STAGES = ['Fechada e Ganha', 'Fechada e Ganha TR'];
+const CLOSED_LOST_STAGE = 'Fechada e Perdida';
 
 type SortField = 'oppId' | 'conta' | 'representante' | 'etapa' | 'probabilidade' | 'valorPrevisto' | 'valorFechado' | 'agenda' | 'mesFech';
 type SortDir = 'asc' | 'desc';
@@ -124,6 +126,10 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
     for (const r of etnDataFiltered) {
       if (!oppMap.has(r.oppId)) oppMap.set(r.oppId, r);
     }
+
+    const uniqueOps = Array.from(oppMap.values());
+
+    // Base A: oportunidades relacionadas a compromissos de demonstração
     const demoOppIds = new Set<string>();
     for (const a of etnActions) {
       const categoria = normalize(trim(a['Categoria']));
@@ -132,22 +138,49 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
       const oppId = trim(a['Oportunidade ID']);
       if (oppId) demoOppIds.add(oppId);
     }
+    const demoRelatedOpportunities = uniqueOps.filter(r => demoOppIds.has(r.oppId));
 
-    const uniqueOps = Array.from(oppMap.values());
+    // Base B: oportunidades fechadas (independente de demonstração)
+    const closedWonOpportunities = uniqueOps.filter(r => CLOSED_WON_STAGES.includes(r.etapa));
+    const closedLostOpportunities = uniqueOps.filter(r => r.etapa === CLOSED_LOST_STAGE);
+
     const totalOps = uniqueOps.length;
-    const ganhasOps = uniqueOps.filter(r => demoOppIds.has(r.oppId) && (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR'));
-    const perdidasOps = uniqueOps.filter(r => demoOppIds.has(r.oppId) && r.etapa === 'Fechada e Perdida');
-    const ganhas = ganhasOps.length;
-    const perdidas = perdidasOps.length;
-    const ganhasValor = ganhasOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorFechadoReconhecido ?? r.valorFechado), 0);
-    const perdidasValor = perdidasOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto), 0);
-    const winRate = ganhas + perdidas > 0 ? ((ganhas / (ganhas + perdidas)) * 100).toFixed(1) : '0';
+    const ganhas = closedWonOpportunities.length;
+    const perdidas = closedLostOpportunities.length;
+    const ganhasValor = closedWonOpportunities.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorFechadoReconhecido ?? r.valorFechado), 0);
+    const perdidasValor = closedLostOpportunities.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto), 0);
+    const totalFechadas = ganhas + perdidas;
+    const conversionRate = totalFechadas > 0 ? (ganhas / totalFechadas) * 100 : 0;
     const valorTotal = uniqueOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto), 0);
     const valorMedio = totalOps > 0 ? valorTotal / totalOps : 0;
     const totalAgendas = etnDataFiltered.reduce((sum, r) => sum + r.agenda, 0);
 
-    return { totalOps, ganhas, perdidas, ganhasValor, perdidasValor, winRate, valorTotal, valorMedio, totalAgendas };
+    return {
+      totalOps,
+      ganhas,
+      perdidas,
+      ganhasValor,
+      perdidasValor,
+      conversionRate,
+      valorTotal,
+      valorMedio,
+      totalAgendas,
+      demoRelatedOpportunities,
+      closedWonOpportunities,
+      closedLostOpportunities,
+    };
   }, [etnDataFiltered, etnActions]);
+
+  const conversionChartData = useMemo(() => {
+    const totalFechadas = kpis.closedWonOpportunities.length + kpis.closedLostOpportunities.length;
+    const taxaConversao = totalFechadas > 0 ? Math.round((kpis.closedWonOpportunities.length / totalFechadas) * 100) : 0;
+    return {
+      taxaConversao,
+      ganhas: kpis.closedWonOpportunities.length,
+      perdidas: kpis.closedLostOpportunities.length,
+      totalFechadas,
+    };
+  }, [kpis.closedLostOpportunities.length, kpis.closedWonOpportunities.length]);
 
   // Gráfico: Distribuição por Etapa
   const etapaDistribution = useMemo(() => {
@@ -245,7 +278,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
     for (const r of etnDataFiltered) {
       if (seen.has(r.oppId)) continue;
       seen.add(r.oppId);
-      if (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR') {
+      if (CLOSED_WON_STAGES.includes(r.etapa)) {
         if (!r.anoPrevisao || !r.mesPrevisao) continue;
         const key = `${r.anoPrevisao}-${r.mesPrevisao}`;
         const e = map.get(key) || { count: 0, valor: 0 };
@@ -290,9 +323,9 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
 
     // Filtro por KPI clicado
     if (activeKPIFilter === 'ganhas') {
-      ops = ops.filter(r => r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR');
+      ops = ops.filter(r => CLOSED_WON_STAGES.includes(r.etapa));
     } else if (activeKPIFilter === 'perdidas') {
-      ops = ops.filter(r => r.etapa === 'Fechada e Perdida');
+      ops = ops.filter(r => r.etapa === CLOSED_LOST_STAGE);
     }
 
     // Item 2: Filtro por clique em gráfico
@@ -301,7 +334,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
         ops = ops.filter(r => r.etapa === chartFilter.value);
       } else if (chartFilter.type === 'fechamentoMes') {
         const [month, year] = chartFilter.value.split('|');
-        ops = ops.filter(r => r.mesPrevisao === month && r.anoPrevisao === year && (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR'));
+        ops = ops.filter(r => r.mesPrevisao === month && r.anoPrevisao === year && CLOSED_WON_STAGES.includes(r.etapa));
       } else if (chartFilter.type === 'compromissoMes') {
         // Mostrar oportunidades vinculadas ao mês de compromisso
         const [month, year] = chartFilter.value.split('|');
@@ -473,7 +506,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
             <div onClick={() => handleKPIClick('perdidas')} className={`cursor-pointer transition-all ${activeKPIFilter === 'perdidas' ? 'ring-2 ring-red-500 rounded-xl' : ''}`}>
               <KPICard title="Fechada e Perdida" value={kpis.perdidas.toString()} subtitle={formatCurrency(kpis.perdidasValor)} icon={<XCircle size={18} />} color="red" />
             </div>
-            <KPICard title="Taxa de Conversão" value={`${kpis.winRate}%`} icon={<TrendingUp size={18} />} color="amber" />
+            <KPICard title="Taxa de Conversão" value={`${kpis.conversionRate.toFixed(1)}%`} icon={<TrendingUp size={18} />} color="amber" />
             <KPICard title="Total de Agendas" value={kpis.totalAgendas.toString()} icon={<Calendar size={18} />} color="purple" />
 
           </div>
@@ -556,6 +589,54 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
                   Sem dados de categoria
                 </div>
               )}
+              <p className="text-[10px] text-gray-400 text-center mt-2">Período: {dateRange}</p>
+            </div>
+
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+              <h3 className="font-semibold text-gray-800 mb-1 text-sm">Taxa de Conversão</h3>
+              <p className="text-[10px] text-gray-500 mb-3">Fechada e Ganha vs Fechada e Perdida (% aproveitamento)</p>
+
+              <div className="grid grid-cols-3 gap-3 mb-5">
+                <div className="bg-emerald-50 rounded-lg p-3 text-center border border-emerald-100">
+                  <p className="text-lg font-bold text-emerald-700">{conversionChartData.taxaConversao}%</p>
+                  <p className="text-[10px] text-emerald-600 font-medium">Taxa Geral</p>
+                </div>
+                <div className="bg-green-50 rounded-lg p-3 text-center border border-green-100">
+                  <p className="text-lg font-bold text-green-700">{conversionChartData.ganhas}</p>
+                  <p className="text-[10px] text-green-600 font-medium">Ganhas</p>
+                </div>
+                <div className="bg-red-50 rounded-lg p-3 text-center border border-red-100">
+                  <p className="text-lg font-bold text-red-600">{conversionChartData.perdidas}</p>
+                  <p className="text-[10px] text-red-500 font-medium">Perdidas</p>
+                </div>
+              </div>
+
+              <div
+                className="w-full h-7 bg-gray-100 rounded-full overflow-hidden flex"
+                title={`Ganhas: ${conversionChartData.ganhas} • Perdidas: ${conversionChartData.perdidas} • Total: ${conversionChartData.totalFechadas}`}
+              >
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 flex items-center justify-center transition-all duration-500"
+                    style={{ width: `${conversionChartData.taxaConversao}%`, minWidth: conversionChartData.ganhas > 0 ? '8px' : '0' }}
+                  >
+                    {conversionChartData.taxaConversao >= 12 && (
+                      <span className="text-[10px] font-bold text-white">{conversionChartData.ganhas}</span>
+                    )}
+                  </div>
+                  <div
+                    className="h-full bg-gradient-to-r from-red-400 to-red-500 flex items-center justify-center transition-all duration-500"
+                    style={{ width: `${100 - conversionChartData.taxaConversao}%`, minWidth: conversionChartData.perdidas > 0 ? '8px' : '0' }}
+                  >
+                    {(100 - conversionChartData.taxaConversao) >= 12 && (
+                      <span className="text-[10px] font-bold text-white">{conversionChartData.perdidas}</span>
+                    )}
+                  </div>
+                </div>
+
+              <div className="flex items-center justify-between mt-2 text-[10px] text-gray-500">
+                <span>Base fechamento: {conversionChartData.totalFechadas} oportunidades</span>
+                <span>Demonstração: {kpis.demoRelatedOpportunities.length} oportunidades</span>
+              </div>
               <p className="text-[10px] text-gray-400 text-center mt-2">Período: {dateRange}</p>
             </div>
 
