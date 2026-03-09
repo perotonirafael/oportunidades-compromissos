@@ -2,6 +2,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { X, TrendingUp, Award, Target, Calendar, Trophy, XCircle, DollarSign, Search, Filter, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, Cell, PieChart, Pie } from 'recharts';
 import { KPICard } from './KPICard';
+import { getActionOpportunityId, isConversionCommitmentAction } from '@/lib/conversionCommitments';
 
 interface ProcessedRecord {
   oppId: string;
@@ -65,14 +66,6 @@ function trim(val: any): string {
   return val ? val.toString().trim() : '';
 }
 
-function normalize(val: string): string {
-  return (val || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
-}
-
 export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailModalProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEtapa, setFilterEtapa] = useState('');
@@ -126,10 +119,8 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
     }
     const demoOppIds = new Set<string>();
     for (const a of etnActions) {
-      const categoria = normalize(trim(a['Categoria']));
-      const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
-      if (!isDemo) continue;
-      const oppId = trim(a['Oportunidade ID']);
+      if (!isConversionCommitmentAction(a)) continue;
+      const oppId = getActionOpportunityId(a);
       if (oppId) demoOppIds.add(oppId);
     }
 

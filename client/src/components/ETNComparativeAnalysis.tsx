@@ -5,6 +5,7 @@ import {
   Cell, LineChart, Line, CartesianGrid, Legend, Funnel, FunnelChart,
 } from 'recharts';
 import { TrendingUp, DollarSign, AlertCircle, Zap, BarChart3 } from 'lucide-react';
+import { getActionOpportunityId, getActionOwner, isConversionCommitmentAction } from '@/lib/conversionCommitments';
 
 const COLORS = [
   '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6',
@@ -66,6 +67,15 @@ interface Props {
 export function ETNComparativeAnalysis({ data, actions }: Props) {
   // 1. Matriz de Performance ETN (Taxa de Conversão, Valor Médio, Ciclo, Agendas/Op)
   const performanceMatrix = useMemo(() => {
+    const demoKeys = new Set<string>();
+    for (const action of actions) {
+      if (!isConversionCommitmentAction(action)) continue;
+      const owner = getActionOwner(action);
+      const oppId = getActionOpportunityId(action);
+      if (!owner || !oppId) continue;
+      demoKeys.add(`${owner}||${oppId}`);
+    }
+
     const etnMap = new Map<string, {
       total: number;
       won: number;
@@ -75,9 +85,14 @@ export function ETNComparativeAnalysis({ data, actions }: Props) {
       agendas: number;
       daysInStage: number[];
     }>();
+    const seenByEtnOpp = new Set<string>();
 
     // Processar oportunidades
     for (const r of data) {
+      const key = `${r.etn}||${r.oppId}`;
+      if (!demoKeys.has(key) || seenByEtnOpp.has(key)) continue;
+      seenByEtnOpp.add(key);
+
       if (!etnMap.has(r.etn)) {
         etnMap.set(r.etn, { total: 0, won: 0, wonValue: 0, lostValue: 0, totalValue: 0, agendas: 0, daysInStage: [] });
       }
@@ -96,7 +111,8 @@ export function ETNComparativeAnalysis({ data, actions }: Props) {
     // Processar ações para contar agendas por ETN
     const agendasByETN = new Map<string, number>();
     for (const a of actions) {
-      const etn = (a['Usuário'] || a['Usuario'] || '').trim();
+      const etn = getActionOwner(a);
+      if (!etn) continue;
       agendasByETN.set(etn, (agendasByETN.get(etn) || 0) + 1);
     }
 
@@ -411,5 +427,4 @@ export function ETNComparativeAnalysis({ data, actions }: Props) {
     </div>
   );
 }
-
 

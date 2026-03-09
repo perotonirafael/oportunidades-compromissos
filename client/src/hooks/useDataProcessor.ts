@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useCallback } from 'react';
+import { getActionOpportunityId, getActionOwner, isConversionCommitmentAction } from '@/lib/conversionCommitments';
 
 export interface Opportunity { [key: string]: any; }
 export interface Action { [key: string]: any; }
@@ -349,7 +350,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
     }
     
     return Array.from(funnel.entries()).map(([etapa, d]) => ({ etapa, ...d }));
-  }, [combinedData]);
+  }, [actions, combinedData]);
 
   // Forecast funnel (lazy-evaluated)
   const forecastFunnel = useMemo(() => {
@@ -423,20 +424,26 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
   const etnConversionTop10 = useMemo(() => {
     if (!combinedData?.records) return [];
     const records = combinedData.records;
+    const demoKeys = new Set<string>();
+    for (const action of actions) {
+      if (!isConversionCommitmentAction(action)) continue;
+      const owner = getActionOwner(action);
+      const oppId = getActionOpportunityId(action);
+      if (!owner || !oppId) continue;
+      demoKeys.add(`${owner}||${oppId}`);
+    }
+
     const etnMap = new Map<string, { total: number; ganhas: number; perdidas: number }>();
     const seen = new Set<string>();
     
     for (const r of records) {
-      if (seen.has(r.oppId)) continue;
-      // Filtrar apenas oportunidades com Demonstração Presencial/Remota (normalizado sem acentos)
-      const catNorm = (r.categoriaCompromisso || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      const hasDemo = catNorm.includes('demonstracao presencial') || catNorm.includes('demonstracao remota');
-      if (!hasDemo) continue;
+      const key = `${r.etn}||${r.oppId}`;
+      if (seen.has(key) || !demoKeys.has(key)) continue;
       
-      seen.add(r.oppId);
+      seen.add(key);
       const e = etnMap.get(r.etn) || { total: 0, ganhas: 0, perdidas: 0 };
       e.total++;
-      if (r.etapa === 'Fechada e Ganha') e.ganhas++;
+      if (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR') e.ganhas++;
       if (r.etapa === 'Fechada e Perdida') e.perdidas++;
       etnMap.set(r.etn, e);
     }
@@ -452,7 +459,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
       }))
       .sort((a, b) => b.taxaConversao - a.taxaConversao)
       .slice(0, 10);
-  }, [combinedData]);
+  }, [actions, combinedData]);
 
   // ETN Recursos X Agendas (lazy-evaluated)
   const etnRecursosAgendas = useMemo(() => {

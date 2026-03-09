@@ -1,6 +1,7 @@
 // Web Worker para parsing CSV/XLSX + processamento de dados
 // Tudo roda fora da thread principal para não travar a UI
 import * as XLSX from 'xlsx';
+import { getActionOpportunityId, getActionOwner, isConversionCommitmentAction } from '../lib/conversionCommitments';
 
 const MONTH_NAMES: Record<number, string> = {
   1: 'Janeiro', 2: 'Fevereiro', 3: 'Março', 4: 'Abril',
@@ -596,11 +597,9 @@ function processData(opportunities: any[], actions: any[]) {
   // Ganhas / (Ganhas + Perdidas) considerando apenas oportunidades com demo presencial/remota
   const demoOppByEtn = new Set<string>();
   for (const act of validActions) {
-    const user = trim(act['Usuario']) || trim(act['Responsavel']) || trim(act['Usuário Ação']);
-    const oppId = trim(act['Oportunidade ID']);
-    const categoria = normalizeStr(trim(act['Categoria']));
-    const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
-    if (!user || !oppId || !isDemo) continue;
+    const user = getActionOwner(act);
+    const oppId = getActionOpportunityId(act);
+    if (!user || !oppId || !isConversionCommitmentAction(act)) continue;
     demoOppByEtn.add(`${user}||${oppId}`);
   }
 

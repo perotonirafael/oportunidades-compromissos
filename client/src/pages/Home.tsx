@@ -16,6 +16,7 @@ import { ETNDetailModal } from '@/components/ETNDetailModal';
 import { ETNComparativeAnalysis } from '@/components/ETNComparativeAnalysis';
 import { DEMO_DATA } from '@/lib/demoData';
 import { saveToCache, loadFromCache, clearCache, getCacheInfo } from '@/hooks/useDataCache';
+import { getActionOpportunityId, getActionOwner, isConversionCommitmentAction } from '@/lib/conversionCommitments';
 
 export default function Home() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
@@ -177,20 +178,12 @@ export default function Home() {
   const etnConversionTop10 = useMemo(() => {
     if (!filteredData || filteredData.length === 0) return [];
 
-    const normalize = (v: string) => v
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .toLowerCase()
-      .trim();
-
     const demoKeys = new Set<string>();
     for (const a of actions) {
-      const categoria = normalize((a['Categoria'] || '').toString());
-      const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
-      if (!isDemo) continue;
+      if (!isConversionCommitmentAction(a)) continue;
 
-      const oppId = (a['Oportunidade ID'] || '').toString().trim();
-      const etn = (a['Usuario'] || a['Responsavel'] || a['Usuário Ação'] || '').toString().trim();
+      const oppId = getActionOpportunityId(a);
+      const etn = getActionOwner(a);
       if (!oppId || !etn) continue;
       demoKeys.add(`${etn}||${oppId}`);
     }
