@@ -520,10 +520,24 @@ function processData(opportunities: any[], actions: any[]) {
   // KPIs básicos
   const seenOps = new Set<string>();
   let totalAgendas = 0;
+  let totalGanhas = 0;
+  let totalGanhasValor = 0;
+  let totalPerdidas = 0;
+  let totalPerdidasValor = 0;
   for (const r of records) {
-    if (!seenOps.has(r.oppId)) seenOps.add(r.oppId);
+    if (!seenOps.has(r.oppId)) {
+      seenOps.add(r.oppId);
+      if (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR') {
+        totalGanhas++;
+        totalGanhasValor += r.valorUnificado;
+      } else if (r.etapa === 'Fechada e Perdida') {
+        totalPerdidas++;
+        totalPerdidasValor += r.valorUnificado;
+      }
+    }
     totalAgendas += r.agenda;
   }
+  const totalConversao = totalGanhas + totalPerdidas > 0 ? Math.round((totalGanhas / (totalGanhas + totalPerdidas)) * 100) : 0;
 
   // Funnel data
   const funnelSeen = new Set<string>();
@@ -596,10 +610,13 @@ function processData(opportunities: any[], actions: any[]) {
   // Ganhas / (Ganhas + Perdidas) considerando apenas oportunidades com demo presencial/remota
   const demoOppByEtn = new Set<string>();
   for (const act of validActions) {
-    const user = trim(act['Usuario']) || trim(act['Responsavel']) || trim(act['Usuário Ação']);
-    const oppId = trim(act['Oportunidade ID']);
-    const categoria = normalizeStr(trim(act['Categoria']));
-    const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
+    // Tentar vários nomes possíveis para o campo de usuário
+    const user = trim(act['Usuario']) || trim(act['Responsavel']) || trim(act['Usuário']) || trim(act['Usuário Ação']) || trim(act['Usuario Acao']);
+    const oppId = trim(act['Oportunidade ID']) || trim(act['ID Oportunidade']);
+    const categoria = trim(act['Categoria']) || '';
+    const categoriaNorm = normalizeStr(categoria);
+    // Verificar se contém "demonstracao" E ("presencial" OU "remota")
+    const isDemo = categoriaNorm.includes('demonstracao') && (categoriaNorm.includes('presencial') || categoriaNorm.includes('remota'));
     if (!user || !oppId || !isDemo) continue;
     demoOppByEtn.add(`${user}||${oppId}`);
   }
@@ -666,7 +683,15 @@ function processData(opportunities: any[], actions: any[]) {
     records,
     missingAgendas,
     filterOptions,
-    kpis: { totalOps: seenOps.size, totalAgendas },
+    kpis: { 
+      totalOps: seenOps.size, 
+      totalAgendas,
+      totalGanhas,
+      totalGanhasValor,
+      totalPerdidas,
+      totalPerdidasValor,
+      totalConversao,
+    },
     motivosPerda,
     funnelData,
     forecastFunnel,
