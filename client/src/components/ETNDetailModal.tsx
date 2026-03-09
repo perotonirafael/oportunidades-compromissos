@@ -118,36 +118,38 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
     return filtered;
   }, [etnData, filterAno, filterMes]);
 
-  // KPIs
-  const kpis = useMemo(() => {
+  // Base oficial de oportunidades únicas do ETN (respeitando filtros de período)
+  const uniqueOps = useMemo(() => {
     const oppMap = new Map<string, ProcessedRecord>();
     for (const r of etnDataFiltered) {
       if (!oppMap.has(r.oppId)) oppMap.set(r.oppId, r);
     }
-    const demoOppIds = new Set<string>();
-    for (const a of etnActions) {
-      const categoria = normalize(trim(a['Categoria']));
-      const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
-      if (!isDemo) continue;
-      const oppId = trim(a['Oportunidade ID']);
-      if (oppId) demoOppIds.add(oppId);
-    }
+    return Array.from(oppMap.values());
+  }, [etnDataFiltered]);
 
-    const uniqueOps = Array.from(oppMap.values());
+  // KPIs
+  const kpis = useMemo(() => {
     const totalOps = uniqueOps.length;
-    const ganhasOps = uniqueOps.filter(r => demoOppIds.has(r.oppId) && (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR'));
-    const perdidasOps = uniqueOps.filter(r => demoOppIds.has(r.oppId) && r.etapa === 'Fechada e Perdida');
+
+    // Base de fechamento (não depende de demonstração)
+    const ganhasOps = uniqueOps.filter(r => r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR');
+    const perdidasOps = uniqueOps.filter(r => r.etapa === 'Fechada e Perdida');
     const ganhas = ganhasOps.length;
     const perdidas = perdidasOps.length;
     const ganhasValor = ganhasOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorFechadoReconhecido ?? r.valorFechado), 0);
     const perdidasValor = perdidasOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto), 0);
-    const winRate = ganhas + perdidas > 0 ? ((ganhas / (ganhas + perdidas)) * 100).toFixed(1) : '0';
+    const closedTotal = ganhas + perdidas;
+    const winRate = closedTotal > 0 ? ((ganhas / closedTotal) * 100).toFixed(1) : '0';
     const valorTotal = uniqueOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto), 0);
     const valorMedio = totalOps > 0 ? valorTotal / totalOps : 0;
     const totalAgendas = etnDataFiltered.reduce((sum, r) => sum + r.agenda, 0);
 
-    return { totalOps, ganhas, perdidas, ganhasValor, perdidasValor, winRate, valorTotal, valorMedio, totalAgendas };
-  }, [etnDataFiltered, etnActions]);
+    return { totalOps, ganhas, perdidas, ganhasValor, perdidasValor, winRate, valorTotal, valorMedio, totalAgendas, closedTotal };
+  }, [etnDataFiltered, uniqueOps]);
+
+  const conversionChartData = useMemo(() => ([
+    { name: 'Conversão', ganhas: kpis.ganhas, perdidas: kpis.perdidas },
+  ]), [kpis.ganhas, kpis.perdidas]);
 
   // Gráfico: Distribuição por Etapa
   const etapaDistribution = useMemo(() => {
@@ -556,6 +558,47 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
                   Sem dados de categoria
                 </div>
               )}
+              <p className="text-[10px] text-gray-400 text-center mt-2">Período: {dateRange}</p>
+            </div>
+
+            {/* Taxa de Conversão - mesmo padrão visual do dashboard principal */}
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+              <h3 className="font-semibold text-gray-800 mb-1 text-sm">Taxa de Conversão</h3>
+              <p className="text-[10px] text-gray-500 mb-3">Fechada e Ganha vs Fechada e Perdida (base de oportunidades fechadas)</p>
+
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <div className="bg-emerald-50 rounded-lg p-2 text-center border border-emerald-100">
+                  <p className="text-base font-bold text-emerald-700">{kpis.winRate}%</p>
+                  <p className="text-[10px] text-emerald-600 font-medium">Taxa Geral</p>
+                </div>
+                <div className="bg-green-50 rounded-lg p-2 text-center border border-green-100">
+                  <p className="text-base font-bold text-green-700">{kpis.ganhas}</p>
+                  <p className="text-[10px] text-green-600 font-medium">Ganhas</p>
+                </div>
+                <div className="bg-red-50 rounded-lg p-2 text-center border border-red-100">
+                  <p className="text-base font-bold text-red-600">{kpis.perdidas}</p>
+                  <p className="text-[10px] text-red-500 font-medium">Perdidas</p>
+                </div>
+              </div>
+
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={conversionChartData} layout="vertical" margin={{ left: 10, right: 10, top: 8, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                  <XAxis type="number" allowDecimals={false} domain={[0, Math.max(1, kpis.closedTotal)]} tick={{ fontSize: 10, fill: '#6b7280' }} />
+                  <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 10, fill: '#6b7280' }} />
+                  <Tooltip
+                    contentStyle={{ background: 'rgba(255,255,255,0.97)', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '12px' }}
+                    formatter={(value: number, key: string) => [value, key === 'ganhas' ? 'Fechada e Ganha' : 'Fechada e Perdida']}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '11px' }} formatter={(value) => value === 'ganhas' ? 'Fechada e Ganha' : 'Fechada e Perdida'} />
+                  <Bar dataKey="ganhas" name="ganhas" stackId="conversion" fill="#10b981" radius={[4, 0, 0, 4]}>
+                    <LabelList dataKey="ganhas" position="inside" fill="#ffffff" fontSize={10} />
+                  </Bar>
+                  <Bar dataKey="perdidas" name="perdidas" stackId="conversion" fill="#ef4444" radius={[0, 4, 4, 0]}>
+                    <LabelList dataKey="perdidas" position="inside" fill="#ffffff" fontSize={10} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
               <p className="text-[10px] text-gray-400 text-center mt-2">Período: {dateRange}</p>
             </div>
 
