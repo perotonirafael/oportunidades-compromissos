@@ -3,21 +3,21 @@ import {
   Loader, BarChart3, Trophy, XCircle, FileText, RotateCcw,
   Calendar, AlertTriangle, Search, Database, Trash2, Clock, ChevronDown,
 } from 'lucide-react';
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { useDataProcessor, type Opportunity, type Action, type ProcessedRecord } from '@/hooks/useDataProcessor';
 import { useFileProcessor } from '@/hooks/useFileProcessor';
 import { useWorkerDataProcessor } from '@/hooks/useWorkerDataProcessor';
 import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
+import { AnalyticsTable } from '@/components/AnalyticsTable';
+import { ChartsSection } from '@/components/ChartsSection';
+import { ETNDetailModal } from '@/components/ETNDetailModal';
+import { ETNComparativeAnalysis } from '@/components/ETNComparativeAnalysis';
+import { MissingAgendaChart } from '@/components/MissingAgendaChart';
 import { KPICard } from '@/components/KPICard';
 import { ProgressBar } from '@/components/ProgressBar';
 import { DEMO_DATA } from '@/lib/demoData';
 import { saveToCache, loadFromCache, clearCache, getCacheInfo } from '@/hooks/useDataCache';
 
-const ChartsSection = lazy(() => import('@/components/ChartsSection').then(m => ({ default: m.ChartsSection })));
-const AnalyticsTable = lazy(() => import('@/components/AnalyticsTable').then(m => ({ default: m.AnalyticsTable })));
-const ETNDetailModal = lazy(() => import('@/components/ETNDetailModal').then(m => ({ default: m.ETNDetailModal })));
-const ETNComparativeAnalysis = lazy(() => import('@/components/ETNComparativeAnalysis').then(m => ({ default: m.ETNComparativeAnalysis })));
-const MissingAgendaChart = lazy(() => import('@/components/MissingAgendaChart').then(m => ({ default: m.MissingAgendaChart })));
 
 export default function Home() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
@@ -792,7 +792,7 @@ export default function Home() {
             )}
 
             {/* Charts */}
-            <Suspense fallback={<div className="bg-white rounded-xl p-6 border border-border text-sm text-muted-foreground">Carregando gráficos...</div>}><ChartsSection
+            <ChartsSection
               data={filteredData}
               funnelData={funnelData}
               motivosPerda={motivosPerdaFiltered}
@@ -803,11 +803,11 @@ export default function Home() {
               onChartClick={handleChartClick}
               onETNClick={setSelectedETNDetail}
             />
-            </Suspense>
+            
 
             {/* Table */}
             <div className="mt-6">
-              <Suspense fallback={<div className="bg-white rounded-xl p-6 border border-border text-sm text-muted-foreground">Carregando tabela...</div>}><AnalyticsTable data={tableData} /></Suspense>
+              <AnalyticsTable data={tableData} />
             </div>
 
             {/* Agendas Faltantes */}
@@ -843,14 +843,14 @@ export default function Home() {
                       />
                     </div>
                   </div>
-                  <Suspense fallback={<div className="h-[300px] flex items-center justify-center text-sm text-muted-foreground">Carregando gráfico...</div>}><MissingAgendaChart 
+                  <MissingAgendaChart 
                     data={missingAgendasFiltered} 
                     onBarClick={(etn) => {
                       setChartFilter({ field: 'etnMissing', value: etn });
                       setSelectedETNDetail(etn);
                     }}
                     selectedETN={selETNMissing}
-                  /></Suspense>
+                  />
                 </div>
 
                 <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
@@ -993,17 +993,17 @@ export default function Home() {
         {opportunities.length > 0 && (
           <div className="mt-8">
             <h2 className="text-2xl font-bold text-foreground mb-6">Análise Comparativa de ETNs</h2>
-            <Suspense fallback={<div className="bg-white rounded-xl p-6 border border-border text-sm text-muted-foreground">Carregando análise comparativa...</div>}><ETNComparativeAnalysis data={filteredData} actions={actions} /></Suspense>
+            <ETNComparativeAnalysis data={filteredData} actions={actions} />
           </div>
         )}
         {/* Modal de Detalhe do ETN */}
         {selectedETNDetail && (
-          <Suspense fallback={<div className="fixed inset-0 bg-black/40 flex items-center justify-center text-white">Carregando detalhe...</div>}><ETNDetailModal
+          <ETNDetailModal
             etn={selectedETNDetail}
             data={processedData}
             actions={actions}
             onClose={() => setSelectedETNDetail(null)}
-          /></Suspense>
+          />
         )}
       </div>
     </div>
