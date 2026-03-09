@@ -16,6 +16,7 @@ import { ETNDetailModal } from '@/components/ETNDetailModal';
 import { ETNComparativeAnalysis } from '@/components/ETNComparativeAnalysis';
 import { DEMO_DATA } from '@/lib/demoData';
 import { saveToCache, loadFromCache, clearCache, getCacheInfo } from '@/hooks/useDataCache';
+import { CONVERSION_DEMO_CATEGORIES, KPI_BASE_CATEGORIES, hasAnyValidCategory, hasOnlyAllowedCategories, toNormalizedCategorySet } from '@/lib/kpiFilters';
 
 export default function Home() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
@@ -177,22 +178,22 @@ export default function Home() {
   const etnConversionTop10 = useMemo(() => {
     if (!filteredData || filteredData.length === 0) return [];
 
-    const normalize = (v: string) => v
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .toLowerCase()
-      .trim();
+    const demoCategorySet = toNormalizedCategorySet(CONVERSION_DEMO_CATEGORIES);
+    const categoriesByKey = new Map<string, string[]>();
+
+    for (const action of actions) {
+      const oppId = String(action['Oportunidade ID'] || action['ID Oportunidade'] || '').trim();
+      const etn = String(action['Usuario'] || action['Responsavel'] || action['Usuário Ação'] || '').trim();
+      const categoria = String(action['Categoria'] || '').trim();
+      if (!oppId || !etn || !categoria) continue;
+      const key = `${etn}||${oppId}`;
+      if (!categoriesByKey.has(key)) categoriesByKey.set(key, []);
+      categoriesByKey.get(key)!.push(categoria);
+    }
 
     const demoKeys = new Set<string>();
-    for (const a of actions) {
-      const categoria = normalize((a['Categoria'] || '').toString());
-      const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
-      if (!isDemo) continue;
-
-      const oppId = (a['Oportunidade ID'] || '').toString().trim();
-      const etn = (a['Usuario'] || a['Responsavel'] || a['Usuário Ação'] || '').toString().trim();
-      if (!oppId || !etn) continue;
-      demoKeys.add(`${etn}||${oppId}`);
+    for (const [key, categories] of Array.from(categoriesByKey.entries())) {
+      if (hasOnlyAllowedCategories(categories, demoCategorySet)) demoKeys.add(key);
     }
 
     const etnMap = new Map<string, { total: number; ganhas: number; perdidas: number; ganhasValor: number; perdidasValor: number }>();
@@ -383,6 +384,19 @@ export default function Home() {
   // KPIs filtrados - ITEM 10: usar valorUnificado
   const filteredKPIs = useMemo(() => {
     if (!kpis) return null;
+
+    const kpiBaseCategorySet = toNormalizedCategorySet(KPI_BASE_CATEGORIES);
+    const conversionDemoCategorySet = toNormalizedCategorySet(CONVERSION_DEMO_CATEGORIES);
+    const categoriesByOppId = new Map<string, string[]>();
+
+    for (const action of actions) {
+      const oppId = String(action['Oportunidade ID'] || action['ID Oportunidade'] || '').trim();
+      const categoria = String(action['Categoria'] || '').trim();
+      if (!oppId || !categoria) continue;
+      if (!categoriesByOppId.has(oppId)) categoriesByOppId.set(oppId, []);
+      categoriesByOppId.get(oppId)!.push(categoria);
+    }
+
     const seenOps = new Set<string>();
     const seenGanhas = new Set<string>();
     const seenPerdidas = new Set<string>();
@@ -390,26 +404,40 @@ export default function Home() {
     let totalForecast = 0;
     let ganhasValor = 0;
     let perdidasValor = 0;
+    let conversionGanhas = 0;
+    let conversionPerdidas = 0;
 
     for (const r of filteredData) {
       if (!seenOps.has(r.oppId)) {
         seenOps.add(r.oppId);
-        if (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR') {
+
+        const categories = categoriesByOppId.get(r.oppId) || [];
+        const hasBaseCategory = hasAnyValidCategory(categories, kpiBaseCategorySet);
+        const hasDemoCategory = hasOnlyAllowedCategories(categories, conversionDemoCategorySet);
+
+        if (hasBaseCategory && (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR')) {
           seenGanhas.add(r.oppId);
           ganhasValor += (r.valorUnificado ?? r.valorFechadoReconhecido ?? r.valorFechado);
         }
-        if (r.etapa === 'Fechada e Perdida') {
+        if (hasBaseCategory && r.etapa === 'Fechada e Perdida') {
           seenPerdidas.add(r.oppId);
           perdidasValor += (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto);
         }
+
+        if (hasDemoCategory && (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR')) conversionGanhas++;
+        if (hasDemoCategory && r.etapa === 'Fechada e Perdida') conversionPerdidas++;
       }
+
       totalAgendas += r.agenda;
       if (r.probNum >= 75 && r.etapa !== 'Fechada e Ganha' && r.etapa !== 'Fechada e Ganha TR' && r.etapa !== 'Fechada e Perdida') {
         totalForecast += (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto);
       }
     }
 
-    const winRate = seenGanhas.size + seenPerdidas.size > 0 ? ((seenGanhas.size / (seenGanhas.size + seenPerdidas.size)) * 100).toFixed(1) : '0';
+    const winRate = conversionGanhas + conversionPerdidas > 0
+      ? ((conversionGanhas / (conversionGanhas + conversionPerdidas)) * 100).toFixed(1)
+      : '0';
+
     return {
       totalOps: seenOps.size,
       ganhas: seenGanhas.size,
@@ -420,7 +448,7 @@ export default function Home() {
       ganhasValor,
       perdidasValor,
     };
-  }, [kpis, filteredData]);
+  }, [kpis, filteredData, actions]);
 
   const handleChartClick = useCallback((field: string, value: string) => {
     setChartFilter({ field, value });

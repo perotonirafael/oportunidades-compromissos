@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useCallback } from 'react';
+import { CONVERSION_DEMO_CATEGORIES, hasOnlyAllowedCategories, toNormalizedCategorySet } from '@/lib/kpiFilters';
 
 export interface Opportunity { [key: string]: any; }
 export interface Action { [key: string]: any; }
@@ -423,21 +424,23 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
   const etnConversionTop10 = useMemo(() => {
     if (!combinedData?.records) return [];
     const records = combinedData.records;
+    const demoCategorySet = toNormalizedCategorySet(CONVERSION_DEMO_CATEGORIES);
     const etnMap = new Map<string, { total: number; ganhas: number; perdidas: number }>();
     const seen = new Set<string>();
     
     for (const r of records) {
       if (seen.has(r.oppId)) continue;
-      // Filtrar apenas oportunidades com Demonstração Presencial/Remota (normalizado sem acentos)
-      const catNorm = (r.categoriaCompromisso || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      const hasDemo = catNorm.includes('demonstracao presencial') || catNorm.includes('demonstracao remota');
-      if (!hasDemo) continue;
+      if (!hasOnlyAllowedCategories([r.categoriaCompromisso || ''], demoCategorySet)) continue;
       
       seen.add(r.oppId);
       const e = etnMap.get(r.etn) || { total: 0, ganhas: 0, perdidas: 0 };
+      const isGanha = r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR';
+      const isPerdida = r.etapa === 'Fechada e Perdida';
+      if (!isGanha && !isPerdida) continue;
+
       e.total++;
-      if (r.etapa === 'Fechada e Ganha') e.ganhas++;
-      if (r.etapa === 'Fechada e Perdida') e.perdidas++;
+      if (isGanha) e.ganhas++;
+      if (isPerdida) e.perdidas++;
       etnMap.set(r.etn, e);
     }
     
@@ -448,7 +451,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
         total: d.total,
         ganhas: d.ganhas,
         perdidas: d.perdidas,
-        taxaConversao: d.total > 0 ? (d.ganhas / d.total) * 100 : 0,
+        taxaConversao: d.ganhas + d.perdidas > 0 ? (d.ganhas / (d.ganhas + d.perdidas)) * 100 : 0,
       }))
       .sort((a, b) => b.taxaConversao - a.taxaConversao)
       .slice(0, 10);
