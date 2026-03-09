@@ -175,7 +175,7 @@ export default function Home() {
 
   // Taxa de Conversão (Top 5 ETNs) com vínculo por Oportunidade ID entre planilhas
   // Considera apenas categorias: Demonstracao Remota e Demonstracao Presencial
-  const etnConversionTop10 = useMemo(() => {
+  const etnConversionAll = useMemo(() => {
     if (!filteredData || filteredData.length === 0) return [];
 
     const normalize = (v: string) => v
@@ -228,10 +228,19 @@ export default function Home() {
         perdidasValor: d.perdidasValor,
         taxaConversao: d.total > 0 ? Math.round((d.ganhas / d.total) * 100) : 0,
       }))
-      .sort((a, b) => b.taxaConversao - a.taxaConversao || b.total - a.total)
-      .slice(0, 5);
+      .sort((a, b) => b.taxaConversao - a.taxaConversao || b.total - a.total);
   }, [filteredData, actions]);
 
+
+
+  const etnConversionTop10 = useMemo(() => etnConversionAll.slice(0, 5), [etnConversionAll]);
+
+  const conversionKPIWinRate = useMemo(() => {
+    const totalGanhas = etnConversionAll.reduce((sum, item) => sum + item.ganhas, 0);
+    const totalPerdidas = etnConversionAll.reduce((sum, item) => sum + item.perdidas, 0);
+    const total = totalGanhas + totalPerdidas;
+    return total > 0 ? ((totalGanhas / total) * 100).toFixed(1) : '0';
+  }, [etnConversionAll]);
   // Ajuste 2: Recursos X Agendas recalculado a partir de filteredData
   const etnRecursosAgendas = useMemo(() => {
     if (!filteredData || filteredData.length === 0) return [];
@@ -727,7 +736,7 @@ export default function Home() {
                 icon={<XCircle size={20} />}
                 color="red"
               />
-              <KPICard title="TAXA DE CONVERSÃO" value={`${filteredKPIs?.winRate ?? '0'}%`} subtitle="(Ganhas / (Ganhas + Perdidas)) por Oportunidade ID" icon={<TrendingUp size={20} />} color="amber" />
+              <KPICard title="TAXA DE CONVERSÃO" value={`${conversionKPIWinRate}%`} subtitle="(Ganhas / (Ganhas + Perdidas)) por Oportunidade ID" icon={<TrendingUp size={20} />} color="amber" />
               <KPICard
                 title="FORECAST (≥75%)"
                 value={`R$ ${((filteredKPIs?.totalForecast ?? 0) / 1e6).toFixed(1)}M`}
