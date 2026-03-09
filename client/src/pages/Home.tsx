@@ -7,6 +7,11 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import { useDataProcessor, type Opportunity, type Action, type ProcessedRecord, type MissingAgendaRecord } from '@/hooks/useDataProcessor';
 import { useFileProcessor } from '@/hooks/useFileProcessor';
 import { useWorkerDataProcessor } from '@/hooks/useWorkerDataProcessor';
+import { useGoalProcessor } from '@/hooks/useGoalProcessor';
+import { useGoalMetricsProcessor } from '@/hooks/useGoalMetricsProcessor';
+import type { GoalRecord, PedidoRecord } from '@/types/goals';
+import { PeriodSelector } from '@/components/PeriodSelector';
+import { GoalChart } from '@/components/GoalChart';
 import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
 import { KPICard } from '@/components/KPICard';
 import { AnalyticsTable } from '@/components/AnalyticsTable';
@@ -26,9 +31,17 @@ export default function Home() {
   const [actFile, setActFile] = useState<File | null>(null);
   const [oppFileName, setOppFileName] = useState('');
   const [actFileName, setActFileName] = useState('');
+  const [goalFile, setGoalFile] = useState<File | null>(null);
+  const [pedidoFile, setPedidoFile] = useState<File | null>(null);
+  const [goalFileName, setGoalFileName] = useState('');
+  const [pedidoFileName, setPedidoFileName] = useState('');
+  const [goals, setGoals] = useState<GoalRecord[]>([]);
+  const [pedidos, setPedidos] = useState<PedidoRecord[]>([]);
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('Março'); // Período padrão
 
   const { state: processingState, processFiles: processFilesLegacy, resetState } = useFileProcessor();
   const { processData: processDataWithWorker, processFiles: processFilesWithWorker, isProcessing: isWorkerProcessing, progress: workerProgress } = useWorkerDataProcessor();
+  const { parseGoalsFile, parsePedidosFile } = useGoalProcessor();
   const [workerResult, setWorkerResult] = useState<any>(null);
   const [useWorkerOnly, setUseWorkerOnly] = useState(false);
   const [lightOpportunities, setLightOpportunities] = useState<Opportunity[]>([]);
@@ -133,6 +146,7 @@ export default function Home() {
   const result = workerResult || normalResult;
 
   const processedData = result?.records ?? [];
+  const goalMetricas = useGoalMetricsProcessor(goals, pedidos, processedData, selectedPeriod);
   const missingAgendas = result?.missingAgendas ?? [];
   const kpis = result?.kpis ?? null;
   const motivosPerdaBrutos = result?.motivosPerda ?? [];
@@ -526,6 +540,35 @@ export default function Home() {
     }
   };
 
+  const handleGoalFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setGoalFile(file);
+      setGoalFileName(file.name);
+    }
+  };
+
+  const handlePedidoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPedidoFile(file);
+      setPedidoFileName(file.name);
+    }
+  };
+
+  const handleLoadGoals = useCallback(async () => {
+    if (!goalFile || !pedidoFile) return;
+    setError(null);
+    try {
+      const goalsData = await parseGoalsFile(goalFile);
+      const pedidosData = await parsePedidosFile(pedidoFile);
+      setGoals(goalsData);
+      setPedidos(pedidosData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao processar metas e pedidos');
+    }
+  }, [goalFile, pedidoFile, parseGoalsFile, parsePedidosFile]);
+
   const handleLoadCache = useCallback(async () => {
     setIsLoadingCache(true);
     setError(null);
@@ -626,7 +669,7 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="bg-white rounded-xl p-6 border-2 border-green-200 hover:border-green-400 transition-all hover:shadow-lg hover:shadow-green-100">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="p-2.5 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 shadow-md shadow-green-200">
@@ -674,6 +717,54 @@ export default function Home() {
                   </span>
                 </label>
               </div>
+
+              <div className="bg-white rounded-xl p-6 border-2 border-purple-200 hover:border-purple-400 transition-all hover:shadow-lg hover:shadow-purple-100">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2.5 rounded-lg bg-gradient-to-br from-purple-500 to-violet-600 shadow-md shadow-purple-200">
+                    <Target className="text-white" size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-purple-800">Metas</h3>
+                    <p className="text-xs text-purple-600/70">Base 3 - Metas por ETN</p>
+                  </div>
+                </div>
+                <label className="block">
+                  <input type="file" accept=".xlsx,.xls" onChange={handleGoalFile} className="hidden" />
+                  <span className="block w-full py-3 text-center text-sm font-medium rounded-lg border-2 border-dashed border-purple-300 hover:border-purple-500 hover:bg-purple-50 transition-all cursor-pointer">
+                    {goalFileName ? (
+                      <span className="text-purple-700 flex items-center justify-center gap-1.5">
+                        <FileText size={14} /> {goalFileName}
+                      </span>
+                    ) : (
+                      <span className="text-purple-500">Selecionar arquivo</span>
+                    )}
+                  </span>
+                </label>
+              </div>
+
+              <div className="bg-white rounded-xl p-6 border-2 border-orange-200 hover:border-orange-400 transition-all hover:shadow-lg hover:shadow-orange-100">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2.5 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 shadow-md shadow-orange-200">
+                    <DollarSign className="text-white" size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-orange-800">Pedidos</h3>
+                    <p className="text-xs text-orange-600/70">Base 4 - Pedidos CRM</p>
+                  </div>
+                </div>
+                <label className="block">
+                  <input type="file" accept=".csv" onChange={handlePedidoFile} className="hidden" />
+                  <span className="block w-full py-3 text-center text-sm font-medium rounded-lg border-2 border-dashed border-orange-300 hover:border-orange-500 hover:bg-orange-50 transition-all cursor-pointer">
+                    {pedidoFileName ? (
+                      <span className="text-orange-700 flex items-center justify-center gap-1.5">
+                        <FileText size={14} /> {pedidoFileName}
+                      </span>
+                    ) : (
+                      <span className="text-orange-500">Selecionar arquivo</span>
+                    )}
+                  </span>
+                </label>
+              </div>
             </div>
 
             <div className="flex justify-center gap-4">
@@ -687,6 +778,13 @@ export default function Home() {
                 ) : (
                   <><Upload size={18} /> Carregar e Analisar</>
                 )}
+              </button>
+              <button
+                onClick={handleLoadGoals}
+                disabled={!goalFile || !pedidoFile}
+                className="flex items-center gap-2 px-8 py-3 text-sm font-bold rounded-xl bg-gradient-to-r from-purple-500 to-violet-600 text-white shadow-lg shadow-purple-200 hover:shadow-xl hover:shadow-purple-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:scale-[1.02]"
+              >
+                <Target size={18} /> Carregar Metas
               </button>
               <button
                 onClick={handleLoadDemo}
@@ -807,6 +905,19 @@ export default function Home() {
               </button>
             </div>
 
+            {/* Seletor de Período para Metas */}
+            {goals.length > 0 && pedidos.length > 0 && (
+              <div className="bg-gradient-to-r from-purple-50 to-violet-50 rounded-xl p-5 border border-purple-200 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-purple-900 mb-1">Acompanhamento de Metas</h3>
+                    <p className="text-xs text-purple-700">Selecione o período para visualizar o atingimento das metas</p>
+                  </div>
+                  <PeriodSelector selectedPeriod={selectedPeriod} onPeriodChange={setSelectedPeriod} />
+                </div>
+              </div>
+            )}
+
             {/* Filtros - ITEM 3: Removido filtro Origem, ITEM 6: Adicionado filtro Produto */}
             <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
               <h3 className="text-sm font-bold text-foreground mb-4">Filtros</h3>
@@ -848,6 +959,13 @@ export default function Home() {
               onChartClick={handleChartClick}
               onETNClick={setSelectedETNDetail}
             />
+
+            {/* Gráfico de Metas */}
+            {goalMetricas.length > 0 && (
+              <div className="mt-10 bg-white rounded-xl p-6 border border-border shadow-sm">
+                <GoalChart metricas={goalMetricas} title={`Atingimento de Metas - ${selectedPeriod}`} />
+              </div>
+            )}
 
             {/* Table */}
             <div className="mt-6">
