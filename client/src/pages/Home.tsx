@@ -16,6 +16,7 @@ import { ETNDetailModal } from '@/components/ETNDetailModal';
 import { ETNComparativeAnalysis } from '@/components/ETNComparativeAnalysis';
 import { DEMO_DATA } from '@/lib/demoData';
 import { saveToCache, loadFromCache, clearCache, getCacheInfo } from '@/hooks/useDataCache';
+import { buildEligibleCommitmentIndex, isLostStage, isWonStage, summarizeClosedEligible } from '@/lib/conversionRules';
 
 export default function Home() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
@@ -173,27 +174,11 @@ export default function Home() {
     });
   }, [processedData, selYears, selMonths, selReps, selResp, selETN, selStages, selProbs, selAgenda, selAccounts, selTypes, selSubtipos]);
 
-  // Ajuste 2+3: Taxa de Conversão (somente Demonstração Presencial/Remota)
+  const eligibleCommitmentIndex = useMemo(() => buildEligibleCommitmentIndex(actions), [actions]);
+
+  // Taxa de Conversão por ETN (base elegível por Oportunidade ID + categoria de compromisso)
   const etnConversionTop10 = useMemo(() => {
     if (!filteredData || filteredData.length === 0) return [];
-
-    const normalize = (v: string) => v
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .toLowerCase()
-      .trim();
-
-    const demoKeys = new Set<string>();
-    for (const a of actions) {
-      const categoria = normalize((a['Categoria'] || '').toString());
-      const isDemo = categoria.includes('demonstracao') && (categoria.includes('presencial') || categoria.includes('remota'));
-      if (!isDemo) continue;
-
-      const oppId = (a['Oportunidade ID'] || a['ID Oportunidade'] || '').toString().trim();
-      const etn = (a['Usuario'] || a['Usuário'] || a['Responsavel'] || a['Usuário Ação'] || a['Usuario Acao'] || '').toString().trim();
-      if (!oppId || !etn) continue;
-      demoKeys.add(`${etn}||${oppId}`);
-    }
 
     const etnMap = new Map<string, { total: number; ganhas: number; perdidas: number; ganhasValor: number; perdidasValor: number }>();
     const seen = new Set<string>();
@@ -202,11 +187,11 @@ export default function Home() {
       if (r.etn === 'Sem Agenda') continue;
 
       const key = `${r.etn}||${r.oppId}`;
-      if (!demoKeys.has(key) || seen.has(key)) continue;
+      if (!eligibleCommitmentIndex.eligibleKeysByEtnOpp.has(key) || seen.has(key)) continue;
       seen.add(key);
 
-      const isGanha = r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR';
-      const isPerdida = r.etapa === 'Fechada e Perdida';
+      const isGanha = isWonStage(r.etapa);
+      const isPerdida = isLostStage(r.etapa);
       if (!isGanha && !isPerdida) continue;
 
       const e = etnMap.get(r.etn) || { total: 0, ganhas: 0, perdidas: 0, ganhasValor: 0, perdidasValor: 0 };
@@ -231,7 +216,7 @@ export default function Home() {
       }))
       .sort((a, b) => b.taxaConversao - a.taxaConversao || b.total - a.total)
       .slice(0, 10);
-  }, [filteredData, actions]);
+  }, [filteredData, eligibleCommitmentIndex]);
 
   // Ajuste 2: Recursos X Agendas recalculado a partir de filteredData
   const etnRecursosAgendas = useMemo(() => {
@@ -380,47 +365,37 @@ export default function Home() {
       .slice(0, 10);
   }, [filteredData]);
 
-  // KPIs filtrados - ITEM 10: usar valorUnificado
+  // KPIs filtrados com base elegível de compromissos (por Oportunidade ID única)
   const filteredKPIs = useMemo(() => {
     if (!kpis) return null;
+
     const seenOps = new Set<string>();
-    const seenGanhas = new Set<string>();
-    const seenPerdidas = new Set<string>();
     let totalAgendas = 0;
     let totalForecast = 0;
-    let ganhasValor = 0;
-    let perdidasValor = 0;
 
     for (const r of filteredData) {
       if (!seenOps.has(r.oppId)) {
         seenOps.add(r.oppId);
-        if (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR') {
-          seenGanhas.add(r.oppId);
-          ganhasValor += (r.valorUnificado ?? r.valorFechadoReconhecido ?? r.valorFechado);
-        }
-        if (r.etapa === 'Fechada e Perdida') {
-          seenPerdidas.add(r.oppId);
-          perdidasValor += (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto);
-        }
       }
       totalAgendas += r.agenda;
-      if (r.probNum >= 75 && r.etapa !== 'Fechada e Ganha' && r.etapa !== 'Fechada e Ganha TR' && r.etapa !== 'Fechada e Perdida') {
+      if (r.probNum >= 75 && !isWonStage(r.etapa) && !isLostStage(r.etapa)) {
         totalForecast += (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto);
       }
     }
 
-    const winRate = seenGanhas.size + seenPerdidas.size > 0 ? ((seenGanhas.size / (seenGanhas.size + seenPerdidas.size)) * 100).toFixed(1) : '0';
+    const closedSummary = summarizeClosedEligible(filteredData, eligibleCommitmentIndex.eligibleOppIds);
+
     return {
       totalOps: seenOps.size,
-      ganhas: seenGanhas.size,
-      perdidas: seenPerdidas.size,
-      winRate,
+      ganhas: closedSummary.ganhas,
+      perdidas: closedSummary.perdidas,
+      winRate: closedSummary.winRate,
       totalAgendas,
       totalForecast,
-      ganhasValor,
-      perdidasValor,
+      ganhasValor: closedSummary.ganhasValor,
+      perdidasValor: closedSummary.perdidasValor,
     };
-  }, [kpis, filteredData]);
+  }, [kpis, filteredData, eligibleCommitmentIndex]);
 
   const handleChartClick = useCallback((field: string, value: string) => {
     setChartFilter({ field, value });
