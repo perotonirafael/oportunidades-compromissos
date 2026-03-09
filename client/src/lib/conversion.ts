@@ -27,6 +27,17 @@ const normalize = (v: string) =>
     .toLowerCase()
     .trim();
 
+
+const CONVERSION_CATEGORIAS_VALIDAS = new Set([
+  'analise de aderencia',
+  'analise de rfp/rfi',
+  'analise de rfp / rfi',
+  'demonstracao presencial',
+  'demonstracao remota',
+  'edital',
+  'termo de referencia',
+]);
+
 export function buildDemoConversionByETN(
   records: ConversionRecord[],
   actions: Array<Record<string, any>>,
@@ -88,8 +99,7 @@ export function buildDemoOppIdSet(actions: Array<Record<string, any>>): Set<stri
 
   for (const action of actions || []) {
     const categoria = normalize((action['Categoria'] || '').toString());
-    const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
-    if (!isDemo) continue;
+    if (!CONVERSION_CATEGORIAS_VALIDAS.has(categoria)) continue;
 
     const oppId = (action['Oportunidade ID'] || '').toString().trim();
     if (!oppId) continue;
