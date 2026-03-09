@@ -202,11 +202,12 @@ export default function Home() {
       if (r.etn === 'Sem Agenda') continue;
 
       if (!demoOppIds.has(r.oppId) || seen.has(r.oppId)) continue;
-      seen.add(r.oppId);
 
       const isGanha = r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR';
       const isPerdida = r.etapa === 'Fechada e Perdida';
       if (!isGanha && !isPerdida) continue;
+
+      seen.add(r.oppId);
 
       const e = etnMap.get(r.etn) || { total: 0, ganhas: 0, perdidas: 0, ganhasValor: 0, perdidasValor: 0 };
       e.total++;
