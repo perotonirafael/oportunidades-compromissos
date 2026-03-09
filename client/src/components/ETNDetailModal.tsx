@@ -473,7 +473,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
             <div onClick={() => handleKPIClick('perdidas')} className={`cursor-pointer transition-all ${activeKPIFilter === 'perdidas' ? 'ring-2 ring-red-500 rounded-xl' : ''}`}>
               <KPICard title="Fechada e Perdida" value={kpis.perdidas.toString()} subtitle={formatCurrency(kpis.perdidasValor)} icon={<XCircle size={18} />} color="red" />
             </div>
-            <KPICard title="Taxa de Conversão" value={`${kpis.winRate}%`} icon={<TrendingUp size={18} />} color="amber" />
+            <KPICard title="Taxa de Conversão" value={`${kpis.winRate}%`} subtitle="Demo (Remota/Presencial) vinculada por Oportunidade ID" icon={<TrendingUp size={18} />} color="amber" />
             <KPICard title="Total de Agendas" value={kpis.totalAgendas.toString()} icon={<Calendar size={18} />} color="purple" />
 
           </div>

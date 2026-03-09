@@ -418,8 +418,13 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
           return (
             <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
               <h3 className="text-sm font-bold text-foreground mb-1">Top 5 Taxa de Conversão por ETN</h3>
-              <p className="text-xs text-muted-foreground mb-4">Fechada e Ganha vs Fechada e Perdida usando compromissos de Demonstracao Remota/Presencial — respeitando filtros aplicados</p>
-              
+              <p className="text-xs text-muted-foreground mb-2">Fechada e Ganha vs Fechada e Perdida usando compromissos de Demonstracao Remota/Presencial — respeitando filtros aplicados</p>
+              <ul className="text-[10px] text-muted-foreground list-disc pl-4 mb-4 space-y-0.5">
+                <li>Ligação entre planilhas: compromisso <strong>Oportunidade ID</strong> = oportunidade <strong>Oportunidade ID</strong>.</li>
+                <li>Numerador: oportunidades fechadas em <strong>Fechada e Ganha</strong> (inclui TR) com demonstração.</li>
+                <li>Denominador: <strong>Ganhas + Perdidas</strong> com demonstração, por ETN.</li>
+              </ul>
+
               {/* Resumo geral */}
               <div className="grid grid-cols-3 gap-3 mb-5">
                 <div className="bg-emerald-50 rounded-lg p-3 text-center border border-emerald-100">
