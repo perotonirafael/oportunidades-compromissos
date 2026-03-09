@@ -32,19 +32,7 @@ export function buildDemoConversionByETN(
   actions: Array<Record<string, any>>,
   options?: { year?: string; month?: string },
 ): Map<string, ConversionSummary> {
-  const demoKeys = new Set<string>();
-
-  for (const action of actions || []) {
-    const categoria = normalize((action['Categoria'] || '').toString());
-    const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
-    if (!isDemo) continue;
-
-    const oppId = (action['Oportunidade ID'] || '').toString().trim();
-    const etn = (action['Usuario'] || action['Responsavel'] || action['Usuário Ação'] || '').toString().trim();
-    if (!oppId || !etn) continue;
-    demoKeys.add(`${etn}||${oppId}`);
-  }
-
+  const demoOppIds = buildDemoOppIdSet(actions);
   const seen = new Set<string>();
   const summary = new Map<string, ConversionSummary>();
 
@@ -52,10 +40,11 @@ export function buildDemoConversionByETN(
     if (!record.etn || record.etn === 'Sem Agenda') continue;
     if (options?.year && record.anoPrevisao !== options.year) continue;
     if (options?.month && record.mesPrevisao !== options.month) continue;
+    if (!demoOppIds.has(record.oppId)) continue;
 
-    const key = `${record.etn}||${record.oppId}`;
-    if (!demoKeys.has(key) || seen.has(key)) continue;
-    seen.add(key);
+    const dedupeKey = `${record.etn}||${record.oppId}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
 
     const isGanha = record.etapa === 'Fechada e Ganha' || record.etapa === 'Fechada e Ganha TR';
     const isPerdida = record.etapa === 'Fechada e Perdida';

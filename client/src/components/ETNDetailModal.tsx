@@ -2,7 +2,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { X, TrendingUp, Award, Target, Calendar, Trophy, XCircle, DollarSign, Search, Filter, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, Cell, PieChart, Pie } from 'recharts';
 import { KPICard } from './KPICard';
-import { buildDemoOppIdSet } from '@/lib/conversion';
+import { buildDemoConversionByETN } from '@/lib/conversion';
 
 interface ProcessedRecord {
   oppId: string;
@@ -144,9 +144,12 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
       if (!oppMap.has(r.oppId)) oppMap.set(r.oppId, r);
     }
 
-    const demoOppIds = buildDemoOppIdSet(actions);
+    const conversionMap = buildDemoConversionByETN(etnDataFiltered, actions, {
+      year: filterAno || undefined,
+      month: filterMes || undefined,
+    });
 
-    const conversion = {
+    const conversion = conversionMap.get(etn) || {
       total: 0,
       ganhas: 0,
       perdidas: 0,
@@ -156,24 +159,6 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
     };
 
     const uniqueOps = Array.from(oppMap.values());
-    for (const r of uniqueOps) {
-      if (!demoOppIds.has(r.oppId)) continue;
-      const isGanha = r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR';
-      const isPerdida = r.etapa === 'Fechada e Perdida';
-      if (!isGanha && !isPerdida) continue;
-
-      conversion.total += 1;
-      if (isGanha) {
-        conversion.ganhas += 1;
-        conversion.ganhasValor += (r.valorUnificado ?? r.valorFechadoReconhecido ?? r.valorFechado);
-      }
-      if (isPerdida) {
-        conversion.perdidas += 1;
-        conversion.perdidasValor += (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto);
-      }
-    }
-
-    conversion.taxaConversao = conversion.total > 0 ? Math.round((conversion.ganhas / conversion.total) * 100) : 0;
     const totalOps = uniqueOps.length;
     const valorTotal = uniqueOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorReconhecido ?? r.valorPrevisto), 0);
     const valorMedio = totalOps > 0 ? valorTotal / totalOps : 0;
