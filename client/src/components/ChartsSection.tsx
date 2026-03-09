@@ -133,6 +133,32 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
       });
   }, [data]);
 
+  const conversionSummary = useMemo(() => {
+    const seen = new Set<string>();
+    let ganhas = 0;
+    let perdidas = 0;
+
+    for (const r of data) {
+      if (seen.has(r.oppId)) continue;
+      seen.add(r.oppId);
+
+      if (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR') {
+        ganhas++;
+      } else if (r.etapa === 'Fechada e Perdida') {
+        perdidas++;
+      }
+    }
+
+    const total = ganhas + perdidas;
+    return {
+      ganhas,
+      perdidas,
+      total,
+      taxaGeral: total > 0 ? Number(((ganhas / total) * 100).toFixed(1)) : 0,
+      chartData: total > 0 ? [{ name: 'Conversão', ganhas, perdidas }] : [],
+    };
+  }, [data]);
+
   // Item 4: Motivos de perda COM identificação de ETNs que mais perderam
   const lossReasonsWithETN = useMemo(() => {
     const motivoETNMap = new Map<string, Map<string, { count: number; value: number }>>();
@@ -408,79 +434,56 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
           <DateRangeFooter data={data} />
         </div>
 
-        {/* Ajuste 3: TOP 10 Taxa de Conversão - Novo estilo com barras de progresso */}
-        {(() => {
-          const convData = etnConversionTop10;
-          if (convData.length === 0) return null;
-          const totalGanhas = convData.reduce((s, d) => s + d.ganhas, 0);
-          const totalPerdidas = convData.reduce((s, d) => s + d.perdidas, 0);
-          const totalAll = totalGanhas + totalPerdidas;
-          const taxaGeral = totalAll > 0 ? Math.round((totalGanhas / totalAll) * 100) : 0;
-          return (
-            <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
-              <h3 className="text-sm font-bold text-foreground mb-1">Taxa de Conversão por ETN</h3>
-              <p className="text-xs text-muted-foreground mb-4">Fechada e Ganha vs Fechada e Perdida (% aproveitamento) — respeitando filtros aplicados</p>
-              
-              {/* Resumo geral */}
-              <div className="grid grid-cols-3 gap-3 mb-5">
-                <div className="bg-emerald-50 rounded-lg p-3 text-center border border-emerald-100">
-                  <p className="text-lg font-bold text-emerald-700">{taxaGeral}%</p>
-                  <p className="text-[10px] text-emerald-600 font-medium">Taxa Geral</p>
-                </div>
-                <div className="bg-green-50 rounded-lg p-3 text-center border border-green-100">
-                  <p className="text-lg font-bold text-green-700">{totalGanhas}</p>
-                  <p className="text-[10px] text-green-600 font-medium">Ganhas</p>
-                </div>
-                <div className="bg-red-50 rounded-lg p-3 text-center border border-red-100">
-                  <p className="text-lg font-bold text-red-600">{totalPerdidas}</p>
-                  <p className="text-[10px] text-red-500 font-medium">Perdidas</p>
-                </div>
-              </div>
+        <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
+          <h3 className="text-sm font-bold text-foreground mb-1">Taxa de Conversão</h3>
+          <p className="text-xs text-muted-foreground mb-4">Fechada e Ganha vs Fechada e Perdida (base de oportunidades fechadas)</p>
 
-              {/* Lista de ETNs com barras de progresso */}
-              <div className="space-y-3">
-                {convData.map((d, i) => (
-                  <div key={d.fullName} className="group">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-gray-700 truncate max-w-[200px]" title={d.fullName}>
-                        {i + 1}. {d.fullName}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-green-600 font-medium">{d.ganhas}G</span>
-                        <span className="text-[10px] text-red-500 font-medium">{d.perdidas}P</span>
-                        <span className="text-xs font-bold text-gray-800 min-w-[36px] text-right">{d.taxaConversao}%</span>
-                      </div>
-                    </div>
-                    <div className="w-full h-5 bg-gray-100 rounded-full overflow-hidden flex">
-                      <div
-                        className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 flex items-center justify-center transition-all duration-500"
-                        style={{ width: `${d.taxaConversao}%`, minWidth: d.ganhas > 0 ? '8px' : '0' }}
-                      >
-                        {d.taxaConversao >= 15 && (
-                          <span className="text-[9px] font-bold text-white">{d.ganhas}</span>
-                        )}
-                      </div>
-                      <div
-                        className="h-full bg-gradient-to-r from-red-400 to-red-500 flex items-center justify-center transition-all duration-500"
-                        style={{ width: `${100 - d.taxaConversao}%`, minWidth: d.perdidas > 0 ? '8px' : '0' }}
-                      >
-                        {(100 - d.taxaConversao) >= 15 && (
-                          <span className="text-[9px] font-bold text-white">{d.perdidas}</span>
-                        )}
-                      </div>
-                    </div>
-                    {/* Tooltip com valores */}
-                    <div className="flex items-center justify-between mt-0.5">
-                      <span className="text-[9px] text-gray-400">{formatCurrency(d.ganhasValor)} ganhas</span>
-                      <span className="text-[9px] text-gray-400">{formatCurrency(d.perdidasValor)} perdidas</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <DateRangeFooter data={data} />
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            <div className="bg-emerald-50 rounded-lg p-3 text-center border border-emerald-100">
+              <p className="text-lg font-bold text-emerald-700">{conversionSummary.taxaGeral}%</p>
+              <p className="text-[10px] text-emerald-600 font-medium">Taxa Geral</p>
             </div>
-          );
-        })()}
+            <div className="bg-green-50 rounded-lg p-3 text-center border border-green-100">
+              <p className="text-lg font-bold text-green-700">{conversionSummary.ganhas}</p>
+              <p className="text-[10px] text-green-600 font-medium">Ganhas</p>
+            </div>
+            <div className="bg-red-50 rounded-lg p-3 text-center border border-red-100">
+              <p className="text-lg font-bold text-red-600">{conversionSummary.perdidas}</p>
+              <p className="text-[10px] text-red-500 font-medium">Perdidas</p>
+            </div>
+          </div>
+
+          {conversionSummary.total > 0 ? (
+            <div style={{ height: 220 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={conversionSummary.chartData} layout="vertical" margin={{ left: 10, right: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                  <XAxis type="number" domain={[0, conversionSummary.total]} tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={{ stroke: '#e5e7eb' }} />
+                  <YAxis type="category" dataKey="name" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} />
+                  <Tooltip
+                    {...tooltipStyle}
+                    formatter={(v: number, name: string) => [v, name === 'ganhas' ? 'Fechada e Ganha' : 'Fechada e Perdida']}
+                  />
+                  <Legend
+                    wrapperStyle={{ fontSize: '11px' }}
+                    formatter={(value: string) => (value === 'ganhas' ? 'Fechada e Ganha' : 'Fechada e Perdida')}
+                  />
+                  <Bar dataKey="ganhas" stackId="conversion" fill="#10b981" radius={[4, 0, 0, 4]}>
+                    <LabelList dataKey="ganhas" position="center" fill="#ffffff" fontSize={11} fontWeight={700} />
+                  </Bar>
+                  <Bar dataKey="perdidas" stackId="conversion" fill="#ef4444" radius={[0, 4, 4, 0]}>
+                    <LabelList dataKey="perdidas" position="center" fill="#ffffff" fontSize={11} fontWeight={700} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
+              Sem oportunidades fechadas no período
+            </div>
+          )}
+          <DateRangeFooter data={data} />
+        </div>
       </div>
 
       {/* Item 6: TOP 10 Maiores Recursos X Agendas */}
