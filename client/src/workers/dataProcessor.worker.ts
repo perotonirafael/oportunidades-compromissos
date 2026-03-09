@@ -54,6 +54,14 @@ function normalizeOpportunityId(val: any): string {
   return raw.split('.')[0].trim();
 }
 
+function normalizeCategoria(val: any): string {
+  return String(val || '').trim().toLowerCase();
+}
+
+function normalizeEtapa(val: any): string {
+  return String(val || '').trim().toLowerCase();
+}
+
 function splitSubtipos(raw: string): string[] {
   return String(raw || '').split(/[;,]/).map(s => s.trim()).filter(Boolean);
 }
@@ -603,7 +611,7 @@ function processData(opportunities: any[], actions: any[]) {
   // Motivos de perda
   const motivoMap = new Map<string, number>();
   for (const r of records) {
-    if (r.etapa !== 'Fechada e Perdida') continue;
+    if (normalizeEtapa(r.etapa) !== 'fechada e perdida') continue;
     const motivo = r.motivoPerda || 'Sem motivo';
     motivoMap.set(motivo, (motivoMap.get(motivo) || 0) + r.valorUnificado);
   }
@@ -619,10 +627,8 @@ function processData(opportunities: any[], actions: any[]) {
     // Tentar vários nomes possíveis para o campo de usuário
     const user = trim(act['Usuario']) || trim(act['Responsavel']) || trim(act['Usuário']) || trim(act['Usuário Ação']) || trim(act['Usuario Acao']);
     const oppId = normalizeOpportunityId(act['Oportunidade ID']) || normalizeOpportunityId(act['ID Oportunidade']);
-    const categoria = trim(act['Categoria']) || '';
-    const categoriaNorm = normalizeStr(categoria);
-    // Verificar se contém "demonstracao" E ("presencial" OU "remota")
-    const isDemo = categoriaNorm.includes('demonstracao') && (categoriaNorm.includes('presencial') || categoriaNorm.includes('remota'));
+    const categoria = normalizeCategoria(act['Categoria']);
+    const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
     if (!user || !oppId || !isDemo) continue;
     demoOppByEtn.add(`${user}||${oppId}`);
   }
@@ -635,8 +641,9 @@ function processData(opportunities: any[], actions: any[]) {
     if (!demoOppByEtn.has(key) || etnConversionSeen.has(key)) continue;
     etnConversionSeen.add(key);
 
-    const isGanha = r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR';
-    const isPerdida = r.etapa === 'Fechada e Perdida';
+    const etapa = normalizeEtapa(r.etapa);
+    const isGanha = etapa === 'fechada e ganha';
+    const isPerdida = etapa === 'fechada e perdida';
     if (!isGanha && !isPerdida) continue;
 
     const e = etnConversionMap.get(r.etn) || { total: 0, ganhas: 0, perdidas: 0, ganhasValor: 0, perdidasValor: 0 };
@@ -661,7 +668,7 @@ function processData(opportunities: any[], actions: any[]) {
       perdidas: d.perdidas,
       ganhasValor: d.ganhasValor,
       perdidasValor: d.perdidasValor,
-      taxaConversao: d.ganhas + d.perdidas > 0 ? Math.round((d.ganhas / (d.ganhas + d.perdidas)) * 100) : 0,
+      taxaConversao: d.total > 0 ? Math.round((d.ganhas / d.total) * 100) : 0,
     }))
     .sort((a, b) => b.total - a.total || b.taxaConversao - a.taxaConversao)
     .slice(0, 10);

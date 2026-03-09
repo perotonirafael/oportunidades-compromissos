@@ -410,10 +410,16 @@ function ChartsSectionInner({ data, funnelData, motivosPerda, forecastFunnel, et
 
         {/* Ajuste 3: TOP 10 Taxa de Conversão - Novo estilo com barras de progresso */}
         {(() => {
-          const convData = etnConversionTop10;
+          const convData = etnConversionTop10
+            .map(d => {
+              const taxaConversao = Number.isFinite(d.taxaConversao)
+                ? Math.max(0, Math.min(100, d.taxaConversao))
+                : 0;
+              return { ...d, taxaConversao };
+            });
           if (convData.length === 0) return null;
-          const totalGanhas = convData.reduce((s, d) => s + d.ganhas, 0);
-          const totalPerdidas = convData.reduce((s, d) => s + d.perdidas, 0);
+          const totalGanhas = convData.reduce((s, d) => s + (Number.isFinite(d.ganhas) ? d.ganhas : 0), 0);
+          const totalPerdidas = convData.reduce((s, d) => s + (Number.isFinite(d.perdidas) ? d.perdidas : 0), 0);
           const totalAll = totalGanhas + totalPerdidas;
           const taxaGeral = totalAll > 0 ? Math.round((totalGanhas / totalAll) * 100) : 0;
           return (

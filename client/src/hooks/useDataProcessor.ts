@@ -99,6 +99,14 @@ function normalizeOpportunityId(val: any): string {
   return raw.split('.')[0].trim();
 }
 
+function normalizeCategoria(val: any): string {
+  return String(val || '').trim().toLowerCase();
+}
+
+function normalizeEtapa(val: any): string {
+  return String(val || '').trim().toLowerCase();
+}
+
 // Extrair número sequencial do ID da oportunidade (ex: "OPP001" → 1, "12345" → 12345)
 function extractSequential(oppId: string): number {
   const nums = oppId.replace(/[^0-9]/g, '');
@@ -414,7 +422,7 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
     const motivoMap = new Map<string, number>();
     
     for (const r of records) {
-      if (r.etapa !== 'Fechada e Perdida') continue;
+      if (normalizeEtapa(r.etapa) !== 'fechada e perdida') continue;
       const motivo = r.motivoPerda || 'Sem motivo';
       motivoMap.set(motivo, (motivoMap.get(motivo) || 0) + r.valorPrevisto);
     }
@@ -435,15 +443,16 @@ export function useDataProcessor(opportunities: Opportunity[], actions: Action[]
     for (const r of records) {
       if (seen.has(r.oppId)) continue;
       // Filtrar apenas oportunidades com Demonstração Presencial/Remota (normalizado sem acentos)
-      const catNorm = (r.categoriaCompromisso || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      const hasDemo = catNorm.includes('demonstracao presencial') || catNorm.includes('demonstracao remota');
+      const categoria = normalizeCategoria(r.categoriaCompromisso);
+      const hasDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
       if (!hasDemo) continue;
       
       seen.add(r.oppId);
       const e = etnMap.get(r.etn) || { total: 0, ganhas: 0, perdidas: 0 };
       e.total++;
-      if (r.etapa === 'Fechada e Ganha') e.ganhas++;
-      if (r.etapa === 'Fechada e Perdida') e.perdidas++;
+      const etapa = normalizeEtapa(r.etapa);
+      if (etapa === 'fechada e ganha') e.ganhas++;
+      if (etapa === 'fechada e perdida') e.perdidas++;
       etnMap.set(r.etn, e);
     }
     
