@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import * as XLSX from 'xlsx';
 
 export interface FileProcessingState {
   isProcessing: boolean;
@@ -172,6 +171,7 @@ export function useFileProcessor() {
         await yieldToMain();
 
         setState(prev => ({ ...prev, progress: 25 }));
+        const XLSX = await import('xlsx');
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         await yieldToMain();
 

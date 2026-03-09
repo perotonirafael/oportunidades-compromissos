@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { X, TrendingUp, Award, Target, Calendar, Trophy, XCircle, DollarSign, Search, Filter, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, Cell, PieChart, Pie } from 'recharts';
+import { BarChart, ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, Cell, PieChart, Pie } from 'recharts';
 import { KPICard } from './KPICard';
 
 interface ProcessedRecord {
@@ -73,6 +73,12 @@ function normalize(val: string): string {
     .trim();
 }
 
+function normalizeOppId(val: any): string {
+  const trimmed = trim(val);
+  if (!trimmed) return '';
+  return trimmed.replace(/\.0+$/, '').toLowerCase();
+}
+
 export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailModalProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEtapa, setFilterEtapa] = useState('');
@@ -129,14 +135,21 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
       const categoria = normalize(trim(a['Categoria']));
       const isDemo = categoria === 'demonstracao presencial' || categoria === 'demonstracao remota';
       if (!isDemo) continue;
-      const oppId = trim(a['Oportunidade ID']);
+      const oppId = normalizeOppId(a['Oportunidade ID']);
       if (oppId) demoOppIds.add(oppId);
     }
 
     const uniqueOps = Array.from(oppMap.values());
     const totalOps = uniqueOps.length;
-    const ganhasOps = uniqueOps.filter(r => demoOppIds.has(r.oppId) && (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR'));
-    const perdidasOps = uniqueOps.filter(r => demoOppIds.has(r.oppId) && r.etapa === 'Fechada e Perdida');
+    const ganhasByDemoOps = uniqueOps.filter(r => demoOppIds.has(normalizeOppId(r.oppId)) && (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR'));
+    const perdidasByDemoOps = uniqueOps.filter(r => demoOppIds.has(normalizeOppId(r.oppId)) && r.etapa === 'Fechada e Perdida');
+    const hasDemoClosures = ganhasByDemoOps.length + perdidasByDemoOps.length > 0;
+    const ganhasOps = hasDemoClosures
+      ? ganhasByDemoOps
+      : uniqueOps.filter(r => r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR');
+    const perdidasOps = hasDemoClosures
+      ? perdidasByDemoOps
+      : uniqueOps.filter(r => r.etapa === 'Fechada e Perdida');
     const ganhas = ganhasOps.length;
     const perdidas = perdidasOps.length;
     const ganhasValor = ganhasOps.reduce((sum, r) => sum + (r.valorUnificado ?? r.valorFechadoReconhecido ?? r.valorFechado), 0);
@@ -148,6 +161,41 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
 
     return { totalOps, ganhas, perdidas, ganhasValor, perdidasValor, winRate, valorTotal, valorMedio, totalAgendas };
   }, [etnDataFiltered, etnActions]);
+
+  const conversaoMensal = useMemo(() => {
+    const map = new Map<string, { ganhas: number; perdidas: number }>();
+    const seen = new Set<string>();
+
+    for (const r of etnDataFiltered) {
+      if (seen.has(r.oppId)) continue;
+      seen.add(r.oppId);
+
+      const isGanha = r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR';
+      const isPerdida = r.etapa === 'Fechada e Perdida';
+      if (!isGanha && !isPerdida) continue;
+      if (!r.anoPrevisao || !r.mesPrevisao) continue;
+
+      const key = `${r.anoPrevisao}-${r.mesPrevisao}`;
+      const entry = map.get(key) || { ganhas: 0, perdidas: 0 };
+      if (isGanha) entry.ganhas++;
+      if (isPerdida) entry.perdidas++;
+      map.set(key, entry);
+    }
+
+    return Array.from(map.entries())
+      .sort(([a], [b]) => {
+        const [aY, aM] = a.split('-');
+        const [bY, bM] = b.split('-');
+        if (aY !== bY) return aY.localeCompare(bY);
+        return MONTH_ORDER.indexOf(aM) - MONTH_ORDER.indexOf(bM);
+      })
+      .map(([key, d]) => {
+        const [year, month] = key.split('-');
+        const total = d.ganhas + d.perdidas;
+        const taxa = total > 0 ? Number(((d.ganhas / total) * 100).toFixed(1)) : 0;
+        return { name: `${month.slice(0, 3)}/${year.slice(2)}`, fullMonth: month, year, ...d, taxa };
+      });
+  }, [etnDataFiltered]);
 
   // Gráfico: Distribuição por Etapa
   const etapaDistribution = useMemo(() => {
@@ -306,6 +354,9 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
         // Mostrar oportunidades vinculadas ao mês de compromisso
         const [month, year] = chartFilter.value.split('|');
         ops = ops.filter(r => r.mesPrevisao === month && r.anoPrevisao === year);
+      } else if (chartFilter.type === 'conversaoMes') {
+        const [month, year] = chartFilter.value.split('|');
+        ops = ops.filter(r => r.mesPrevisao === month && r.anoPrevisao === year && (r.etapa === 'Fechada e Ganha' || r.etapa === 'Fechada e Ganha TR' || r.etapa === 'Fechada e Perdida'));
       } else if (chartFilter.type === 'categoria') {
         ops = ops.filter(r => r.categoriaCompromisso === chartFilter.value);
       }
@@ -623,6 +674,39 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
                 </div>
               )}
               <p className="text-[10px] text-gray-400 text-center mt-2">Valores de oportunidades Fechadas e Ganhas · Período: {dateRange}</p>
+            </div>
+
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+              <h3 className="font-semibold text-gray-800 mb-1 text-sm">Taxa de Conversão Mensal</h3>
+              <p className="text-[10px] text-gray-500 mb-3">Fechada e Ganha ÷ (Fechada e Ganha + Fechada e Perdida)</p>
+              {conversaoMensal.length > 0 ? (
+                <ResponsiveContainer width="100%" height={280}>
+                  <ComposedChart data={conversaoMensal}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#6b7280' }} allowDecimals={false} />
+                    <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tick={{ fontSize: 11, fill: '#6b7280' }} tickFormatter={(v: number) => `${v}%`} />
+                    <Tooltip
+                      contentStyle={{ background: 'rgba(255,255,255,0.97)', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '12px' }}
+                      formatter={(value: number, name: string) => {
+                        if (name === 'Taxa') return [`${value}%`, name];
+                        return [value, name];
+                      }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '11px' }} />
+                    <Bar yAxisId="left" dataKey="ganhas" fill="#10b981" name="Ganhas" radius={[4, 4, 0, 0]} cursor="pointer"
+                      onClick={(d: any) => handleChartClick('conversaoMes', `${d.fullMonth}|${d.year}`)} />
+                    <Bar yAxisId="left" dataKey="perdidas" fill="#ef4444" name="Perdidas" radius={[4, 4, 0, 0]} cursor="pointer"
+                      onClick={(d: any) => handleChartClick('conversaoMes', `${d.fullMonth}|${d.year}`)} />
+                    <Line yAxisId="right" type="monotone" dataKey="taxa" stroke="#f59e0b" name="Taxa" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-[280px] flex items-center justify-center text-sm text-gray-400">
+                  Sem oportunidades fechadas no período
+                </div>
+              )}
+              <p className="text-[10px] text-gray-400 text-center mt-2">Período: {dateRange}</p>
             </div>
           </div>
 
