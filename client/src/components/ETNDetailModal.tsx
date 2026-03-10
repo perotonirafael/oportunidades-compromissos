@@ -2,6 +2,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { X, TrendingUp, Award, Target, Calendar, Trophy, XCircle, DollarSign, Search, Filter, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, Cell, PieChart, Pie } from 'recharts';
 import { KPICard } from './KPICard';
+import type { GoalMetrics } from '@/types/goals';
 
 interface ProcessedRecord {
   oppId: string;
@@ -44,6 +45,7 @@ interface ETNDetailModalProps {
   data: ProcessedRecord[];
   actions?: Action[];
   onClose: () => void;
+  goalMetricas?: GoalMetrics[];
 }
 
 const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6'];
@@ -73,7 +75,7 @@ function normalize(val: string): string {
     .trim();
 }
 
-export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailModalProps) {
+export function ETNDetailModal({ etn, data, actions = [], onClose, goalMetricas = [] }: ETNDetailModalProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEtapa, setFilterEtapa] = useState('');
   const [filterProb, setFilterProb] = useState('');
@@ -854,6 +856,50 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
               </div>
             )}
             <p className="text-[10px] text-gray-400 text-center mt-2">Período: {dateRange}</p>
+          </div>
+
+          {/* Seção de Metas */}
+          <div className="bg-white rounded-xl border border-purple-200 overflow-hidden">
+            <div className="bg-gradient-to-r from-purple-50 to-violet-50 px-5 py-3 border-b border-purple-200">
+              <h3 className="text-sm font-bold text-purple-900 flex items-center gap-2">
+                <Target size={16} className="text-purple-600" />
+                Atingimento de Metas
+              </h3>
+            </div>
+            <div className="p-5">
+              {(() => {
+                const etnGoal = goalMetricas.find(m => m.etn === etn);
+                if (!etnGoal || (etnGoal.realLicencasServicos === 0 && etnGoal.realRecorrente === 0)) {
+                  return (
+                    <div className="h-32 flex flex-col items-center justify-center text-muted-foreground">
+                      <Target size={24} className="mb-2 opacity-50" />
+                      <p className="text-sm">Sem dados de realização de meta para este ETN</p>
+                      <p className="text-xs opacity-70 mt-1">Carregue os arquivos de Metas e Pedidos CRM</p>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                        <p className="text-xs font-medium text-blue-700">Licenças + Serviços</p>
+                        <p className="text-lg font-bold text-blue-900">R$ {etnGoal.realLicencasServicos.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+                      </div>
+                      <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
+                        <p className="text-xs font-medium text-purple-700">Recorrente</p>
+                        <p className="text-lg font-bold text-purple-900">R$ {etnGoal.realRecorrente.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+                      </div>
+                    </div>
+                    <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-200">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-medium text-emerald-700">Total Realizado</p>
+                        <p className="text-lg font-bold text-emerald-900">R$ {(etnGoal.realLicencasServicos + etnGoal.realRecorrente).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         </div>
       </div>

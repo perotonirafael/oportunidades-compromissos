@@ -2,6 +2,15 @@ import { useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { GoalRecord, PedidoRecord } from '@/types/goals';
 
+// Parse valor no formato brasileiro: 4.771,20 → 4771.20
+const parseBR = (v: string | undefined): number => {
+  if (!v || v.trim() === '') return 0;
+  // Remove pontos de milhar, troca vírgula por ponto
+  const cleaned = v.trim().replace(/\./g, '').replace(',', '.');
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? 0 : num;
+};
+
 export const useGoalProcessor = () => {
   const parseGoalsFile = useCallback(async (file: File): Promise<GoalRecord[]> => {
     return new Promise((resolve, reject) => {
@@ -89,19 +98,19 @@ export const useGoalProcessor = () => {
               produto: row['PRODUTO'] || '',
               produtoCodigoModulo: row['PRODUTO - CÓDIGO DO MÓDULO'] || '',
               produtoModulo: row['PRODUTO - MODULO'] || '',
-              produtoValorLicenca: parseFloat(row['PRODUTO - VALOR LICENCA']?.replace(',', '.') || '0') || 0,
-              produtoValorLicencaCanal: parseFloat(row['PRODUTO - VALOR LICENCA CANAL']?.replace(',', '.') || '0') || 0,
-              produtoValorManutencao: parseFloat(row['PRODUTO - VALOR MANUTENCAO']?.replace(',', '.') || '0') || 0,
-              produtoValorManutencaoCanal: parseFloat(row['PRODUTO - VALOR MANUTENCAO CANAL']?.replace(',', '.') || '0') || 0,
+              produtoValorLicenca: parseBR(row['PRODUTO - VALOR LICENCA']),
+              produtoValorLicencaCanal: parseBR(row['PRODUTO - VALOR LICENCA CANAL']),
+              produtoValorManutencao: parseBR(row['PRODUTO - VALOR MANUTENCAO']),
+              produtoValorManutencaoCanal: parseBR(row['PRODUTO - VALOR MANUTENCAO CANAL']),
               servico: row['SERVICO'] || '',
               servicoTipoDeFaturamento: row['SERVICO - TIPO DE FATURAMENTO'] || '',
-              servicoQtdeDeHoras: parseFloat(row['SERVICO - QTDE DE HORAS']?.replace(',', '.') || '0') || 0,
-              servicoValorHora: parseFloat(row['SERVICO - VALOR HORA']?.replace(',', '.') || '0') || 0,
-              servicoValorBruto: parseFloat(row['SERVICO - VALOR BRUTO']?.replace(',', '.') || '0') || 0,
-              servicoValorOver: parseFloat(row['SERVICO - VALOR OVER']?.replace(',', '.') || '0') || 0,
-              servicoValorDesconto: parseFloat(row['SERVICO - VALOR DESCONTO']?.replace(',', '.') || '0') || 0,
-              servicoValorCanal: parseFloat(row['SERVICO - VALOR CANAL']?.replace(',', '.') || '0') || 0,
-              servicoValorLiquido: parseFloat(row['SERVICO - VALOR LIQUIDO']?.replace(',', '.') || '0') || 0,
+              servicoQtdeDeHoras: parseBR(row['SERVICO - QTDE DE HORAS']),
+              servicoValorHora: parseBR(row['SERVICO - VALOR HORA']),
+              servicoValorBruto: parseBR(row['SERVICO - VALOR BRUTO']),
+              servicoValorOver: parseBR(row['SERVICO - VALOR OVER']),
+              servicoValorDesconto: parseBR(row['SERVICO - VALOR DESCONTO']),
+              servicoValorCanal: parseBR(row['SERVICO - VALOR CANAL']),
+              servicoValorLiquido: parseBR(row['SERVICO - VALOR LIQUIDO']),
             };
 
             if (pedido.idOportunidade) {

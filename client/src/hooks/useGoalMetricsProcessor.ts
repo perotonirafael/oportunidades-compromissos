@@ -2,14 +2,25 @@ import { useMemo } from 'react';
 import type { GoalRecord, PedidoRecord, GoalMetrics } from '@/types/goals';
 import type { ProcessedRecord } from './useDataProcessor';
 
+/**
+ * Processa metas e pedidos para calcular % de atingimento por ETN.
+ * 
+ * Fluxo de mapeamento:
+ * Meta (ID Usuário) → Compromisso (Id Usuário ERP) → Oportunidade (Oportunidade ID) → Pedido (ID OPORTUNIDADE)
+ * 
+ * No processedData, o campo `etn` é o nome do usuário do compromisso.
+ * A meta é global para o ID Usuário (ex: 11124 = Rafael Perotoni).
+ * A realização é calculada somando pedidos de todas as oportunidades vinculadas a esse ETN.
+ */
 export const useGoalMetricsProcessor = (
   goals: GoalRecord[],
   pedidos: PedidoRecord[],
   processedData: ProcessedRecord[],
   selectedPeriod: string
 ) => {
-  const metricas = useMemo(() => {
-    if (!goals.length || !pedidos.length || !processedData.length) return [];
+  const metricas = useMemo((): GoalMetrics[] => {
+    // Se não tem dados processados, retornar vazio
+    if (!processedData.length) return [];
 
     // Mapear período para meses
     const periodToMonths: Record<string, string[]> = {
@@ -34,77 +45,28 @@ export const useGoalMetricsProcessor = (
     const months = periodToMonths[selectedPeriod] || [];
     if (!months.length) return [];
 
-    // Passo 1: Mapear ID Oportunidade → ETN a partir dos dados processados
-    const oppIdToEtn = new Map<string, string>();
-    for (const record of processedData) {
-      oppIdToEtn.set(record.oppId, record.etn);
-    }
+    // Obter lista única de ETNs
+    const allEtns = Array.from(new Set(processedData.map(r => r.etn)));
 
-    // Passo 2: Mapear ID Oportunidade → Pedidos
-    const oppIdToPedidos = new Map<string, PedidoRecord[]>();
-    for (const pedido of pedidos) {
-      const oppId = pedido.idOportunidade.toString().trim();
-      if (!oppId) continue;
-      if (!oppIdToPedidos.has(oppId)) {
-        oppIdToPedidos.set(oppId, []);
-      }
-      oppIdToPedidos.get(oppId)!.push(pedido);
-    }
-
-    // Passo 3: Calcular receita real por ETN a partir de pedidos
-    const etnRealizacao = new Map<string, {
-      realLicencasServicos: number;
-      realRecorrente: number;
-    }>();
-
-    Array.from(oppIdToPedidos.keys()).forEach((oppId) => {
-      const etn = oppIdToEtn.get(oppId);
-      if (!etn) return; // Skip se não encontrar ETN
-
-      const oppPedidos = oppIdToPedidos.get(oppId)!;
-
-      if (!etnRealizacao.has(etn)) {
-        etnRealizacao.set(etn, {
-          realLicencasServicos: 0,
-          realRecorrente: 0,
-        });
-      }
-
-      const realization = etnRealizacao.get(etn)!;
-
-      // Somar receita de pedidos para esta oportunidade
-      for (const pedido of oppPedidos) {
-        // Licenças + Serviços Não Recorrentes
-        const licencasServicos =
-          (pedido.produtoValorLicenca || 0) +
-          (pedido.servicoValorLiquido || 0);
-
-        // Recorrente (Manutenção)
-        const recorrente = pedido.produtoValorManutencao || 0;
-
-        realization.realLicencasServicos += licencasServicos;
-        realization.realRecorrente += recorrente;
-      }
-    });
-
-    // Passo 4: Calcular metas por ETN
-    // Agrupar metas por ETN (via processedData)
-    const etnMetas = new Map<string, {
-      metaLicencasServicos: number;
-      metaRecorrente: number;
-    }>();
-
-    // Primeiro, inicializar todas as ETNs com 0
-    Array.from(new Set(processedData.map(r => r.etn))).forEach((etn) => {
-      etnMetas.set(etn, {
+    // Se não tem metas ou pedidos, retornar métricas vazias para cada ETN
+    if (!goals.length || !pedidos.length) {
+      return allEtns.map(etn => ({
+        idUsuario: '',
+        etn,
+        periodo: selectedPeriod,
         metaLicencasServicos: 0,
+        realLicencasServicos: 0,
         metaRecorrente: 0,
-      });
-    });
+        realRecorrente: 0,
+        percentualAtingimento: 0,
+      }));
+    }
 
-    // Depois, somar as metas
+    // Passo 1: Calcular meta TOTAL para o período (soma de todas as rubricas/produtos)
+    let metaTotalLicencasServicos = 0;
+    let metaTotalRecorrente = 0;
+
     for (const goal of goals) {
-      // Calcular meta para o período
       let metaValue = 0;
       for (const month of months) {
         if (month === 'Janeiro') metaValue += goal.janeiro;
@@ -121,58 +83,121 @@ export const useGoalMetricsProcessor = (
         else if (month === 'Dezembro') metaValue += goal.dezembro;
       }
 
-      // Distribuir meta para todas as ETNs (simplificado)
-      // TODO: Melhorar mapeamento quando houver campo de ID Usuário nos compromissos
       const rubrica = goal.rubrica.trim();
-      
-      Array.from(etnMetas.keys()).forEach((etn) => {
-        const meta = etnMetas.get(etn)!;
-        
-        // Adicionar meta conforme rubrica
-        if (rubrica.includes('Setup') || rubrica.includes('Serviços Não Recorrentes') || rubrica.includes('Licença')) {
-          meta.metaLicencasServicos += metaValue;
-        } else if (rubrica.includes('Recorrente') || rubrica.includes('Manutenção')) {
-          meta.metaRecorrente += metaValue;
-        }
-      });
+      if (rubrica.includes('Setup') || rubrica.includes('Licença') || rubrica.includes('Licenças')) {
+        metaTotalLicencasServicos += metaValue;
+      } else if (rubrica.includes('Serviços Não Recorrentes') || rubrica.includes('Servicos Nao Recorrentes')) {
+        metaTotalLicencasServicos += metaValue;
+      } else if (rubrica.includes('Recorrente')) {
+        metaTotalRecorrente += metaValue;
+      }
     }
 
-    // Passo 5: Combinar metas e realizações
-    const result: GoalMetrics[] = Array.from(etnMetas.keys())
-      .map((etn) => {
-        const meta = etnMetas.get(etn)!;
-        const realization = etnRealizacao.get(etn) || {
-          realLicencasServicos: 0,
-          realRecorrente: 0,
-        };
+    // Passo 2: Mapear oppId → ETN (pode ter múltiplos ETNs por opp)
+    const oppIdToEtns = new Map<string, Set<string>>();
+    for (const record of processedData) {
+      if (!oppIdToEtns.has(record.oppId)) {
+        oppIdToEtns.set(record.oppId, new Set());
+      }
+      oppIdToEtns.get(record.oppId)!.add(record.etn);
+    }
 
-        const percentualLicencas =
-          meta.metaLicencasServicos > 0
-            ? (realization.realLicencasServicos / meta.metaLicencasServicos) * 100
-            : 0;
+    // Passo 3: Indexar pedidos por oppId
+    const oppIdToPedidos = new Map<string, PedidoRecord[]>();
+    for (const pedido of pedidos) {
+      const oppId = pedido.idOportunidade.toString().trim();
+      if (!oppId) continue;
+      if (!oppIdToPedidos.has(oppId)) {
+        oppIdToPedidos.set(oppId, []);
+      }
+      oppIdToPedidos.get(oppId)!.push(pedido);
+    }
 
-        const percentualRecorrente =
-          meta.metaRecorrente > 0
-            ? (realization.realRecorrente / meta.metaRecorrente) * 100
-            : 0;
+    // Passo 4: Calcular realização por ETN
+    const etnRealizacao = new Map<string, { realLicencasServicos: number; realRecorrente: number }>();
 
-        // Aplicar pesos: 50% cada
-        const percentualAtingimento =
-          (percentualLicencas * 0.5) + (percentualRecorrente * 0.5);
+    // Inicializar todas as ETNs
+    for (const etn of allEtns) {
+      etnRealizacao.set(etn, { realLicencasServicos: 0, realRecorrente: 0 });
+    }
 
-        return {
-          idUsuario: '',
-          etn,
-          periodo: selectedPeriod,
-          metaLicencasServicos: meta.metaLicencasServicos,
-          realLicencasServicos: realization.realLicencasServicos,
-          metaRecorrente: meta.metaRecorrente,
-          realRecorrente: realization.realRecorrente,
-          percentualAtingimento: Math.round(percentualAtingimento * 100) / 100,
-        };
-      })
-      .filter((m) => m.metaLicencasServicos > 0 || m.metaRecorrente > 0) // Filtrar apenas ETNs com metas
-      .sort((a, b) => b.percentualAtingimento - a.percentualAtingimento);
+    // Somar pedidos por ETN
+    for (const [oppId, oppPedidos] of Array.from(oppIdToPedidos.entries())) {
+      const etns = oppIdToEtns.get(oppId);
+      if (!etns || etns.size === 0) continue;
+
+      // Calcular total de pedidos para esta oportunidade
+      let totalLicServicos = 0;
+      let totalRecorrente = 0;
+      for (const pedido of oppPedidos) {
+        totalLicServicos += (pedido.produtoValorLicenca || 0) + (pedido.servicoValorLiquido || 0);
+        totalRecorrente += pedido.produtoValorManutencao || 0;
+      }
+
+      // Distribuir proporcionalmente entre ETNs (se múltiplos)
+      const numEtns = etns.size;
+      for (const etn of Array.from(etns)) {
+        const real = etnRealizacao.get(etn)!;
+        real.realLicencasServicos += totalLicServicos / numEtns;
+        real.realRecorrente += totalRecorrente / numEtns;
+      }
+    }
+
+    // Passo 5: Calcular realização TOTAL (soma de todos os ETNs)
+    let realTotalLicencasServicos = 0;
+    let realTotalRecorrente = 0;
+    for (const [, real] of Array.from(etnRealizacao.entries())) {
+      realTotalLicencasServicos += real.realLicencasServicos;
+      realTotalRecorrente += real.realRecorrente;
+    }
+
+    // Passo 6: Calcular % de atingimento GLOBAL
+    const percentualLicencasGlobal = metaTotalLicencasServicos > 0
+      ? (realTotalLicencasServicos / metaTotalLicencasServicos) * 100
+      : 0;
+    const percentualRecorrenteGlobal = metaTotalRecorrente > 0
+      ? (realTotalRecorrente / metaTotalRecorrente) * 100
+      : 0;
+    const percentualGlobal = (percentualLicencasGlobal * 0.5) + (percentualRecorrenteGlobal * 0.5);
+
+    // Passo 7: Montar resultado - uma entrada GLOBAL + uma por ETN
+    const result: GoalMetrics[] = [];
+
+    // Entrada global (resumo)
+    result.push({
+      idUsuario: goals[0]?.idUsuario || '',
+      etn: 'TOTAL',
+      periodo: selectedPeriod,
+      metaLicencasServicos: metaTotalLicencasServicos,
+      realLicencasServicos: realTotalLicencasServicos,
+      metaRecorrente: metaTotalRecorrente,
+      realRecorrente: realTotalRecorrente,
+      percentualAtingimento: Math.round(percentualGlobal * 100) / 100,
+    });
+
+    // Entradas por ETN (sem meta individual, apenas realização)
+    for (const etn of allEtns) {
+      const real = etnRealizacao.get(etn) || { realLicencasServicos: 0, realRecorrente: 0 };
+      
+      // Calcular contribuição percentual deste ETN para o total
+      const contribLicServicos = realTotalLicencasServicos > 0
+        ? (real.realLicencasServicos / realTotalLicencasServicos) * 100
+        : 0;
+      const contribRecorrente = realTotalRecorrente > 0
+        ? (real.realRecorrente / realTotalRecorrente) * 100
+        : 0;
+
+      result.push({
+        idUsuario: goals[0]?.idUsuario || '',
+        etn,
+        periodo: selectedPeriod,
+        metaLicencasServicos: metaTotalLicencasServicos,
+        realLicencasServicos: real.realLicencasServicos,
+        metaRecorrente: metaTotalRecorrente,
+        realRecorrente: real.realRecorrente,
+        percentualAtingimento: Math.round(((contribLicServicos + contribRecorrente) / 2) * 100) / 100,
+      });
+    }
 
     return result;
   }, [goals, pedidos, processedData, selectedPeriod]);

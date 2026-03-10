@@ -499,6 +499,17 @@ export default function Home() {
     try {
       const workerRes = await processFilesWithWorker(oppFile, actFile);
       setWorkerResult(workerRes);
+      // Processar metas e pedidos automaticamente se arquivos foram selecionados
+      if (goalFile && pedidoFile) {
+        try {
+          const goalsData = await parseGoalsFile(goalFile);
+          const pedidosData = await parsePedidosFile(pedidoFile);
+          setGoals(goalsData);
+          setPedidos(pedidosData);
+        } catch (goalErr) {
+          console.warn('Erro ao processar metas:', goalErr);
+        }
+      }
       try {
         await saveToCache(
           workerRes,
@@ -522,7 +533,7 @@ export default function Home() {
       console.error('Erro no Web Worker:', err);
       setError(err instanceof Error ? err.message : 'Erro ao processar arquivos');
     }
-  }, [oppFile, actFile, processFilesWithWorker]);
+  }, [oppFile, actFile, goalFile, pedidoFile, processFilesWithWorker, parseGoalsFile, parsePedidosFile]);
 
   const handleOppFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -676,8 +687,8 @@ export default function Home() {
                     <FileText className="text-white" size={16} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-xs font-bold text-green-800 truncate">Oportunidades</h3>
-                    <p className="text-xs text-green-600/70 truncate">Base 1 - Pipeline</p>
+                    <h3 className="text-xs font-bold text-green-800">Oportunidades</h3>
+                    <p className="text-[10px] text-green-600/70">Base 1 - Pipeline</p>
                   </div>
                 </div>
                 <label className="block">
@@ -700,8 +711,8 @@ export default function Home() {
                     <FileText className="text-white" size={16} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-xs font-bold text-blue-800 truncate">Ações/Compromissos</h3>
-                    <p className="text-xs text-blue-600/70 truncate">Base 2 - Engajamento</p>
+                    <h3 className="text-xs font-bold text-blue-800">Ações/Comprom.</h3>
+                    <p className="text-[10px] text-blue-600/70">Base 2 - Engajamento</p>
                   </div>
                 </div>
                 <label className="block">
@@ -724,8 +735,8 @@ export default function Home() {
                     <Target className="text-white" size={16} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-xs font-bold text-purple-800 truncate">Metas</h3>
-                    <p className="text-xs text-purple-600/70 truncate">Base 3 - Metas</p>
+                    <h3 className="text-xs font-bold text-purple-800">Metas</h3>
+                    <p className="text-[10px] text-purple-600/70">Base 3 - Metas (.xlsx)</p>
                   </div>
                 </div>
                 <label className="block">
@@ -748,8 +759,8 @@ export default function Home() {
                     <DollarSign className="text-white" size={16} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-xs font-bold text-orange-800 truncate">Pedidos</h3>
-                    <p className="text-xs text-orange-600/70 truncate">Base 4 - Pedidos</p>
+                    <h3 className="text-xs font-bold text-orange-800">Pedidos CRM</h3>
+                    <p className="text-[10px] text-orange-600/70">Base 4 - Pedidos (.csv)</p>
                   </div>
                 </div>
                 <label className="block">
@@ -779,13 +790,7 @@ export default function Home() {
                   <><Upload size={18} /> Carregar e Analisar</>
                 )}
               </button>
-              <button
-                onClick={handleLoadGoals}
-                disabled={!goalFile || !pedidoFile}
-                className="flex items-center gap-2 px-8 py-3 text-sm font-bold rounded-xl bg-gradient-to-r from-purple-500 to-violet-600 text-white shadow-lg shadow-purple-200 hover:shadow-xl hover:shadow-purple-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:scale-[1.02]"
-              >
-                <Target size={18} /> Carregar Metas
-              </button>
+
               <button
                 onClick={handleLoadDemo}
                 className="flex items-center gap-2 px-8 py-3 text-sm font-bold rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-200 hover:shadow-xl hover:shadow-amber-300 transition-all hover:scale-[1.02]"
@@ -905,18 +910,7 @@ export default function Home() {
               </button>
             </div>
 
-            {/* Seletor de Período para Metas */}
-            {goals.length > 0 && pedidos.length > 0 && (
-              <div className="bg-gradient-to-r from-purple-50 to-violet-50 rounded-xl p-5 border border-purple-200 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-bold text-purple-900 mb-1">Acompanhamento de Metas</h3>
-                    <p className="text-xs text-purple-700">Selecione o período para visualizar o atingimento das metas</p>
-                  </div>
-                  <PeriodSelector selectedPeriod={selectedPeriod} onPeriodChange={setSelectedPeriod} />
-                </div>
-              </div>
-            )}
+
 
             {/* Filtros - ITEM 3: Removido filtro Origem, ITEM 6: Adicionado filtro Produto */}
             <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
@@ -960,12 +954,17 @@ export default function Home() {
               onETNClick={setSelectedETNDetail}
             />
 
-            {/* Gráfico de Metas */}
-            {goalMetricas.length > 0 && (
-              <div className="mt-10 bg-white rounded-xl p-6 border border-border shadow-sm">
-                <GoalChart metricas={goalMetricas} title={`Atingimento de Metas - ${selectedPeriod}`} />
+            {/* Gráfico de Metas - sempre visível */}
+            <div className="mt-10 bg-white rounded-xl p-6 border border-border shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                  <Target size={20} className="text-purple-600" />
+                  Atingimento de Metas - {selectedPeriod}
+                </h3>
+                <PeriodSelector selectedPeriod={selectedPeriod} onPeriodChange={setSelectedPeriod} />
               </div>
-            )}
+              <GoalChart metricas={goalMetricas} title="" />
+            </div>
 
             {/* Table */}
             <div className="mt-6">
@@ -1165,6 +1164,7 @@ export default function Home() {
             data={processedData}
             actions={actions}
             onClose={() => setSelectedETNDetail(null)}
+            goalMetricas={goalMetricas}
           />
         )}
       </div>
