@@ -23,10 +23,10 @@ export const useGoalProcessor = () => {
           const rows = XLSX.utils.sheet_to_json(worksheet) as any[];
 
           const goals: GoalRecord[] = rows
-            .filter((row) => row.Produto && row['ID Usuário'])
+            .filter((row) => row.Produto && (row['ID Usuário ERP'] || row['ID Usuário']))
             .map((row) => ({
               produto: String(row.Produto || '').trim(),
-              idUsuario: String(row['ID Usuário'] || '').trim(),
+              idUsuario: String(row['ID Usuário ERP'] || row['ID Usuário'] || '').trim(),
               rubrica: String(row.Rubrica || '').trim(),
               janeiro: parseFloat(row.Janeiro) || 0,
               fevereiro: parseFloat(row.Fevereiro) || 0,
