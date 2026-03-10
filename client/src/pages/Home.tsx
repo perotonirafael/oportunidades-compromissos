@@ -500,14 +500,20 @@ export default function Home() {
       const workerRes = await processFilesWithWorker(oppFile, actFile);
       setWorkerResult(workerRes);
       // Processar metas e pedidos automaticamente se arquivos foram selecionados
-      if (goalFile && pedidoFile) {
+      if (goalFile) {
         try {
           const goalsData = await parseGoalsFile(goalFile);
-          const pedidosData = await parsePedidosFile(pedidoFile);
           setGoals(goalsData);
-          setPedidos(pedidosData);
         } catch (goalErr) {
           console.warn('Erro ao processar metas:', goalErr);
+        }
+      }
+      if (pedidoFile) {
+        try {
+          const pedidosData = await parsePedidosFile(pedidoFile);
+          setPedidos(pedidosData);
+        } catch (pedErr) {
+          console.warn('Erro ao processar pedidos:', pedErr);
         }
       }
       try {
