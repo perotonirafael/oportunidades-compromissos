@@ -8,9 +8,8 @@ import type { ProcessedRecord } from './useDataProcessor';
  * Fluxo de mapeamento:
  * Meta (ID Usuário) → Compromisso (Id Usuário ERP) → Oportunidade (Oportunidade ID) → Pedido (ID OPORTUNIDADE)
  * 
- * No processedData, o campo `etn` é o nome do usuário do compromisso.
- * A meta é global para o ID Usuário (ex: 11124 = Rafael Perotoni).
- * A realização é calculada somando pedidos de todas as oportunidades vinculadas a esse ETN.
+ * Se não houver processedData (oportunidades/compromissos), mostra meta global como "Total".
+ * Se não houver pedidos, mostra meta com realização zerada.
  */
 export const useGoalMetricsProcessor = (
   goals: GoalRecord[],
@@ -19,9 +18,6 @@ export const useGoalMetricsProcessor = (
   selectedPeriod: string
 ) => {
   const metricas = useMemo((): GoalMetrics[] => {
-    // Se não tem dados processados, retornar vazio
-    if (!processedData.length) return [];
-
     // Mapear período para meses
     const periodToMonths: Record<string, string[]> = {
       'Janeiro': ['Janeiro'],
@@ -45,24 +41,10 @@ export const useGoalMetricsProcessor = (
     const months = periodToMonths[selectedPeriod] || [];
     if (!months.length) return [];
 
-    // Obter lista única de ETNs
-    const allEtns = Array.from(new Set(processedData.map(r => r.etn)));
+    // Se não tem metas, retornar vazio
+    if (!goals.length) return [];
 
-    // Se não tem metas ou pedidos, retornar métricas vazias para cada ETN
-    if (!goals.length || !pedidos.length) {
-      return allEtns.map(etn => ({
-        idUsuario: '',
-        etn,
-        periodo: selectedPeriod,
-        metaLicencasServicos: 0,
-        realLicencasServicos: 0,
-        metaRecorrente: 0,
-        realRecorrente: 0,
-        percentualAtingimento: 0,
-      }));
-    }
-
-    // Passo 1: Calcular meta TOTAL para o período (soma de todas as rubricas/produtos)
+    // Calcular meta TOTAL para o período
     let metaTotalLicencasServicos = 0;
     let metaTotalRecorrente = 0;
 
@@ -92,6 +74,30 @@ export const useGoalMetricsProcessor = (
         metaTotalRecorrente += metaValue;
       }
     }
+
+    // Se não tem pedidos, retornar métricas com meta mas sem realização
+    if (!pedidos.length) {
+      // Obter lista única de ETNs (se houver processedData)
+      const allEtns = processedData.length > 0 
+        ? Array.from(new Set(processedData.map(r => r.etn)))
+        : ['Total']; // Se não houver oportunidades, mostrar meta global
+
+      return allEtns.map(etn => ({
+        idUsuario: goals[0]?.idUsuario || '',
+        etn,
+        periodo: selectedPeriod,
+        metaLicencasServicos: metaTotalLicencasServicos,
+        realLicencasServicos: 0,
+        metaRecorrente: metaTotalRecorrente,
+        realRecorrente: 0,
+        percentualAtingimento: 0,
+      }));
+    }
+
+    // Obter lista única de ETNs
+    const allEtns = processedData.length > 0
+      ? Array.from(new Set(processedData.map(r => r.etn)))
+      : ['Total'];
 
     // Passo 2: Mapear oppId → ETN (pode ter múltiplos ETNs por opp)
     const oppIdToEtns = new Map<string, Set<string>>();
@@ -158,36 +164,22 @@ export const useGoalMetricsProcessor = (
     const percentualRecorrenteGlobal = metaTotalRecorrente > 0
       ? (realTotalRecorrente / metaTotalRecorrente) * 100
       : 0;
-    const percentualGlobal = (percentualLicencasGlobal * 0.5) + (percentualRecorrenteGlobal * 0.5);
+    const percentualAtingimentoGlobal = (percentualLicencasGlobal * 0.5) + (percentualRecorrenteGlobal * 0.5);
 
-    // Passo 7: Montar resultado - uma entrada GLOBAL + uma por ETN
-    const result: GoalMetrics[] = [];
-
-    // Entrada global (resumo)
-    result.push({
-      idUsuario: goals[0]?.idUsuario || '',
-      etn: 'TOTAL',
-      periodo: selectedPeriod,
-      metaLicencasServicos: metaTotalLicencasServicos,
-      realLicencasServicos: realTotalLicencasServicos,
-      metaRecorrente: metaTotalRecorrente,
-      realRecorrente: realTotalRecorrente,
-      percentualAtingimento: Math.round(percentualGlobal * 100) / 100,
-    });
-
-    // Entradas por ETN (sem meta individual, apenas realização)
-    for (const etn of allEtns) {
+    // Passo 7: Retornar métricas por ETN
+    return allEtns.map(etn => {
       const real = etnRealizacao.get(etn) || { realLicencasServicos: 0, realRecorrente: 0 };
-      
-      // Calcular contribuição percentual deste ETN para o total
-      const contribLicServicos = realTotalLicencasServicos > 0
-        ? (real.realLicencasServicos / realTotalLicencasServicos) * 100
-        : 0;
-      const contribRecorrente = realTotalRecorrente > 0
-        ? (real.realRecorrente / realTotalRecorrente) * 100
-        : 0;
 
-      result.push({
+      // Para ETNs individuais, calcular % proporcional
+      const percentualLicencas = metaTotalLicencasServicos > 0
+        ? (real.realLicencasServicos / metaTotalLicencasServicos) * 100
+        : 0;
+      const percentualRecorrente = metaTotalRecorrente > 0
+        ? (real.realRecorrente / metaTotalRecorrente) * 100
+        : 0;
+      const percentualAtingimento = (percentualLicencas * 0.5) + (percentualRecorrente * 0.5);
+
+      return {
         idUsuario: goals[0]?.idUsuario || '',
         etn,
         periodo: selectedPeriod,
@@ -195,11 +187,9 @@ export const useGoalMetricsProcessor = (
         realLicencasServicos: real.realLicencasServicos,
         metaRecorrente: metaTotalRecorrente,
         realRecorrente: real.realRecorrente,
-        percentualAtingimento: Math.round(((contribLicServicos + contribRecorrente) / 2) * 100) / 100,
-      });
-    }
-
-    return result;
+        percentualAtingimento,
+      };
+    });
   }, [goals, pedidos, processedData, selectedPeriod]);
 
   return metricas;
