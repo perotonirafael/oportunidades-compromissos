@@ -580,6 +580,13 @@ export default function Home() {
     }
   }, [goalFile, pedidoFile, parseGoalsFile, parsePedidosFile]);
 
+  // Processar metas automaticamente quando ambos arquivos são selecionados
+  useEffect(() => {
+    if (goalFile && pedidoFile) {
+      handleLoadGoals();
+    }
+  }, [goalFile, pedidoFile, handleLoadGoals]);
+
   const handleLoadCache = useCallback(async () => {
     setIsLoadingCache(true);
     setError(null);
@@ -961,7 +968,21 @@ export default function Home() {
                   <Target size={20} className="text-purple-600" />
                   Atingimento de Metas - {selectedPeriod}
                 </h3>
-                <PeriodSelector selectedPeriod={selectedPeriod} onPeriodChange={setSelectedPeriod} />
+                <div className="flex items-center gap-3">
+                  {goals.length === 0 && (
+                    <div className="flex items-center gap-2">
+                      <label className="cursor-pointer px-3 py-1.5 text-xs font-medium rounded-lg border border-purple-300 text-purple-700 hover:bg-purple-50 transition-all">
+                        <input type="file" accept=".xlsx,.xls" onChange={handleGoalFile} className="hidden" />
+                        {goalFileName || 'Metas (.xlsx)'}
+                      </label>
+                      <label className="cursor-pointer px-3 py-1.5 text-xs font-medium rounded-lg border border-orange-300 text-orange-700 hover:bg-orange-50 transition-all">
+                        <input type="file" accept=".csv" onChange={handlePedidoFile} className="hidden" />
+                        {pedidoFileName || 'Pedidos (.csv)'}
+                      </label>
+                    </div>
+                  )}
+                  <PeriodSelector selectedPeriod={selectedPeriod} onPeriodChange={setSelectedPeriod} />
+                </div>
               </div>
               <GoalChart metricas={goalMetricas} title="" />
             </div>
