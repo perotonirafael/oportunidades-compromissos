@@ -669,15 +669,15 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-white rounded-xl p-6 border-2 border-green-200 hover:border-green-400 transition-all hover:shadow-lg hover:shadow-green-100">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2.5 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 shadow-md shadow-green-200">
-                    <FileText className="text-white" size={20} />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white rounded-xl p-4 border-2 border-green-200 hover:border-green-400 transition-all hover:shadow-lg hover:shadow-green-100 flex flex-col">
+                <div className="flex items-start gap-2 mb-3 min-h-0">
+                  <div className="p-2 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 shadow-md shadow-green-200 flex-shrink-0">
+                    <FileText className="text-white" size={16} />
                   </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-green-800">Oportunidades</h3>
-                    <p className="text-xs text-green-600/70">Base 1 - Pipeline CRM</p>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-xs font-bold text-green-800 truncate">Oportunidades</h3>
+                    <p className="text-xs text-green-600/70 truncate">Base 1 - Pipeline</p>
                   </div>
                 </div>
                 <label className="block">
@@ -694,14 +694,14 @@ export default function Home() {
                 </label>
               </div>
 
-              <div className="bg-white rounded-xl p-6 border-2 border-blue-200 hover:border-blue-400 transition-all hover:shadow-lg hover:shadow-blue-100">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2.5 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 shadow-md shadow-blue-200">
-                    <FileText className="text-white" size={20} />
+              <div className="bg-white rounded-xl p-4 border-2 border-blue-200 hover:border-blue-400 transition-all hover:shadow-lg hover:shadow-blue-100 flex flex-col">
+                <div className="flex items-start gap-2 mb-3 min-h-0">
+                  <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 shadow-md shadow-blue-200 flex-shrink-0">
+                    <FileText className="text-white" size={16} />
                   </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-blue-800">Ações / Compromissos</h3>
-                    <p className="text-xs text-blue-600/70">Base 2 - Engajamento</p>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-xs font-bold text-blue-800 truncate">Ações/Compromissos</h3>
+                    <p className="text-xs text-blue-600/70 truncate">Base 2 - Engajamento</p>
                   </div>
                 </div>
                 <label className="block">
@@ -718,14 +718,14 @@ export default function Home() {
                 </label>
               </div>
 
-              <div className="bg-white rounded-xl p-6 border-2 border-purple-200 hover:border-purple-400 transition-all hover:shadow-lg hover:shadow-purple-100">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2.5 rounded-lg bg-gradient-to-br from-purple-500 to-violet-600 shadow-md shadow-purple-200">
-                    <Target className="text-white" size={20} />
+              <div className="bg-white rounded-xl p-4 border-2 border-purple-200 hover:border-purple-400 transition-all hover:shadow-lg hover:shadow-purple-100 flex flex-col">
+                <div className="flex items-start gap-2 mb-3 min-h-0">
+                  <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-violet-600 shadow-md shadow-purple-200 flex-shrink-0">
+                    <Target className="text-white" size={16} />
                   </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-purple-800">Metas</h3>
-                    <p className="text-xs text-purple-600/70">Base 3 - Metas por ETN</p>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-xs font-bold text-purple-800 truncate">Metas</h3>
+                    <p className="text-xs text-purple-600/70 truncate">Base 3 - Metas</p>
                   </div>
                 </div>
                 <label className="block">
@@ -742,14 +742,14 @@ export default function Home() {
                 </label>
               </div>
 
-              <div className="bg-white rounded-xl p-6 border-2 border-orange-200 hover:border-orange-400 transition-all hover:shadow-lg hover:shadow-orange-100">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2.5 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 shadow-md shadow-orange-200">
-                    <DollarSign className="text-white" size={20} />
+              <div className="bg-white rounded-xl p-4 border-2 border-orange-200 hover:border-orange-400 transition-all hover:shadow-lg hover:shadow-orange-100 flex flex-col">
+                <div className="flex items-start gap-2 mb-3 min-h-0">
+                  <div className="p-2 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 shadow-md shadow-orange-200 flex-shrink-0">
+                    <DollarSign className="text-white" size={16} />
                   </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-orange-800">Pedidos</h3>
-                    <p className="text-xs text-orange-600/70">Base 4 - Pedidos CRM</p>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-xs font-bold text-orange-800 truncate">Pedidos</h3>
+                    <p className="text-xs text-orange-600/70 truncate">Base 4 - Pedidos</p>
                   </div>
                 </div>
                 <label className="block">

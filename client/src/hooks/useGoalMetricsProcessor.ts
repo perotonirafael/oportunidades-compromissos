@@ -6,7 +6,7 @@ export const useGoalMetricsProcessor = (
   goals: GoalRecord[],
   pedidos: PedidoRecord[],
   processedData: ProcessedRecord[],
-  selectedPeriod: string // "Janeiro", "1ºTrimestre", etc
+  selectedPeriod: string
 ) => {
   const metricas = useMemo(() => {
     if (!goals.length || !pedidos.length || !processedData.length) return [];
@@ -34,13 +34,13 @@ export const useGoalMetricsProcessor = (
     const months = periodToMonths[selectedPeriod] || [];
     if (!months.length) return [];
 
-    // Mapear ID Oportunidade → ETN a partir dos dados processados
+    // Passo 1: Mapear ID Oportunidade → ETN a partir dos dados processados
     const oppIdToEtn = new Map<string, string>();
     for (const record of processedData) {
       oppIdToEtn.set(record.oppId, record.etn);
     }
 
-    // Mapear ID Oportunidade → Pedidos
+    // Passo 2: Mapear ID Oportunidade → Pedidos
     const oppIdToPedidos = new Map<string, PedidoRecord[]>();
     for (const pedido of pedidos) {
       const oppId = pedido.idOportunidade.toString().trim();
@@ -51,75 +51,7 @@ export const useGoalMetricsProcessor = (
       oppIdToPedidos.get(oppId)!.push(pedido);
     }
 
-    // Calcular receita por ETN
-    const etnMetricas = new Map<string, {
-      idUsuario: string;
-      etn: string;
-      metaLicencasServicos: number;
-      realLicencasServicos: number;
-      metaRecorrente: number;
-      realRecorrente: number;
-    }>();
-
-    // Somar metas por ID Usuário e rubrica para o período selecionado
-    for (const goal of goals) {
-      const idUsuario = goal.idUsuario.trim();
-      const rubrica = goal.rubrica.trim();
-
-      // Calcular meta para o período
-      let metaValue = 0;
-      for (const month of months) {
-        if (month === 'Janeiro') metaValue += goal.janeiro;
-        else if (month === 'Fevereiro') metaValue += goal.fevereiro;
-        else if (month === 'Março') metaValue += goal.marco;
-        else if (month === 'Abril') metaValue += goal.abril;
-        else if (month === 'Maio') metaValue += goal.maio;
-        else if (month === 'Junho') metaValue += goal.junho;
-        else if (month === 'Julho') metaValue += goal.julho;
-        else if (month === 'Agosto') metaValue += goal.agosto;
-        else if (month === 'Setembro') metaValue += goal.setembro;
-        else if (month === 'Outubro') metaValue += goal.outubro;
-        else if (month === 'Novembro') metaValue += goal.novembro;
-        else if (month === 'Dezembro') metaValue += goal.dezembro;
-      }
-
-      // Encontrar ETN associado a este ID Usuário (via compromissos)
-      let etnForUser = '';
-      for (const record of processedData) {
-        // Tentar encontrar correspondência via ID Usuário
-        // Por enquanto, vamos usar um mapeamento simples baseado no nome
-        // TODO: Melhorar este mapeamento quando houver campo de ID Usuário nos compromissos
-      }
-
-      // Se não encontrou ETN, pular
-      if (!etnForUser) {
-        // Usar ID Usuário como chave temporária
-        etnForUser = `ID_${idUsuario}`;
-      }
-
-      // Inicializar métrica se não existe
-      if (!etnMetricas.has(etnForUser)) {
-        etnMetricas.set(etnForUser, {
-          idUsuario,
-          etn: etnForUser,
-          metaLicencasServicos: 0,
-          realLicencasServicos: 0,
-          metaRecorrente: 0,
-          realRecorrente: 0,
-        });
-      }
-
-      const metrica = etnMetricas.get(etnForUser)!;
-
-      // Adicionar meta conforme rubrica
-      if (rubrica.includes('Setup') || rubrica.includes('Serviços Não Recorrentes')) {
-        metrica.metaLicencasServicos += metaValue;
-      } else if (rubrica.includes('Recorrente')) {
-        metrica.metaRecorrente += metaValue;
-      }
-    }
-
-    // Calcular receita real a partir de pedidos cruzados com oportunidades
+    // Passo 3: Calcular receita real por ETN a partir de pedidos
     const etnRealizacao = new Map<string, {
       realLicencasServicos: number;
       realRecorrente: number;
@@ -127,7 +59,7 @@ export const useGoalMetricsProcessor = (
 
     Array.from(oppIdToPedidos.keys()).forEach((oppId) => {
       const etn = oppIdToEtn.get(oppId);
-      if (!etn) return;
+      if (!etn) return; // Skip se não encontrar ETN
 
       const oppPedidos = oppIdToPedidos.get(oppId)!;
 
@@ -155,36 +87,73 @@ export const useGoalMetricsProcessor = (
       }
     });
 
-    // Aplicar realização às métricas
-    Array.from(etnRealizacao.entries()).forEach(([etn, realization]) => {
-      if (!etnMetricas.has(etn)) {
-        etnMetricas.set(etn, {
-          idUsuario: '',
-          etn,
-          metaLicencasServicos: 0,
-          realLicencasServicos: 0,
-          metaRecorrente: 0,
-          realRecorrente: 0,
-        });
-      }
+    // Passo 4: Calcular metas por ETN
+    // Agrupar metas por ETN (via processedData)
+    const etnMetas = new Map<string, {
+      metaLicencasServicos: number;
+      metaRecorrente: number;
+    }>();
 
-      const metrica = etnMetricas.get(etn)!;
-      metrica.realLicencasServicos = realization.realLicencasServicos;
-      metrica.realRecorrente = realization.realRecorrente;
+    // Primeiro, inicializar todas as ETNs com 0
+    Array.from(new Set(processedData.map(r => r.etn))).forEach((etn) => {
+      etnMetas.set(etn, {
+        metaLicencasServicos: 0,
+        metaRecorrente: 0,
+      });
     });
 
-    // Calcular % de atingimento com pesos
-    const result: GoalMetrics[] = Array.from(etnMetricas.values())
-      .filter((m) => m.metaLicencasServicos > 0 || m.metaRecorrente > 0) // Filtrar apenas ETNs com metas
-      .map((m) => {
+    // Depois, somar as metas
+    for (const goal of goals) {
+      // Calcular meta para o período
+      let metaValue = 0;
+      for (const month of months) {
+        if (month === 'Janeiro') metaValue += goal.janeiro;
+        else if (month === 'Fevereiro') metaValue += goal.fevereiro;
+        else if (month === 'Março') metaValue += goal.marco;
+        else if (month === 'Abril') metaValue += goal.abril;
+        else if (month === 'Maio') metaValue += goal.maio;
+        else if (month === 'Junho') metaValue += goal.junho;
+        else if (month === 'Julho') metaValue += goal.julho;
+        else if (month === 'Agosto') metaValue += goal.agosto;
+        else if (month === 'Setembro') metaValue += goal.setembro;
+        else if (month === 'Outubro') metaValue += goal.outubro;
+        else if (month === 'Novembro') metaValue += goal.novembro;
+        else if (month === 'Dezembro') metaValue += goal.dezembro;
+      }
+
+      // Distribuir meta para todas as ETNs (simplificado)
+      // TODO: Melhorar mapeamento quando houver campo de ID Usuário nos compromissos
+      const rubrica = goal.rubrica.trim();
+      
+      Array.from(etnMetas.keys()).forEach((etn) => {
+        const meta = etnMetas.get(etn)!;
+        
+        // Adicionar meta conforme rubrica
+        if (rubrica.includes('Setup') || rubrica.includes('Serviços Não Recorrentes') || rubrica.includes('Licença')) {
+          meta.metaLicencasServicos += metaValue;
+        } else if (rubrica.includes('Recorrente') || rubrica.includes('Manutenção')) {
+          meta.metaRecorrente += metaValue;
+        }
+      });
+    }
+
+    // Passo 5: Combinar metas e realizações
+    const result: GoalMetrics[] = Array.from(etnMetas.keys())
+      .map((etn) => {
+        const meta = etnMetas.get(etn)!;
+        const realization = etnRealizacao.get(etn) || {
+          realLicencasServicos: 0,
+          realRecorrente: 0,
+        };
+
         const percentualLicencas =
-          m.metaLicencasServicos > 0
-            ? (m.realLicencasServicos / m.metaLicencasServicos) * 100
+          meta.metaLicencasServicos > 0
+            ? (realization.realLicencasServicos / meta.metaLicencasServicos) * 100
             : 0;
 
         const percentualRecorrente =
-          m.metaRecorrente > 0
-            ? (m.realRecorrente / m.metaRecorrente) * 100
+          meta.metaRecorrente > 0
+            ? (realization.realRecorrente / meta.metaRecorrente) * 100
             : 0;
 
         // Aplicar pesos: 50% cada
@@ -192,18 +161,20 @@ export const useGoalMetricsProcessor = (
           (percentualLicencas * 0.5) + (percentualRecorrente * 0.5);
 
         return {
-          idUsuario: m.idUsuario,
-          etn: m.etn,
+          idUsuario: '',
+          etn,
           periodo: selectedPeriod,
-          metaLicencasServicos: m.metaLicencasServicos,
-          realLicencasServicos: m.realLicencasServicos,
-          metaRecorrente: m.metaRecorrente,
-          realRecorrente: m.realRecorrente,
+          metaLicencasServicos: meta.metaLicencasServicos,
+          realLicencasServicos: realization.realLicencasServicos,
+          metaRecorrente: meta.metaRecorrente,
+          realRecorrente: realization.realRecorrente,
           percentualAtingimento: Math.round(percentualAtingimento * 100) / 100,
         };
-      });
+      })
+      .filter((m) => m.metaLicencasServicos > 0 || m.metaRecorrente > 0) // Filtrar apenas ETNs com metas
+      .sort((a, b) => b.percentualAtingimento - a.percentualAtingimento);
 
-    return result.sort((a, b) => b.percentualAtingimento - a.percentualAtingimento);
+    return result;
   }, [goals, pedidos, processedData, selectedPeriod]);
 
   return metricas;
