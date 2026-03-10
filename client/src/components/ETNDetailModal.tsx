@@ -2,6 +2,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { X, TrendingUp, Award, Target, Calendar, Trophy, XCircle, DollarSign, Search, Filter, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, Cell, PieChart, Pie } from 'recharts';
 import { KPICard } from './KPICard';
+import { CHART_COLORS, CHART_THEME, axisStyle, chartTooltipStyle, formatChartCurrency } from '@/components/charts/chartTheme';
 
 interface ProcessedRecord {
   oppId: string;
@@ -46,15 +47,8 @@ interface ETNDetailModalProps {
   onClose: () => void;
 }
 
-const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6'];
-const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6', '#f97316', '#6366f1'];
-
-const formatCurrency = (v: number) => {
-  if (v >= 1e9) return `R$ ${(v / 1e9).toFixed(1)}B`;
-  if (v >= 1e6) return `R$ ${(v / 1e6).toFixed(1)}M`;
-  if (v >= 1e3) return `R$ ${(v / 1e3).toFixed(0)}K`;
-  return `R$ ${v.toFixed(0)}`;
-};
+const COLORS = CHART_COLORS.categorical;
+const PIE_COLORS = CHART_COLORS.categorical;
 
 const MONTH_ORDER = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
@@ -542,10 +536,10 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
               <KPICard title="Total de Oportunidades" value={kpis.totalOps.toString()} icon={<Target size={18} />} color="blue" />
             </div>
             <div onClick={() => handleKPIClick('ganhas')} className={`cursor-pointer transition-all ${activeKPIFilter === 'ganhas' ? 'ring-2 ring-green-500 rounded-xl' : ''}`}>
-              <KPICard title="Fechada e Ganha" value={kpis.ganhas.toString()} subtitle={formatCurrency(kpis.ganhasValor)} icon={<Trophy size={18} />} color="green" />
+              <KPICard title="Fechada e Ganha" value={kpis.ganhas.toString()} subtitle={formatChartCurrency(kpis.ganhasValor)} icon={<Trophy size={18} />} color="green" />
             </div>
             <div onClick={() => handleKPIClick('perdidas')} className={`cursor-pointer transition-all ${activeKPIFilter === 'perdidas' ? 'ring-2 ring-red-500 rounded-xl' : ''}`}>
-              <KPICard title="Fechada e Perdida" value={kpis.perdidas.toString()} subtitle={formatCurrency(kpis.perdidasValor)} icon={<XCircle size={18} />} color="red" />
+              <KPICard title="Fechada e Perdida" value={kpis.perdidas.toString()} subtitle={formatChartCurrency(kpis.perdidasValor)} icon={<XCircle size={18} />} color="red" />
             </div>
             <KPICard title="Taxa de Conversão" value={`${kpis.winRate}%`} icon={<TrendingUp size={18} />} color="amber" />
             <KPICard title="Total de Agendas" value={kpis.totalAgendas.toString()} icon={<Calendar size={18} />} color="purple" />
@@ -574,7 +568,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
                   <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                   <XAxis dataKey="etapa" angle={-40} textAnchor="end" height={150} tick={{ fontSize: 9, fill: '#6b7280' }} interval={0} />
                   <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} allowDecimals={false} />
-                  <Tooltip contentStyle={{ background: 'rgba(255,255,255,0.97)', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '12px' }} />
+                  <Tooltip {...chartTooltipStyle} />
                   <Bar dataKey="count" radius={[6, 6, 0, 0]} name="Oportunidades" cursor="pointer" onClick={(d: any) => handleChartClick('etapa', d.etapa)}>
                     {etapaDistribution.map((entry, i) => {
                       const color = entry.etapa.includes('Ganha') ? '#10b981' : entry.etapa.includes('Perdida') ? '#ef4444' : COLORS[i % COLORS.length];
@@ -612,7 +606,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
                           return <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} opacity={chartFilter?.type === 'categoria' && !isActive ? 0.3 : 1} />;
                         })}
                       </Pie>
-                      <Tooltip contentStyle={{ background: 'rgba(255,255,255,0.97)', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '12px' }} />
+                      <Tooltip {...chartTooltipStyle} />
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="grid grid-cols-2 gap-1 mt-2">
@@ -684,7 +678,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
                     <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                     <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} />
                     <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} allowDecimals={false} />
-                    <Tooltip contentStyle={{ background: 'rgba(255,255,255,0.97)', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '12px' }} />
+                    <Tooltip {...chartTooltipStyle} />
                     <Legend wrapperStyle={{ fontSize: '11px' }} />
                     <Bar dataKey="agendas" fill="#3b82f6" name="Compromissos no Mês" radius={[4, 4, 0, 0]} cursor="pointer"
                       onClick={(d: any) => handleChartClick('compromissoMes', `${d.fullMonth}|${d.year}`)}>
@@ -713,11 +707,11 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
                   <BarChart data={fechamentoGanhasMensal}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                     <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} />
-                    <YAxis tickFormatter={(v: number) => formatCurrency(v)} tick={{ fontSize: 10, fill: '#6b7280' }} />
+                    <YAxis tickFormatter={(v: number) => formatChartCurrency(v)} tick={{ fontSize: 10, fill: '#6b7280' }} />
                     <Tooltip
-                      contentStyle={{ background: 'rgba(255,255,255,0.97)', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '12px' }}
+                      {...chartTooltipStyle}
                       formatter={(v: number, name: string) => {
-                        if (name === 'Valor Fechado') return [formatCurrency(v), 'Valor Fechado'];
+                        if (name === 'Valor Fechado') return [formatChartCurrency(v), 'Valor Fechado'];
                         return [v, 'Qtd. Ganhas'];
                       }}
                     />
@@ -728,7 +722,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
                         const isActive = chartFilter?.type === 'fechamentoMes' && chartFilter?.value === `${entry.fullMonth}|${entry.year}`;
                         return <Cell key={i} fill={COLORS[i % COLORS.length]} opacity={chartFilter?.type === 'fechamentoMes' && !isActive ? 0.3 : 1} />;
                       })}
-                      <LabelList dataKey="valor" position="top" fill="#374151" fontSize={9} formatter={(v: number) => formatCurrency(v)} />
+                      <LabelList dataKey="valor" position="top" fill="#374151" fontSize={9} formatter={(v: number) => formatChartCurrency(v)} />
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -818,9 +812,9 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
                         </span>
                       </td>
                       <td className="px-3 py-2 text-gray-700">{op.probabilidade}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-gray-800">{formatCurrency(op.valorPrevisto)}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-gray-800">{formatChartCurrency(op.valorPrevisto)}</td>
                       <td className="px-3 py-2 text-right font-semibold text-green-700">
-                        {op.valorFechado > 0 ? formatCurrency(op.valorFechado) : '—'}
+                        {op.valorFechado > 0 ? formatChartCurrency(op.valorFechado) : '—'}
                       </td>
                       <td className="px-3 py-2 text-center">
                         <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
@@ -832,7 +826,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
                         </span>
                       </td>
                       <td className="px-3 py-2 text-right font-semibold text-blue-700">
-                        {formatCurrency(op.valorUnificado ?? op.valorReconhecido ?? op.valorPrevisto)}
+                        {formatChartCurrency(op.valorUnificado ?? op.valorReconhecido ?? op.valorPrevisto)}
                       </td>
                       <td className="px-3 py-2 text-center">
                         <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${

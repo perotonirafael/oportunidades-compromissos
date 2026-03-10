@@ -2,37 +2,22 @@ import { useMemo } from 'react';
 import type { ProcessedRecord, Action } from '@/hooks/useDataProcessor';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  Cell, LineChart, Line, CartesianGrid, Legend, Funnel, FunnelChart,
+  Cell, LineChart, Line, CartesianGrid, Legend,
 } from 'recharts';
 import { TrendingUp, DollarSign, AlertCircle, Zap, BarChart3 } from 'lucide-react';
+import {
+  CHART_COLORS,
+  CHART_THEME,
+  StandardChartTooltip,
+  axisStyle,
+  chartTooltipStyle,
+  formatChartCount,
+  formatChartCurrency,
+  formatChartPercent,
+} from '@/components/charts/chartTheme';
 
-const COLORS = [
-  '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6',
-  '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1',
-];
-
-const FUNNEL_COLORS = [
-  '#10b981', '#22c55e', '#84cc16', '#eab308', '#f59e0b',
-  '#f97316', '#ef4444', '#dc2626', '#b91c1c', '#991b1b',
-];
-
-const formatCurrency = (v: number) => {
-  if (v >= 1e9) return `R$ ${(v / 1e9).toFixed(1)}B`;
-  if (v >= 1e6) return `R$ ${(v / 1e6).toFixed(1)}M`;
-  if (v >= 1e3) return `R$ ${(v / 1e3).toFixed(0)}K`;
-  return `R$ ${v.toFixed(0)}`;
-};
-
-const tooltipStyle = {
-  contentStyle: {
-    background: 'rgba(255, 255, 255, 0.97)',
-    border: '1px solid #e5e7eb',
-    borderRadius: '10px',
-    fontSize: '12px',
-    color: '#1f2937',
-    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-  },
-};
+const COLORS = CHART_COLORS.categorical;
+const FUNNEL_COLORS = CHART_COLORS.progression;
 
 function DateRangeFooter({ data }: { data: ProcessedRecord[] }) {
   const range = useMemo(() => {
@@ -52,7 +37,7 @@ function DateRangeFooter({ data }: { data: ProcessedRecord[] }) {
   }, [data]);
 
   return (
-    <p className="text-[10px] text-gray-400 text-center mt-2 pt-1 border-t border-gray-100">
+    <p className={CHART_THEME.footerClassName}>
       Período dos filtros aplicados: {range}
     </p>
   );
@@ -243,8 +228,8 @@ export function ETNComparativeAnalysis({ data, actions }: Props) {
   return (
     <div className="space-y-6">
       {/* Seção 1: Matriz de Performance */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+      <div className={CHART_THEME.cardClassName}>
+        <h3 className="text-sm md:text-base font-bold mb-4 flex items-center gap-2">
           <BarChart3 className="w-5 h-5 text-blue-600" />
           Matriz de Performance - ETNs
         </h3>
@@ -277,12 +262,12 @@ export function ETNComparativeAnalysis({ data, actions }: Props) {
                       {row.winRate}%
                     </span>
                   </td>
-                  <td className="px-4 py-2 text-right text-green-600">{formatCurrency(row.wonValue)}</td>
-                  <td className="px-4 py-2 text-right text-red-600">{formatCurrency(row.lostValue)}</td>
-                  <td className="px-4 py-2 text-right">{formatCurrency(parseFloat(row.avgValue))}</td>
+                  <td className="px-4 py-2 text-right text-green-600">{formatChartCurrency(row.wonValue)}</td>
+                  <td className="px-4 py-2 text-right text-red-600">{formatChartCurrency(row.lostValue)}</td>
+                  <td className="px-4 py-2 text-right">{formatChartCurrency(parseFloat(row.avgValue))}</td>
                   <td className="px-4 py-2 text-right">{row.agendas}</td>
                   <td className="px-4 py-2 text-right">{row.agendaPerOp}</td>
-                  <td className="px-4 py-2 text-right font-semibold">{formatCurrency(parseFloat(row.valuePerAgenda))}</td>
+                  <td className="px-4 py-2 text-right font-semibold">{formatChartCurrency(parseFloat(row.valuePerAgenda))}</td>
                 </tr>
               ))}
             </tbody>
@@ -292,8 +277,8 @@ export function ETNComparativeAnalysis({ data, actions }: Props) {
       </div>
 
       {/* Seção 2: Evolução de Compromissos por ETN */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+      <div className={CHART_THEME.cardClassName}>
+        <h3 className="text-sm md:text-base font-bold mb-4 flex items-center gap-2">
           <TrendingUp className="w-5 h-5 text-blue-600" />
           Evolução de Compromissos Realizados por ETN
         </h3>
@@ -304,7 +289,7 @@ export function ETNComparativeAnalysis({ data, actions }: Props) {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="etn" />
                 <YAxis />
-                <Tooltip {...tooltipStyle} />
+                <Tooltip {...chartTooltipStyle} />
                 <Legend />
                 {commitmentEvolution.months.map((month, idx) => (
                   <Line
@@ -328,51 +313,51 @@ export function ETNComparativeAnalysis({ data, actions }: Props) {
       {/* Seção 3: Valor Ganho, Perdido e Risco */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Valor Ganho */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h4 className="text-sm font-semibold mb-4 flex items-center gap-2 text-green-600">
+        <div className={CHART_THEME.cardClassName}>
+          <h4 className="text-sm font-bold mb-4 flex items-center gap-2 text-green-600">
             <DollarSign className="w-4 h-4" />
             Valor Total Ganho
           </h4>
           <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={valueWonByETN}>
-              <XAxis dataKey="etn" angle={-45} textAnchor="end" height={80} />
-              <YAxis />
-              <Tooltip {...tooltipStyle} formatter={(v: any) => formatCurrency(typeof v === 'number' ? v : 0)} />
-              <Bar dataKey="value" fill="#10b981" />
+            <BarChart data={valueWonByETN.slice(0, 8)} layout="vertical" margin={{ left: 10, right: 40 }}>
+              <XAxis type="number" tickFormatter={formatChartCurrency} tick={axisStyle.xTick} axisLine={axisStyle.axisLine} />
+              <YAxis type="category" dataKey="etn" width={CHART_THEME.horizontalLabelWidth} tick={axisStyle.yTick} axisLine={axisStyle.axisLine} />
+              <Tooltip {...chartTooltipStyle} formatter={(v: any) => formatChartCurrency(typeof v === 'number' ? v : 0)} />
+              <Bar dataKey="value" barSize={CHART_THEME.horizontalBarSize} radius={CHART_THEME.barRadius} fill="#10b981" />
             </BarChart>
           </ResponsiveContainer>
           <DateRangeFooter data={data} />
         </div>
 
         {/* Valor Perdido */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h4 className="text-sm font-semibold mb-4 flex items-center gap-2 text-red-600">
+        <div className={CHART_THEME.cardClassName}>
+          <h4 className="text-sm font-bold mb-4 flex items-center gap-2 text-red-600">
             <AlertCircle className="w-4 h-4" />
             Valor Total Perdido
           </h4>
           <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={valueLostByETN}>
-              <XAxis dataKey="etn" angle={-45} textAnchor="end" height={80} />
-              <YAxis />
-              <Tooltip {...tooltipStyle} formatter={(v: any) => formatCurrency(typeof v === 'number' ? v : 0)} />
-              <Bar dataKey="value" fill="#ef4444" />
+            <BarChart data={valueLostByETN.slice(0, 8)} layout="vertical" margin={{ left: 10, right: 40 }}>
+              <XAxis type="number" tickFormatter={formatChartCurrency} tick={axisStyle.xTick} axisLine={axisStyle.axisLine} />
+              <YAxis type="category" dataKey="etn" width={CHART_THEME.horizontalLabelWidth} tick={axisStyle.yTick} axisLine={axisStyle.axisLine} />
+              <Tooltip {...chartTooltipStyle} formatter={(v: any) => formatChartCurrency(typeof v === 'number' ? v : 0)} />
+              <Bar dataKey="value" barSize={CHART_THEME.horizontalBarSize} radius={CHART_THEME.barRadius} fill="#ef4444" />
             </BarChart>
           </ResponsiveContainer>
           <DateRangeFooter data={data} />
         </div>
 
         {/* Valor em Risco */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h4 className="text-sm font-semibold mb-4 flex items-center gap-2 text-orange-600">
+        <div className={CHART_THEME.cardClassName}>
+          <h4 className="text-sm font-bold mb-4 flex items-center gap-2 text-orange-600">
             <Zap className="w-4 h-4" />
             Valor em Risco (Pipeline)
           </h4>
           <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={valueAtRiskByETN}>
-              <XAxis dataKey="etn" angle={-45} textAnchor="end" height={80} />
-              <YAxis />
-              <Tooltip {...tooltipStyle} formatter={(v: any) => formatCurrency(typeof v === 'number' ? v : 0)} />
-              <Bar dataKey="value" fill="#f59e0b" />
+            <BarChart data={valueAtRiskByETN.slice(0, 8)} layout="vertical" margin={{ left: 10, right: 40 }}>
+              <XAxis type="number" tickFormatter={formatChartCurrency} tick={axisStyle.xTick} axisLine={axisStyle.axisLine} />
+              <YAxis type="category" dataKey="etn" width={CHART_THEME.horizontalLabelWidth} tick={axisStyle.yTick} axisLine={axisStyle.axisLine} />
+              <Tooltip {...chartTooltipStyle} formatter={(v: any) => formatChartCurrency(typeof v === 'number' ? v : 0)} />
+              <Bar dataKey="value" barSize={CHART_THEME.horizontalBarSize} radius={CHART_THEME.barRadius} fill="#f59e0b" />
             </BarChart>
           </ResponsiveContainer>
           <DateRangeFooter data={data} />
@@ -380,29 +365,34 @@ export function ETNComparativeAnalysis({ data, actions }: Props) {
       </div>
 
       {/* Seção 4: Funil de Valor por Etapa */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold mb-4">Funil de Valor por Etapa</h3>
-        <ResponsiveContainer width="100%" height={350}>
-          <FunnelChart>
-            <Tooltip {...tooltipStyle} formatter={(v: any) => formatCurrency(typeof v === 'number' ? v : 0)} />
-            <Funnel
-              data={valueByStage}
-              dataKey="value"
-              stroke="none"
-              fill="#8884d8"
-            >
-              {valueByStage.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.fill} />
-              ))}
-            </Funnel>
-          </FunnelChart>
-        </ResponsiveContainer>
-        <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-2">
+      <div className={CHART_THEME.cardClassName}>
+        <h3 className="text-sm md:text-base font-bold mb-4">Funil de Valor por Etapa</h3>
+        <div className="space-y-2">
+          {valueByStage.map((stage, idx) => {
+            const maxValue = valueByStage[0]?.value || 1;
+            const widthPct = Math.max(35, (stage.value / maxValue) * 100);
+            return (
+              <div key={stage.name} className="group">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+                  <div
+                    className="flex min-w-[230px] items-center justify-between rounded-lg px-4 py-2.5 text-sm font-semibold text-white"
+                    style={{ width: `${widthPct}%`, background: FUNNEL_COLORS[idx % FUNNEL_COLORS.length] }}
+                  >
+                    <span className="truncate pr-2">{stage.name}</span>
+                    <span className="shrink-0">{formatChartCurrency(stage.value)}</span>
+                  </div>
+                  <div className="text-xs text-gray-600">{formatChartCount(stage.count, 'ops')}</div>
+                </div>
+                <div className="pointer-events-none absolute hidden" />
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
           {valueByStage.map((stage, idx) => (
-            <div key={idx} className="text-center p-2 bg-gray-50 rounded">
-              <p className="text-xs font-semibold text-gray-600">{stage.name}</p>
-              <p className="text-sm font-bold">{stage.count} ops</p>
-              <p className="text-xs text-gray-500">{formatCurrency(stage.value)}</p>
+            <div key={stage.name} className="flex items-center gap-1.5 rounded-md bg-gray-50 px-2 py-1 text-[11px]">
+              <span className="h-2.5 w-2.5 rounded-sm" style={{ background: FUNNEL_COLORS[idx % FUNNEL_COLORS.length] }} />
+              <span className="text-gray-700">{stage.name}</span>
             </div>
           ))}
         </div>
@@ -411,5 +401,3 @@ export function ETNComparativeAnalysis({ data, actions }: Props) {
     </div>
   );
 }
-
-
