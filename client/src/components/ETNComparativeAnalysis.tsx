@@ -265,8 +265,8 @@ export function ETNComparativeAnalysis({ data, actions }: Props) {
               </tr>
             </thead>
             <tbody>
-              {performanceMatrix.map((row, idx) => (
-                <tr key={idx} className="border-b hover:bg-gray-50">
+              {performanceMatrix.map((row) => (
+                <tr key={row.etn} className="border-b hover:bg-gray-50">
                   <td className="px-4 py-2 font-medium">{row.etn}</td>
                   <td className="px-4 py-2 text-right">{row.total}</td>
                   <td className="px-4 py-2 text-right text-green-600 font-semibold">{row.won}</td>
@@ -398,8 +398,8 @@ export function ETNComparativeAnalysis({ data, actions }: Props) {
           </FunnelChart>
         </ResponsiveContainer>
         <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-2">
-          {valueByStage.map((stage, idx) => (
-            <div key={idx} className="text-center p-2 bg-gray-50 rounded">
+          {valueByStage.map((stage) => (
+            <div key={stage.name} className="text-center p-2 bg-gray-50 rounded">
               <p className="text-xs font-semibold text-gray-600">{stage.name}</p>
               <p className="text-sm font-bold">{stage.count} ops</p>
               <p className="text-xs text-gray-500">{formatCurrency(stage.value)}</p>

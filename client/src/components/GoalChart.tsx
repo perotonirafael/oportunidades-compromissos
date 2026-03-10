@@ -94,8 +94,8 @@ export const GoalChart: React.FC<GoalChartProps> = ({
             </tr>
           </thead>
           <tbody>
-            {metricas.map((m, idx) => (
-              <tr key={idx} className="border-b border-border hover:bg-muted/20">
+            {metricas.map((m) => (
+              <tr key={`${m.etn}-${m.periodo}`} className="border-b border-border hover:bg-muted/20">
                 <td className="px-4 py-2 font-medium">{m.etn}</td>
                 <td className="px-4 py-2 text-right">
                   R$ {m.metaLicencasServicos.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}

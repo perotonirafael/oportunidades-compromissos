@@ -803,8 +803,8 @@ export function ETNDetailModal({ etn, data, actions = [], onClose }: ETNDetailMo
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredOps.slice(0, 100).map((op, idx) => (
-                    <tr key={idx} className="border-b border-gray-100 hover:bg-gray-100/50 transition-colors">
+                  {filteredOps.slice(0, 100).map((op) => (
+                    <tr key={op.oppId} className="border-b border-gray-100 hover:bg-gray-100/50 transition-colors">
                       <td className="px-3 py-2 font-semibold text-gray-800">{op.oppId}</td>
                       <td className="px-3 py-2 text-gray-700 max-w-[200px] truncate">{op.conta}</td>
                       <td className="px-3 py-2 text-gray-700 max-w-[150px] truncate">{op.representante || '—'}</td>
