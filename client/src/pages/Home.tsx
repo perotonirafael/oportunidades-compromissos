@@ -1065,8 +1065,8 @@ export default function Home() {
                               <button onClick={() => setMissingFilterEtapas([])} className="text-[10px] text-red-500 hover:text-red-700 font-semibold">Limpar</button>
                             )}
                           </div>
-                          {Array.from(new Set(missingAgendas.map((r: any) => r.etapa))).sort().map((etapa: any) => (
-                            <label key={etapa} className="flex items-center gap-2 px-3 py-1.5 hover:bg-amber-50 cursor-pointer text-xs text-gray-700">
+                          {Array.from(new Set(missingAgendas.map((r: any) => r.etapa))).sort().map((etapa: any, idx: number) => (
+                            <label key={`etapa-${idx}-${etapa}`} className="flex items-center gap-2 px-3 py-1.5 hover:bg-amber-50 cursor-pointer text-xs text-gray-700">
                               <input
                                 type="checkbox"
                                 checked={missingFilterEtapas.includes(etapa)}
