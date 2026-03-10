@@ -1114,8 +1114,8 @@ export default function Home() {
                         </tr>
                       </thead>
                       <tbody>
-                        {missingAgendasFiltered.slice(missingPage * 10, (missingPage + 1) * 10).map((r: any) => (
-                          <tr key={`${r.oppId}-${r.mesFech}-${r.valorPrevisto}`} className="border-b hover:bg-amber-50/50">
+                        {missingAgendasFiltered.slice(missingPage * 10, (missingPage + 1) * 10).map((r: any, idx: number) => (
+                          <tr key={`${r.oppId}-${idx}`} className="border-b hover:bg-amber-50/50">
                             <td className="px-3 py-2 font-semibold text-amber-900">{r.oppId}</td>
                             <td className="px-3 py-2 text-gray-700">{r.conta}</td>
                             <td className="px-3 py-2 text-gray-700">{r.etn}</td>
