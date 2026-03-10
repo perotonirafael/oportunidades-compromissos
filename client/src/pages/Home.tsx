@@ -146,7 +146,7 @@ export default function Home() {
   const result = workerResult || normalResult;
 
   const processedData = result?.records ?? [];
-  const goalMetricas = useGoalMetricsProcessor(goals, pedidos, processedData, selectedPeriod);
+  const goalMetricas = useGoalMetricsProcessor(goals, pedidos, processedData, selectedPeriod, actions, opportunities);
   const missingAgendas = result?.missingAgendas ?? [];
   const kpis = result?.kpis ?? null;
   const motivosPerdaBrutos = result?.motivosPerda ?? [];
