@@ -2,13 +2,154 @@ import { useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { GoalRecord, PedidoRecord } from '@/types/goals';
 
+type SpreadsheetRow = Record<string, unknown>;
+
+const ID_USUARIO_ALIASES = ['ID Usuário ERP', 'Id Usuário ERP', 'ID Usuário', 'Id Usuário'] as const;
+
+const GOAL_FIELD_ALIASES = {
+  produto: ['Produto'],
+  idUsuario: ID_USUARIO_ALIASES,
+  rubrica: ['Rubrica'],
+  ano: ['Ano'],
+  janeiro: ['Janeiro'],
+  fevereiro: ['Fevereiro'],
+  marco: ['Março', 'Marco'],
+  primeiroTrimestre: ['1ºTri', '1oTri', '1°Tri'],
+  abril: ['Abril'],
+  maio: ['Maio'],
+  junho: ['Junho'],
+  segundoTrimestre: ['2ºTri', '2oTri', '2°Tri'],
+  julho: ['Julho'],
+  agosto: ['Agosto'],
+  setembro: ['Setembro'],
+  terceiroTrimestre: ['3ºTri', '3oTri', '3°Tri'],
+  outubro: ['Outubro'],
+  novembro: ['Novembro'],
+  dezembro: ['Dezembro'],
+  quartoTrimestre: ['4ºTri', '4oTri', '4°Tri'],
+  totalAno: ['Total Ano'],
+} as const;
+
+const PEDIDO_FIELD_ALIASES = {
+  idOportunidade: ['ID OPORTUNIDADE'],
+  idEtapaOportunidade: ['ETAPA OPORTUNIDADE'],
+  proprietarioOportunidade: ['PROPRIETARIO OPORTUNIDADE'],
+  idErpProprietario: ['ID ERP PROPRIETARIO'],
+  dataFechamento: ['DATA FECHAMENTO'],
+  produto: ['PRODUTO'],
+  produtoCodigoModulo: ['PRODUTO - CÓDIGO DO MÓDULO'],
+  produtoModulo: ['PRODUTO - MODULO'],
+  produtoValorLicenca: ['PRODUTO - VALOR LICENCA'],
+  produtoValorLicencaCanal: ['PRODUTO - VALOR LICENCA CANAL'],
+  produtoValorManutencao: ['PRODUTO - VALOR MANUTENCAO'],
+  produtoValorManutencaoCanal: ['PRODUTO - VALOR MANUTENCAO CANAL'],
+  servico: ['SERVICO'],
+  servicoTipoDeFaturamento: ['SERVICO - TIPO DE FATURAMENTO'],
+  servicoQtdeDeHoras: ['SERVICO - QTDE DE HORAS'],
+  servicoValorHora: ['SERVICO - VALOR HORA'],
+  servicoValorBruto: ['SERVICO - VALOR BRUTO'],
+  servicoValorOver: ['SERVICO - VALOR OVER'],
+  servicoValorDesconto: ['SERVICO - VALOR DESCONTO'],
+  servicoValorCanal: ['SERVICO - VALOR CANAL'],
+  servicoValorLiquido: ['SERVICO - VALOR LIQUIDO'],
+} as const;
+
+const normalizeText = (value: unknown): string => (value == null ? '' : String(value).trim());
+
+export const firstNonEmpty = (values: unknown[]): string => {
+  for (const value of values) {
+    const normalized = normalizeText(value);
+    if (normalized) return normalized;
+  }
+  return '';
+};
+
+export const getFieldByAliases = (row: SpreadsheetRow, aliases: readonly string[]): string => {
+  return firstNonEmpty(aliases.map((alias) => row[alias]));
+};
+
 // Parse valor no formato brasileiro: 4.771,20 → 4771.20
-const parseBR = (v: string | undefined): number => {
-  if (!v || v.trim() === '') return 0;
-  // Remove pontos de milhar, troca vírgula por ponto
-  const cleaned = v.trim().replace(/\./g, '').replace(',', '.');
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? 0 : num;
+export const parseBRNumber = (value: unknown): number => {
+  const raw = normalizeText(value);
+  if (!raw) return 0;
+
+  const cleaned = raw
+    .replace(/R\$/gi, '')
+    .replace(/\s/g, '')
+    .replace(/\.(?=\d{3}(\D|$))/g, '')
+    .replace(',', '.')
+    .replace(/[^0-9.-]/g, '');
+
+  const num = Number.parseFloat(cleaned);
+  return Number.isFinite(num) ? num : 0;
+};
+
+export const parseGoalRows = (rows: SpreadsheetRow[]): GoalRecord[] => {
+  return rows
+    .map((row) => {
+      const produto = getFieldByAliases(row, GOAL_FIELD_ALIASES.produto);
+      const idUsuario = getFieldByAliases(row, GOAL_FIELD_ALIASES.idUsuario);
+
+      if (!produto || !idUsuario) return null;
+
+      return {
+        produto,
+        idUsuario,
+        rubrica: getFieldByAliases(row, GOAL_FIELD_ALIASES.rubrica),
+        ano: parseBRNumber(getFieldByAliases(row, GOAL_FIELD_ALIASES.ano)),
+        janeiro: parseBRNumber(getFieldByAliases(row, GOAL_FIELD_ALIASES.janeiro)),
+        fevereiro: parseBRNumber(getFieldByAliases(row, GOAL_FIELD_ALIASES.fevereiro)),
+        marco: parseBRNumber(getFieldByAliases(row, GOAL_FIELD_ALIASES.marco)),
+        primeiroTrimestre: parseBRNumber(getFieldByAliases(row, GOAL_FIELD_ALIASES.primeiroTrimestre)),
+        abril: parseBRNumber(getFieldByAliases(row, GOAL_FIELD_ALIASES.abril)),
+        maio: parseBRNumber(getFieldByAliases(row, GOAL_FIELD_ALIASES.maio)),
+        junho: parseBRNumber(getFieldByAliases(row, GOAL_FIELD_ALIASES.junho)),
+        segundoTrimestre: parseBRNumber(getFieldByAliases(row, GOAL_FIELD_ALIASES.segundoTrimestre)),
+        julho: parseBRNumber(getFieldByAliases(row, GOAL_FIELD_ALIASES.julho)),
+        agosto: parseBRNumber(getFieldByAliases(row, GOAL_FIELD_ALIASES.agosto)),
+        setembro: parseBRNumber(getFieldByAliases(row, GOAL_FIELD_ALIASES.setembro)),
+        terceiroTrimestre: parseBRNumber(getFieldByAliases(row, GOAL_FIELD_ALIASES.terceiroTrimestre)),
+        outubro: parseBRNumber(getFieldByAliases(row, GOAL_FIELD_ALIASES.outubro)),
+        novembro: parseBRNumber(getFieldByAliases(row, GOAL_FIELD_ALIASES.novembro)),
+        dezembro: parseBRNumber(getFieldByAliases(row, GOAL_FIELD_ALIASES.dezembro)),
+        quartoTrimestre: parseBRNumber(getFieldByAliases(row, GOAL_FIELD_ALIASES.quartoTrimestre)),
+        totalAno: parseBRNumber(getFieldByAliases(row, GOAL_FIELD_ALIASES.totalAno)),
+      } as GoalRecord;
+    })
+    .filter((goal): goal is GoalRecord => goal !== null);
+};
+
+const parsePedidoLine = (headers: string[], values: string[]): PedidoRecord => {
+  const row: Record<string, string> = {};
+  headers.forEach((header, idx) => {
+    row[header] = normalizeText(values[idx]);
+  });
+
+  const get = (aliases: readonly string[]) => getFieldByAliases(row, aliases);
+
+  return {
+    idOportunidade: get(PEDIDO_FIELD_ALIASES.idOportunidade),
+    idEtapaOportunidade: get(PEDIDO_FIELD_ALIASES.idEtapaOportunidade),
+    proprietarioOportunidade: get(PEDIDO_FIELD_ALIASES.proprietarioOportunidade),
+    idErpProprietario: get(PEDIDO_FIELD_ALIASES.idErpProprietario),
+    dataFechamento: get(PEDIDO_FIELD_ALIASES.dataFechamento),
+    produto: get(PEDIDO_FIELD_ALIASES.produto),
+    produtoCodigoModulo: get(PEDIDO_FIELD_ALIASES.produtoCodigoModulo),
+    produtoModulo: get(PEDIDO_FIELD_ALIASES.produtoModulo),
+    produtoValorLicenca: parseBRNumber(get(PEDIDO_FIELD_ALIASES.produtoValorLicenca)),
+    produtoValorLicencaCanal: parseBRNumber(get(PEDIDO_FIELD_ALIASES.produtoValorLicencaCanal)),
+    produtoValorManutencao: parseBRNumber(get(PEDIDO_FIELD_ALIASES.produtoValorManutencao)),
+    produtoValorManutencaoCanal: parseBRNumber(get(PEDIDO_FIELD_ALIASES.produtoValorManutencaoCanal)),
+    servico: get(PEDIDO_FIELD_ALIASES.servico),
+    servicoTipoDeFaturamento: get(PEDIDO_FIELD_ALIASES.servicoTipoDeFaturamento),
+    servicoQtdeDeHoras: parseBRNumber(get(PEDIDO_FIELD_ALIASES.servicoQtdeDeHoras)),
+    servicoValorHora: parseBRNumber(get(PEDIDO_FIELD_ALIASES.servicoValorHora)),
+    servicoValorBruto: parseBRNumber(get(PEDIDO_FIELD_ALIASES.servicoValorBruto)),
+    servicoValorOver: parseBRNumber(get(PEDIDO_FIELD_ALIASES.servicoValorOver)),
+    servicoValorDesconto: parseBRNumber(get(PEDIDO_FIELD_ALIASES.servicoValorDesconto)),
+    servicoValorCanal: parseBRNumber(get(PEDIDO_FIELD_ALIASES.servicoValorCanal)),
+    servicoValorLiquido: parseBRNumber(get(PEDIDO_FIELD_ALIASES.servicoValorLiquido)),
+  };
 };
 
 export const useGoalProcessor = () => {
@@ -20,33 +161,9 @@ export const useGoalProcessor = () => {
           const data = e.target?.result;
           const workbook = XLSX.read(data, { type: 'array' });
           const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-          const rows = XLSX.utils.sheet_to_json(worksheet) as any[];
+          const rows = XLSX.utils.sheet_to_json(worksheet) as SpreadsheetRow[];
 
-          const goals: GoalRecord[] = rows
-            .filter((row) => row.Produto && (row['ID Usuário ERP'] || row['ID Usuário']))
-            .map((row) => ({
-              produto: String(row.Produto || '').trim(),
-              idUsuario: String(row['ID Usuário ERP'] || row['ID Usuário'] || '').trim(),
-              rubrica: String(row.Rubrica || '').trim(),
-              janeiro: parseFloat(row.Janeiro) || 0,
-              fevereiro: parseFloat(row.Fevereiro) || 0,
-              marco: parseFloat(row.Março) || 0,
-              primeiroTrimestre: parseFloat(row['1ºTri']) || 0,
-              abril: parseFloat(row.Abril) || 0,
-              maio: parseFloat(row.Maio) || 0,
-              junho: parseFloat(row.Junho) || 0,
-              segundoTrimestre: parseFloat(row['2ºTri']) || 0,
-              julho: parseFloat(row.Julho) || 0,
-              agosto: parseFloat(row.Agosto) || 0,
-              setembro: parseFloat(row.Setembro) || 0,
-              terceiroTrimestre: parseFloat(row['3ºTri']) || 0,
-              outubro: parseFloat(row.Outubro) || 0,
-              novembro: parseFloat(row.Novembro) || 0,
-              dezembro: parseFloat(row.Dezembro) || 0,
-              quartoTrimestre: parseFloat(row['4ºTri']) || 0,
-              totalAno: parseFloat(row['Total Ano']) || 0,
-            }));
-
+          const goals = parseGoalRows(rows);
           resolve(goals);
         } catch (err) {
           reject(new Error(`Erro ao processar arquivo de metas: ${err}`));
@@ -68,7 +185,6 @@ export const useGoalProcessor = () => {
           if (typeof data === 'string') {
             text = data;
           } else {
-            // Tentar diferentes encodings
             const decoder = new TextDecoder('iso-8859-1');
             text = decoder.decode(data as ArrayBuffer);
           }
@@ -84,34 +200,7 @@ export const useGoalProcessor = () => {
             if (!line) continue;
 
             const values = line.split(';').map((v) => v.trim());
-            const row: Record<string, string> = {};
-            headers.forEach((header, idx) => {
-              row[header] = values[idx] || '';
-            });
-
-            // Mapear campos do CSV para PedidoRecord
-            const pedido: PedidoRecord = {
-              idOportunidade: row['ID OPORTUNIDADE'] || '',
-              idEtapaOportunidade: row['ETAPA OPORTUNIDADE'] || '',
-              proprietarioOportunidade: row['PROPRIETARIO OPORTUNIDADE'] || '',
-              idErpProprietario: row['ID ERP PROPRIETARIO'] || '',
-              produto: row['PRODUTO'] || '',
-              produtoCodigoModulo: row['PRODUTO - CÓDIGO DO MÓDULO'] || '',
-              produtoModulo: row['PRODUTO - MODULO'] || '',
-              produtoValorLicenca: parseBR(row['PRODUTO - VALOR LICENCA']),
-              produtoValorLicencaCanal: parseBR(row['PRODUTO - VALOR LICENCA CANAL']),
-              produtoValorManutencao: parseBR(row['PRODUTO - VALOR MANUTENCAO']),
-              produtoValorManutencaoCanal: parseBR(row['PRODUTO - VALOR MANUTENCAO CANAL']),
-              servico: row['SERVICO'] || '',
-              servicoTipoDeFaturamento: row['SERVICO - TIPO DE FATURAMENTO'] || '',
-              servicoQtdeDeHoras: parseBR(row['SERVICO - QTDE DE HORAS']),
-              servicoValorHora: parseBR(row['SERVICO - VALOR HORA']),
-              servicoValorBruto: parseBR(row['SERVICO - VALOR BRUTO']),
-              servicoValorOver: parseBR(row['SERVICO - VALOR OVER']),
-              servicoValorDesconto: parseBR(row['SERVICO - VALOR DESCONTO']),
-              servicoValorCanal: parseBR(row['SERVICO - VALOR CANAL']),
-              servicoValorLiquido: parseBR(row['SERVICO - VALOR LIQUIDO']),
-            };
+            const pedido = parsePedidoLine(headers, values);
 
             if (pedido.idOportunidade) {
               pedidos.push(pedido);

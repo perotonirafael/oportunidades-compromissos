@@ -4,12 +4,36 @@
  * automaticamente ao reabrir a página, sem precisar fazer upload novamente.
  */
 
+import type { GoalRecord, PedidoRecord } from '@/types/goals';
+import type { Action, Opportunity } from '@/hooks/useDataProcessor';
+
 const DB_NAME = 'pipeline-analytics-cache';
 const DB_VERSION = 1;
 const STORE_NAME = 'processed-data';
 const CACHE_KEY = 'last-upload';
+const CACHE_SCHEMA_VERSION = 2;
 
-interface CacheEntry {
+export interface CacheEntry {
+  key: string;
+  schemaVersion: number;
+  result: any;
+  timestamp: number;
+  oppFileName: string;
+  actFileName: string;
+  oppCount: number;
+  actCount: number;
+  goalFileName?: string;
+  pedidoFileName?: string;
+  goals: GoalRecord[];
+  pedidos: PedidoRecord[];
+  opportunities: Opportunity[];
+  actions: Action[];
+  lightOpportunities: Opportunity[];
+  lightActions: Action[];
+  selectedPeriod?: string;
+}
+
+interface LegacyCacheEntry {
   key: string;
   result: any;
   timestamp: number;
@@ -17,6 +41,23 @@ interface CacheEntry {
   actFileName: string;
   oppCount: number;
   actCount: number;
+}
+
+export interface SaveToCacheInput {
+  result: any;
+  oppFileName: string;
+  actFileName: string;
+  oppCount: number;
+  actCount: number;
+  goalFileName?: string;
+  pedidoFileName?: string;
+  goals: GoalRecord[];
+  pedidos: PedidoRecord[];
+  opportunities: Opportunity[];
+  actions: Action[];
+  lightOpportunities: Opportunity[];
+  lightActions: Action[];
+  selectedPeriod?: string;
 }
 
 function openDB(): Promise<IDBDatabase> {
@@ -33,25 +74,48 @@ function openDB(): Promise<IDBDatabase> {
   });
 }
 
-export async function saveToCache(
-  result: any,
-  oppFileName: string,
-  actFileName: string,
-  oppCount: number,
-  actCount: number
-): Promise<void> {
+const isNewCacheEntry = (entry: CacheEntry | LegacyCacheEntry): entry is CacheEntry => {
+  return (
+    (entry as CacheEntry).schemaVersion === CACHE_SCHEMA_VERSION &&
+    Array.isArray((entry as CacheEntry).goals) &&
+    Array.isArray((entry as CacheEntry).pedidos)
+  );
+};
+
+const migrateLegacyEntry = (entry: LegacyCacheEntry): CacheEntry => ({
+  ...entry,
+  schemaVersion: 1,
+  goals: [],
+  pedidos: [],
+  opportunities: [],
+  actions: [],
+  lightOpportunities: [],
+  lightActions: [],
+});
+
+export async function saveToCache(input: SaveToCacheInput): Promise<void> {
   try {
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     const entry: CacheEntry = {
       key: CACHE_KEY,
-      result,
+      schemaVersion: CACHE_SCHEMA_VERSION,
+      result: input.result,
       timestamp: Date.now(),
-      oppFileName,
-      actFileName,
-      oppCount,
-      actCount,
+      oppFileName: input.oppFileName,
+      actFileName: input.actFileName,
+      oppCount: input.oppCount,
+      actCount: input.actCount,
+      goalFileName: input.goalFileName,
+      pedidoFileName: input.pedidoFileName,
+      goals: input.goals,
+      pedidos: input.pedidos,
+      opportunities: input.opportunities,
+      actions: input.actions,
+      lightOpportunities: input.lightOpportunities,
+      lightActions: input.lightActions,
+      selectedPeriod: input.selectedPeriod,
     };
     store.put(entry);
     return new Promise((resolve, reject) => {
@@ -78,7 +142,18 @@ export async function loadFromCache(): Promise<CacheEntry | null> {
     return new Promise((resolve, reject) => {
       request.onsuccess = () => {
         db.close();
-        resolve(request.result || null);
+        const rawEntry = request.result as CacheEntry | LegacyCacheEntry | null;
+        if (!rawEntry) {
+          resolve(null);
+          return;
+        }
+
+        if (isNewCacheEntry(rawEntry)) {
+          resolve(rawEntry);
+          return;
+        }
+
+        resolve(migrateLegacyEntry(rawEntry as LegacyCacheEntry));
       };
       request.onerror = () => {
         db.close();
@@ -117,6 +192,8 @@ export async function getCacheInfo(): Promise<{
   timestamp?: number;
   oppFileName?: string;
   actFileName?: string;
+  goalFileName?: string;
+  pedidoFileName?: string;
   oppCount?: number;
   actCount?: number;
 } | null> {
@@ -128,6 +205,8 @@ export async function getCacheInfo(): Promise<{
       timestamp: entry.timestamp,
       oppFileName: entry.oppFileName,
       actFileName: entry.actFileName,
+      goalFileName: entry.goalFileName,
+      pedidoFileName: entry.pedidoFileName,
       oppCount: entry.oppCount,
       actCount: entry.actCount,
     };
