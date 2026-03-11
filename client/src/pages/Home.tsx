@@ -9,7 +9,7 @@ import { useFileProcessor } from '@/hooks/useFileProcessor';
 import { useWorkerDataProcessor } from '@/hooks/useWorkerDataProcessor';
 import { useGoalProcessor } from '@/hooks/useGoalProcessor';
 import { useGoalMetricsProcessor } from '@/hooks/useGoalMetricsProcessor';
-import type { GoalRecord, PedidoRecord } from '@/types/goals';
+import type { GoalRecord, PedidoRecord, GoalMetrics } from '@/types/goals';
 import { PeriodSelector } from '@/components/PeriodSelector';
 import { GoalChart } from '@/components/GoalChart';
 import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
@@ -147,7 +147,44 @@ export default function Home() {
 
   const processedData = result?.records ?? [];
   const selectedUserId = goals[0]?.idUsuario;
-  const goalMetricas = useGoalMetricsProcessor(goals, pedidos, processedData, selectedPeriod, selectedUserId);
+  const goalMetricsByRubrica = useGoalMetricsProcessor(goals, pedidos, processedData, selectedPeriod, selectedUserId);
+  const goalMetricas = useMemo<GoalMetrics[]>(() => {
+    if (!goalMetricsByRubrica.length) return [];
+
+    let metaLicencasServicos = 0;
+    let realLicencasServicos = 0;
+    let metaRecorrente = 0;
+    let realRecorrente = 0;
+
+    for (const metric of goalMetricsByRubrica) {
+      const rubricaNorm = metric.rubrica.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const isRecorrente = rubricaNorm.includes('recorrente') && !rubricaNorm.includes('nao recorrente');
+
+      if (isRecorrente) {
+        metaRecorrente += metric.meta;
+        realRecorrente += metric.realizado;
+      } else {
+        metaLicencasServicos += metric.meta;
+        realLicencasServicos += metric.realizado;
+      }
+    }
+
+    const percentualLicencas =
+      metaLicencasServicos > 0 ? (realLicencasServicos / metaLicencasServicos) * 100 : 0;
+    const percentualRecorrente = metaRecorrente > 0 ? (realRecorrente / metaRecorrente) * 100 : 0;
+    const percentualAtingimento = percentualLicencas * 0.5 + percentualRecorrente * 0.5;
+
+    return [{
+      idUsuario: selectedUserId || '',
+      etn: 'TOTAL',
+      periodo: selectedPeriod,
+      metaLicencasServicos,
+      realLicencasServicos,
+      metaRecorrente,
+      realRecorrente,
+      percentualAtingimento,
+    }];
+  }, [goalMetricsByRubrica, selectedPeriod, selectedUserId]);
   const missingAgendas = result?.missingAgendas ?? [];
   const kpis = result?.kpis ?? null;
   const motivosPerdaBrutos = result?.motivosPerda ?? [];
@@ -991,7 +1028,7 @@ export default function Home() {
                   <PeriodSelector selectedPeriod={selectedPeriod} onPeriodChange={setSelectedPeriod} />
                 </div>
               </div>
-              <GoalChart metricas={goalMetricas as any} title="" />
+              <GoalChart metricas={goalMetricas} title="" />
             </div>
 
             {/* Table */}
@@ -1192,7 +1229,7 @@ export default function Home() {
             data={processedData}
             actions={actions}
             onClose={() => setSelectedETNDetail(null)}
-            goalMetricas={goalMetricas as any}
+            goalMetricas={goalMetricas}
           />
         )}
       </div>
