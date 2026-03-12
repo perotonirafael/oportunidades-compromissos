@@ -47,7 +47,8 @@ export function GoalManager({ onSaveGoals }: GoalManagerProps) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.name.endsWith('.xlsx')) {
+    const lowerFileName = file.name.toLowerCase();
+    if (lowerFileName.endsWith('.xlsx') || lowerFileName.endsWith('.xls')) {
       toast.error('Formato inválido! Abra o Excel, clique em "Salvar Como -> CSV (separado por vírgulas)" e suba o novo arquivo.');
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
@@ -60,7 +61,8 @@ export function GoalManager({ onSaveGoals }: GoalManagerProps) {
       delimiter: ";", // <--- Correção que evita colunas espremidas
       complete: (results) => {
         try {
-          const parsedData: GoalRow[] = results.data.map((row: any, index: number) => {
+          const sourceRows = Array.isArray(results.data) ? results.data : [];
+          const parsedData: GoalRow[] = sourceRows.map((row: any, index: number) => {
             const findKey = (searchStr: string) => Object.keys(row).find(k => k.toLowerCase().replace(/\s/g,'').includes(searchStr));
             
             const prodKey = findKey('produto');
@@ -118,6 +120,7 @@ export function GoalManager({ onSaveGoals }: GoalManagerProps) {
           }
 
           setGoals(parsedData);
+          if (fileInputRef.current) fileInputRef.current.value = '';
           toast.success(`${parsedData.length} metas do ano todo importadas e calculadas!`);
         } catch (error) {
           toast.error("Erro ao processar o arquivo CSV.");
