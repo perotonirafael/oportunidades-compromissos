@@ -145,7 +145,7 @@ export default function Home() {
   const result = workerResult || normalResult;
 
   const processedData = result?.records ?? [];
-  const selectedUserId = goals[0]?.idUsuario;
+  const selectedUserId = goals[0]?.idUsuario || (goals[0] as any)?.['Id Usuário ERP'];
   const goalMetricsByRubrica = useGoalMetricsProcessor(goals, pedidos, processedData, selectedPeriod, selectedUserId);
   const goalMetricas = useMemo<GoalMetrics[]>(() => {
     if (!goalMetricsByRubrica.length) return [];
@@ -753,7 +753,7 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="flex flex-1 items-center justify-center">
-                  <GoalManager onSaveGoals={setGoals} currentGoals={goals} />
+                  <GoalManager onSaveGoals={(cleanGoals) => setGoals(cleanGoals as any)} />
                 </div>
               </div>
 
@@ -966,7 +966,7 @@ export default function Home() {
                   Atingimento de Metas - {selectedPeriod}
                 </h3>
                 <div className="flex items-center gap-3">
-                  <GoalManager onSaveGoals={setGoals} currentGoals={goals} />
+                  <GoalManager onSaveGoals={(cleanGoals) => setGoals(cleanGoals as any)} />
                   <label className="cursor-pointer px-3 py-1.5 text-xs font-medium rounded-lg border border-orange-300 text-orange-700 hover:bg-orange-50 transition-all">
                     <input type="file" accept=".csv" onChange={handlePedidoFile} className="hidden" />
                     {pedidoFileName || 'Pedidos (.csv)'}

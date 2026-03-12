@@ -1,312 +1,188 @@
-import { useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
-import { toast } from 'sonner';
+import React, { useState, useRef } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import type { GoalRecord } from '@/types/goals';
+import { Upload, Save, Edit2, Check } from 'lucide-react';
+import Papa from 'papaparse';
+import { toast } from 'sonner';
 
-type GoalManagerProps = {
-  onSaveGoals: (goals: GoalRecord[]) => void;
-  currentGoals?: GoalRecord[];
-};
-
-type EditableGoal = {
+interface GoalRow {
   id: string;
-  idUsuario: string;
   produto: string;
+  idUsuario: string;
   rubrica: string;
   marco: number;
-  primeiroTrimestre: number;
-  raw: Record<string, any>;
-};
+  tri1: number;
+}
 
-const MONTH_MAP: Array<{ label: string; keys: string[]; target: keyof GoalRecord }> = [
-  { label: 'janeiro', keys: ['janeiro'], target: 'janeiro' },
-  { label: 'fevereiro', keys: ['fevereiro'], target: 'fevereiro' },
-  { label: 'marco', keys: ['marco', 'março'], target: 'marco' },
-  { label: 'abril', keys: ['abril'], target: 'abril' },
-  { label: 'maio', keys: ['maio'], target: 'maio' },
-  { label: 'junho', keys: ['junho'], target: 'junho' },
-  { label: 'julho', keys: ['julho'], target: 'julho' },
-  { label: 'agosto', keys: ['agosto'], target: 'agosto' },
-  { label: 'setembro', keys: ['setembro'], target: 'setembro' },
-  { label: 'outubro', keys: ['outubro'], target: 'outubro' },
-  { label: 'novembro', keys: ['novembro'], target: 'novembro' },
-  { label: 'dezembro', keys: ['dezembro'], target: 'dezembro' },
-  { label: '1tri', keys: ['1ºtri', '1otri', '1 tri', '1º trimestre'], target: 'primeiroTrimestre' },
-  { label: '2tri', keys: ['2ºtri', '2otri', '2 tri', '2º trimestre'], target: 'segundoTrimestre' },
-  { label: '3tri', keys: ['3ºtri', '3otri', '3 tri', '3º trimestre'], target: 'terceiroTrimestre' },
-  { label: '4tri', keys: ['4ºtri', '4otri', '4 tri', '4º trimestre'], target: 'quartoTrimestre' },
-  { label: 'total', keys: ['total ano', 'total'], target: 'totalAno' },
-];
+interface GoalManagerProps {
+  onSaveGoals: (cleanGoals: any[]) => void;
+}
 
-const normalize = (value: unknown): string =>
-  String(value ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
-
-const normalizeId = (value: unknown): string => {
-  const str = String(value ?? '').trim();
-  return str.endsWith('.0') ? str.slice(0, -2) : str;
-};
-
-const parseMoney = (value: unknown): number => {
-  if (value == null || value === '') return 0;
-  if (typeof value === 'number') return value;
-  let text = String(value).trim().replace(/[^\d,.-]/g, '');
-  if (text.includes(',')) text = text.replace(/\./g, '').replace(',', '.');
-  const num = parseFloat(text);
-  return Number.isNaN(num) ? 0 : num;
-};
-
-const parseCsvRows = (text: string): Record<string, string>[] => {
-  const lines = text.split(/\r?\n/).filter(Boolean);
-  if (!lines.length) return [];
-  const delimiter = (lines[0].split(';').length >= lines[0].split(',').length) ? ';' : ',';
-  const headers = lines[0].split(delimiter).map((h) => h.trim());
-  return lines.slice(1).map((line) => {
-    const cols = line.split(delimiter);
-    const row: Record<string, string> = {};
-    headers.forEach((h, idx) => {
-      row[h] = (cols[idx] ?? '').trim();
-    });
-    return row;
-  });
-};
-
-const getByFuzzy = (row: Record<string, any>, aliases: string[]) => {
-  const normalizedAliases = aliases.map(normalize);
-  for (const [key, value] of Object.entries(row)) {
-    const n = normalize(key);
-    if (normalizedAliases.includes(n)) return value;
-  }
-  return undefined;
-};
-
-export function GoalManager({ onSaveGoals, currentGoals = [] }: GoalManagerProps) {
-  const [open, setOpen] = useState(false);
-  const [rows, setRows] = useState<EditableGoal[]>([]);
+export function GoalManager({ onSaveGoals }: GoalManagerProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [goals, setGoals] = useState<GoalRow[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<Partial<GoalRow>>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const statusLabel = useMemo(() => {
-    if (rows.length > 0) return `${rows.length} metas carregadas`;
-    if (currentGoals.length > 0) return `${currentGoals.length} metas validadas`; 
-    return 'Sem metas validadas';
-  }, [rows.length, currentGoals.length]);
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  const buildGoalRecord = (row: EditableGoal): GoalRecord => {
-    const data: GoalRecord = {
-      produto: row.produto,
-      idUsuario: row.idUsuario,
-      rubrica: row.rubrica,
-      janeiro: 0,
-      fevereiro: 0,
-      marco: row.marco,
-      primeiroTrimestre: row.primeiroTrimestre,
-      abril: 0,
-      maio: 0,
-      junho: 0,
-      segundoTrimestre: 0,
-      julho: 0,
-      agosto: 0,
-      setembro: 0,
-      terceiroTrimestre: 0,
-      outubro: 0,
-      novembro: 0,
-      dezembro: 0,
-      quartoTrimestre: 0,
-      totalAno: 0,
-    };
+    if (file.name.endsWith('.xlsx')) {
+      toast.error('Formato inválido! Abra o Excel, clique em "Salvar Como -> CSV (separado por vírgulas)" e suba o novo arquivo.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
 
-    MONTH_MAP.forEach(({ keys, target }) => {
-      const value = getByFuzzy(row.raw, keys);
-      if (value !== undefined) {
-        (data[target] as number) = parseMoney(value);
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        try {
+          const parsedData: GoalRow[] = (results.data as any[]).map((row: any, index: number) => {
+            const findKey = (searchStr: string) => Object.keys(row).find((k) => k.toLowerCase().replace(/\s/g, '').includes(searchStr));
+
+            const prodKey = findKey('produto');
+            const userKey = findKey('usuário') || findKey('usuario') || findKey('iderp');
+            const rubricaKey = findKey('rubrica');
+            const marcoKey = findKey('março') || findKey('marco');
+            const triKey = findKey('1ºtri') || findKey('1otri');
+
+            const parseMoney = (val: any) => {
+              if (!val) return 0;
+              let str = String(val).trim();
+              if (str.includes(',')) str = str.replace(/\./g, '').replace(',', '.');
+              const num = parseFloat(str);
+              return Number.isNaN(num) ? 0 : num;
+            };
+
+            return {
+              id: `goal-${index}-${Date.now()}`,
+              produto: row[prodKey || 'Produto'] || '',
+              idUsuario: String(row[userKey || 'Id Usuário ERP']).replace('.0', ''),
+              rubrica: row[rubricaKey || 'Rubrica'] || '',
+              marco: parseMoney(row[marcoKey || 'Março']),
+              tri1: parseMoney(row[triKey || '1ºTri']),
+            };
+          }).filter((g) => g.produto && g.idUsuario && g.idUsuario !== 'undefined');
+
+          if (parsedData.length === 0) {
+            toast.error('Nenhuma meta encontrada. Verifique o CSV.');
+            return;
+          }
+
+          setGoals(parsedData);
+          toast.success(`${parsedData.length} metas importadas com sucesso!`);
+        } catch (error) {
+          toast.error('Erro ao processar o CSV.');
+        }
       }
     });
-
-    return data;
   };
 
-  const handleFile = async (file?: File) => {
-    if (!file) return;
-    try {
-      let parsedRows: Record<string, any>[] = [];
-      const ext = file.name.toLowerCase();
-
-      if (ext.endsWith('.xlsx') || ext.endsWith('.xls')) {
-        const buffer = await file.arrayBuffer();
-        const workbook = XLSX.read(buffer, { type: 'array' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const csv = XLSX.utils.sheet_to_csv(sheet);
-        parsedRows = parseCsvRows(csv);
-      } else {
-        const text = await file.text();
-        parsedRows = parseCsvRows(text);
-      }
-
-      const cleanRows: EditableGoal[] = parsedRows
-        .map((row, index) => {
-          const idUsuario = normalizeId(
-            getByFuzzy(row, ['id usuario erp', 'id usuario', 'usuario', 'id'])
-          );
-          const produto = String(getByFuzzy(row, ['produto']) ?? '').trim();
-          const rubrica = String(getByFuzzy(row, ['rubrica']) ?? '').trim();
-
-          if (!idUsuario || !produto || !rubrica) return null;
-
-          const metaMarco = parseMoney(getByFuzzy(row, ['marco', 'março']));
-          const metaPrimeiroTri = parseMoney(getByFuzzy(row, ['1ºtri', '1otri', '1 tri', '1º trimestre']));
-
-          return {
-            id: `${idUsuario}-${produto}-${rubrica}-${index}`,
-            idUsuario,
-            produto,
-            rubrica,
-            marco: metaMarco,
-            primeiroTrimestre: metaPrimeiroTri,
-            raw: row,
-          };
-        })
-        .filter(Boolean) as EditableGoal[];
-
-      setRows(cleanRows);
-      toast.success(`Arquivo de metas carregado com ${cleanRows.length} linhas válidas.`);
-    } catch (error) {
-      toast.error('Falha ao ler arquivo de metas. Verifique o formato do arquivo.');
-      console.error(error);
-    }
+  const handleEdit = (goal: GoalRow) => {
+    setEditingId(goal.id);
+    setEditForm(goal);
   };
 
-  const handleSaveGoals = () => {
-    const cleanGoals = rows.map(buildGoalRecord);
-    onSaveGoals(cleanGoals);
-    toast.success(`Metas validadas salvas: ${cleanGoals.length} linhas.`);
-    setOpen(false);
+  const handleSaveEdit = () => {
+    setGoals(goals.map((g) => g.id === editingId ? { ...g, ...editForm } as GoalRow : g));
+    setEditingId(null);
   };
 
-  const updateRow = (id: string, field: 'marco' | 'primeiroTrimestre', value: number) => {
-    setRows((prev) => prev.map((row) => (row.id === id ? { ...row, [field]: value } : row)));
+  const handleFinalSave = () => {
+    const finalGoals = goals.map((g) => ({
+      'Produto': g.produto,
+      'Id Usuário ERP': g.idUsuario,
+      'Rubrica': g.rubrica,
+      'Março': g.marco,
+      '1º Trimestre': g.tri1,
+      'Total Ano': g.tri1 * 4
+    }));
+
+    onSaveGoals(finalGoals);
+    toast.success('Metas sincronizadas!');
+    setIsOpen(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-50">
-          Gestor de Metas
+        <Button variant="outline" className="flex items-center gap-2 bg-slate-900 text-white hover:bg-slate-800 shadow-md">
+          <Upload className="h-4 w-4" /> Importar e Validar Metas
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-5xl">
-        <DialogHeader>
-          <DialogTitle>Gestor Interativo de Metas</DialogTitle>
-          <DialogDescription>
-            Upload, validação e edição inline das metas. Fonte única de verdade do painel.
-          </DialogDescription>
+      <DialogContent className="max-w-6xl max-h-[85vh] overflow-hidden flex flex-col bg-white rounded-xl">
+        <DialogHeader className="px-6 py-4 border-b">
+          <DialogTitle className="text-xl font-bold text-gray-800">Gestor Interativo de Metas</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <label className="cursor-pointer">
-              <input
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                className="hidden"
-                onChange={(e) => handleFile(e.target.files?.[0])}
-              />
-              <span className="inline-flex h-9 items-center rounded-md border px-4 text-sm font-medium hover:bg-accent">
-                Upload metas_2025 (.xlsx/.csv)
-              </span>
-            </label>
-            <span className="text-xs text-muted-foreground">{statusLabel}</span>
+        <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+          <div className="mb-6 p-6 border-2 border-dashed border-blue-300 rounded-xl text-center bg-blue-50 hover:bg-blue-100 transition-colors">
+             <label className="cursor-pointer flex flex-col items-center justify-center h-full">
+               <Upload className="h-10 w-10 text-blue-500 mb-3" />
+               <span className="text-base text-blue-700 font-semibold">Clique para subir o Metas.csv</span>
+               <input type="file" accept=".csv" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
+             </label>
           </div>
 
-          <div className="max-h-[420px] overflow-auto rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID Usuário</TableHead>
-                  <TableHead>Produto</TableHead>
-                  <TableHead>Rubrica</TableHead>
-                  <TableHead>Meta Março</TableHead>
-                  <TableHead>Meta 1º Tri</TableHead>
-                  <TableHead className="w-[120px]">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => {
-                  const editing = editingId === row.id;
-                  return (
-                    <TableRow key={row.id}>
-                      <TableCell>{row.idUsuario}</TableCell>
-                      <TableCell>{row.produto}</TableCell>
-                      <TableCell>{row.rubrica}</TableCell>
-                      <TableCell>
-                        {editing ? (
-                          <Input
-                            type="number"
-                            value={row.marco}
-                            onChange={(e) => updateRow(row.id, 'marco', Number(e.target.value || 0))}
-                          />
-                        ) : (
-                          row.marco.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {editing ? (
-                          <Input
-                            type="number"
-                            value={row.primeiroTrimestre}
-                            onChange={(e) => updateRow(row.id, 'primeiroTrimestre', Number(e.target.value || 0))}
-                          />
-                        ) : (
-                          row.primeiroTrimestre.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {editing ? (
-                          <Button size="sm" onClick={() => setEditingId(null)}>Salvar</Button>
-                        ) : (
-                          <Button size="sm" variant="outline" onClick={() => setEditingId(row.id)}>Editar</Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {rows.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground">
-                      Nenhuma meta carregada.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
+          {goals.length > 0 && (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-gray-200 shadow-sm overflow-hidden bg-white">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left text-gray-600">
+                    <thead className="text-xs text-gray-700 uppercase bg-gray-100 border-b border-gray-200">
+                      <tr>
+                        <th className="px-5 py-4 font-bold text-gray-900">Usuário ID</th>
+                        <th className="px-5 py-4 font-bold text-gray-900">Produto</th>
+                        <th className="px-5 py-4 font-bold text-gray-900">Rubrica</th>
+                        <th className="px-5 py-4 font-bold text-gray-900 bg-blue-50/50">Meta Março (R$)</th>
+                        <th className="px-5 py-4 font-bold text-gray-900 bg-blue-50/50">Meta 1º Tri (R$)</th>
+                        <th className="px-5 py-4 font-bold text-gray-900 text-center">Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {goals.map((goal, idx) => (
+                        <tr key={goal.id} className={`hover:bg-blue-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                          <td className="px-5 py-3 font-semibold text-gray-800">{goal.idUsuario}</td>
+                          <td className="px-5 py-3">{goal.produto}</td>
+                          <td className="px-5 py-3"><span className="px-2 py-1 bg-gray-100 rounded-md text-xs font-medium">{goal.rubrica}</span></td>
+                          <td className="px-5 py-3 bg-blue-50/20">
+                            {editingId === goal.id ? (
+                              <Input type="number" value={editForm.marco ?? ''} onChange={(e) => setEditForm({...editForm, marco: Number(e.target.value)})} className="w-28 h-9" />
+                            ) : (<span className="font-medium text-gray-700">{goal.marco.toLocaleString('pt-BR')}</span>)}
+                          </td>
+                          <td className="px-5 py-3 bg-blue-50/20">
+                            {editingId === goal.id ? (
+                              <Input type="number" value={editForm.tri1 ?? ''} onChange={(e) => setEditForm({...editForm, tri1: Number(e.target.value)})} className="w-28 h-9" />
+                            ) : (<span className="font-medium text-gray-700">{goal.tri1.toLocaleString('pt-BR')}</span>)}
+                          </td>
+                          <td className="px-5 py-3 text-center">
+                            {editingId === goal.id ? (
+                              <Button size="sm" onClick={handleSaveEdit} className="bg-green-500 hover:bg-green-600 text-white w-full"><Check className="h-4 w-4 mr-1"/> Salvar</Button>
+                            ) : (
+                              <Button size="sm" variant="outline" onClick={() => handleEdit(goal)} className="w-full"><Edit2 className="h-4 w-4 mr-1"/> Editar</Button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-          <Button onClick={handleSaveGoals} disabled={rows.length === 0}>Salvar Metas Validadas</Button>
-        </DialogFooter>
+        {goals.length > 0 && (
+          <div className="p-4 border-t bg-white flex justify-end">
+            <Button onClick={handleFinalSave} className="bg-blue-600 hover:bg-blue-700 text-white px-6 shadow-md">
+              <Save className="h-5 w-5 mr-2" /> Injetar Metas no Gráfico
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
