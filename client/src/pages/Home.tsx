@@ -9,7 +9,8 @@ import { useFileProcessor } from '@/hooks/useFileProcessor';
 import { useWorkerDataProcessor } from '@/hooks/useWorkerDataProcessor';
 import { useGoalProcessor } from '@/hooks/useGoalProcessor';
 import { useGoalMetricsProcessor } from '@/hooks/useGoalMetricsProcessor';
-import type { GoalRecord, PedidoRecord, GoalMetrics } from '@/types/goals';
+import type { PedidoRecord, GoalMetrics } from '@/types/goals';
+import type { ManualGoal } from '@/components/GoalManager';
 import { PeriodSelector } from '@/components/PeriodSelector';
 import { GoalChart } from '@/components/GoalChart';
 import { GoalManager } from '@/components/GoalManager';
@@ -34,9 +35,9 @@ export default function Home() {
   const [actFileName, setActFileName] = useState('');
   const [pedidoFile, setPedidoFile] = useState<File | null>(null);
   const [pedidoFileName, setPedidoFileName] = useState('');
-  const [goals, setGoals] = useState<GoalRecord[]>([]);
+  const [goals, setGoals] = useState<ManualGoal[]>([]);
   const [pedidos, setPedidos] = useState<PedidoRecord[]>([]);
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('Março'); // Período padrão
+  const [globalPeriod, setGlobalPeriod] = useState<string>('1º Trimestre');
 
   const { state: processingState, processFiles: processFilesLegacy, resetState } = useFileProcessor();
   const { processData: processDataWithWorker, processFiles: processFilesWithWorker, isProcessing: isWorkerProcessing, progress: workerProgress } = useWorkerDataProcessor();
@@ -145,8 +146,8 @@ export default function Home() {
   const result = workerResult || normalResult;
 
   const processedData = result?.records ?? [];
-  const selectedUserId = goals[0]?.idUsuario || (goals[0] as any)?.['Id Usuário ERP'];
-  const goalMetricsByRubrica = useGoalMetricsProcessor(goals, pedidos, processedData, selectedPeriod, selectedUserId);
+  const selectedUserId = goals[0]?.idUsuario;
+  const goalMetricsByRubrica = useGoalMetricsProcessor(goals, pedidos, processedData, globalPeriod, selectedUserId);
   const goalMetricas = useMemo<GoalMetrics[]>(() => {
     if (!goalMetricsByRubrica.length) return [];
 
@@ -176,14 +177,14 @@ export default function Home() {
     return [{
       idUsuario: selectedUserId || '',
       etn: 'TOTAL',
-      periodo: selectedPeriod,
+      periodo: globalPeriod,
       metaLicencasServicos,
       realLicencasServicos,
       metaRecorrente,
       realRecorrente,
       percentualAtingimento,
     }];
-  }, [goalMetricsByRubrica, selectedPeriod, selectedUserId]);
+  }, [goalMetricsByRubrica, globalPeriod, selectedUserId]);
   const missingAgendas = result?.missingAgendas ?? [];
   const kpis = result?.kpis ?? null;
   const motivosPerdaBrutos = result?.motivosPerda ?? [];
@@ -753,7 +754,7 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="flex flex-1 items-center justify-center">
-                  <GoalManager onSaveGoals={(cleanGoals) => setGoals(cleanGoals as any)} />
+                  <GoalManager onSaveGoals={setGoals} existingGoals={goals} />
                 </div>
               </div>
 
@@ -963,18 +964,18 @@ export default function Home() {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                   <Target size={20} className="text-purple-600" />
-                  Atingimento de Metas - {selectedPeriod}
+                  Atingimento de Metas - {globalPeriod}
                 </h3>
                 <div className="flex items-center gap-3">
-                  <GoalManager onSaveGoals={(cleanGoals) => setGoals(cleanGoals as any)} />
+                  <GoalManager onSaveGoals={setGoals} existingGoals={goals} />
                   <label className="cursor-pointer px-3 py-1.5 text-xs font-medium rounded-lg border border-orange-300 text-orange-700 hover:bg-orange-50 transition-all">
                     <input type="file" accept=".csv" onChange={handlePedidoFile} className="hidden" />
                     {pedidoFileName || 'Pedidos (.csv)'}
                   </label>
-                  <PeriodSelector selectedPeriod={selectedPeriod} onPeriodChange={setSelectedPeriod} />
+                  <PeriodSelector selectedPeriod={globalPeriod} onPeriodChange={setGlobalPeriod} />
                 </div>
               </div>
-              <GoalChart metricas={goalMetricas} title="" />
+              <GoalChart metricas={goalMetricas} globalPeriod={globalPeriod} title="" />
             </div>
 
             {/* Table */}

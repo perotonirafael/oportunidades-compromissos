@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { ManualGoal } from '../components/GoalManager';
 
 export interface GoalMetric {
   id: string;
@@ -10,113 +11,114 @@ export interface GoalMetric {
 }
 
 export function useGoalMetricsProcessor(
-  goals: any[],
+  goals: ManualGoal[],
   pedidos: any[],
   processedData: any[],
-  selectedPeriod: string,
+  globalPeriod: string,
   selectedUserId?: string
 ): GoalMetric[] {
   return useMemo(() => {
     if (!goals?.length || !selectedUserId) return [];
 
-    const normalizeString = (str: any) => String(str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-
-    let safeUserId = String(selectedUserId).trim();
-    if (normalizeString(safeUserId) === 'rafael perotoni') safeUserId = '11124';
-
-    const userOpportunities = new Map<string, number>();
-    (processedData || []).forEach((opp) => {
-      const oppId = String(opp.id || opp.oportunidadeId || opp.oppId).trim();
-      if (oppId) userOpportunities.set(oppId, Number(opp.percentualReconhecimento) || 100);
-    });
-
-    const realizedMap = new Map<string, number>();
+    const normalizeString = (str: any) => String(str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    
+    const getSafeKey = (obj: any, keys: string[]) => {
+      if (!obj) return undefined;
+      const objKeys = Object.keys(obj);
+      for (const k of keys) {
+        const normK = normalizeString(k);
+        const match = objKeys.find(ok => normalizeString(ok) === normK);
+        if (match && obj[match] !== undefined && obj[match] !== '') return obj[match];
+      }
+      return undefined;
+    };
 
     const parseMoney = (val: any): number => {
       if (!val) return 0;
-      if (typeof val === 'number') return val;
-      let str = String(val).trim();
-      str = str.replace(/[^\d,\.-]/g, '');
+      let str = String(val).trim().replace(/[^\d,\.-]/g, '');
       if (str.includes(',')) str = str.replace(/\./g, '').replace(',', '.');
       const num = parseFloat(str);
-      return Number.isNaN(num) ? 0 : num;
+      return isNaN(num) ? 0 : num;
     };
 
-    (pedidos || []).forEach((pedido) => {
-      const oppId = String(pedido['ID OPORTUNIDADE'] || pedido['Oportunidade ID'] || pedido.idOportunidade || '').trim();
-      const donoId = String(pedido['ID ERP PROPRIETARIO'] || pedido['Id ERP Proprietário'] || pedido.idErpProprietario || '').trim();
+    let safeUserId = String(selectedUserId).trim();
+    const knownUsers: Record<string, string> = { 'rafael perotoni': '11124' };
+    if (knownUsers[normalizeString(safeUserId)]) safeUserId = knownUsers[normalizeString(safeUserId)];
 
-      const isOwner = donoId === safeUserId;
-      const isETN = userOpportunities.has(oppId);
+    const userOpportunities = new Map<string, number>();
+    (processedData || []).forEach(opp => {
+      const oppId = String(opp.id || opp.oportunidadeId).trim();
+      if (oppId) userOpportunities.set(oppId, Number(opp.percentualReconhecimento) || 100);
+    });
 
-      if (isOwner || isETN) {
-        const multiplier = isOwner ? 1 : ((userOpportunities.get(oppId) || 100) / 100);
-        const produto = normalizeString(pedido['PRODUTO'] || pedido['Produto'] || pedido.produto || 'Diversos');
+    const belongsToPeriod = (dataFechamento: string, targetPeriod: string) => {
+      if (!dataFechamento) return true;
+      let mes = 0;
+      if (dataFechamento.includes('/')) mes = parseInt(dataFechamento.split(' ')[0].split('/')[1], 10);
+      else if (dataFechamento.includes('-')) {
+         const p = dataFechamento.split(' ')[0].split('-');
+         mes = parseInt(p[p[0].length === 4 ? 1 : 1], 10);
+      }
+      const t = normalizeString(targetPeriod);
+      if (t.includes('total')) return true;
+      const meses = ['', 'janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+      if (t === meses[mes]) return true;
+      if ((t.includes('1otri') || t.includes('1º tri')) && [1, 2, 3].includes(mes)) return true;
+      if ((t.includes('2otri') || t.includes('2º tri')) && [4, 5, 6].includes(mes)) return true;
+      if ((t.includes('3otri') || t.includes('3º tri')) && [7, 8, 9].includes(mes)) return true;
+      if ((t.includes('4otri') || t.includes('4º tri')) && [10, 11, 12].includes(mes)) return true;
+      return false;
+    };
 
-        const licenca = parseMoney(pedido['PRODUTO - VALOR LICENCA'] || pedido['PRODUTO - VALOR LICENCA CANAL'] || pedido.produtoValorLicenca || pedido.produtoValorLicencaCanal);
-        const manutencao = parseMoney(pedido['PRODUTO - VALOR MANUTENCAO'] || pedido['PRODUTO - VALOR MANUTENCAO CANAL'] || pedido.produtoValorManutencao || pedido.produtoValorManutencaoCanal);
-        const servico = parseMoney(pedido['SERVICO - VALOR TOTAL'] || pedido.servicoValorLiquido);
+    const realizedMap = new Map<string, number>();
 
-        let hasSpecific = false;
-        if (licenca > 0) { realizedMap.set(`${produto}|setup+licencas`, (realizedMap.get(`${produto}|setup+licencas`) || 0) + (licenca * multiplier)); hasSpecific = true; }
-        if (manutencao > 0) { realizedMap.set(`${produto}|recorrente`, (realizedMap.get(`${produto}|recorrente`) || 0) + (manutencao * multiplier)); hasSpecific = true; }
-        if (servico > 0) { realizedMap.set(`${produto}|servicosnaorecorrentes`, (realizedMap.get(`${produto}|servicosnaorecorrentes`) || 0) + (servico * multiplier)); hasSpecific = true; }
+    (pedidos || []).forEach(pedido => {
+      const oppId = String(getSafeKey(pedido, ['ID OPORTUNIDADE', 'Oportunidade ID']) || '').trim();
+      const donoId = String(getSafeKey(pedido, ['ID ERP PROPRIETARIO', 'Id ERP Proprietário']) || '').trim();
+      
+      if (donoId === safeUserId || userOpportunities.has(oppId)) {
+        const dataPed = String(getSafeKey(pedido, ['DATA FECHAMENTO', 'Data Fechamento']) || '');
+        if (!belongsToPeriod(dataPed, globalPeriod)) return;
 
-        if (!hasSpecific) {
-          const valorCheio = parseMoney(pedido['Valor Fechado'] || pedido['VALOR TOTAL'] || pedido['VALOR LIQUIDO'] || pedido.valorFechado);
-          if (valorCheio > 0) realizedMap.set(`${produto}|generico`, (realizedMap.get(`${produto}|generico`) || 0) + (valorCheio * multiplier));
+        const multiplier = (donoId === safeUserId) ? 1 : ((userOpportunities.get(oppId) || 100) / 100);
+        const produto = normalizeString(getSafeKey(pedido, ['PRODUTO', 'Produto']) || 'Diversos');
+        
+        const licenca = parseMoney(getSafeKey(pedido, ['PRODUTO - VALOR LICENCA', 'PRODUTO - VALOR LICENCA CANAL']));
+        const manutencao = parseMoney(getSafeKey(pedido, ['PRODUTO - VALOR MANUTENCAO', 'PRODUTO - VALOR MANUTENCAO CANAL']));
+        let servico = parseMoney(getSafeKey(pedido, ['SERVICO - VALOR TOTAL']));
+        if (servico === 0) servico = parseMoney(getSafeKey(pedido, ['SERVICO - QTDE DE HORAS'])) * parseMoney(getSafeKey(pedido, ['SERVICO - VALOR HORA']));
+        
+        let hasDetail = false;
+        if (licenca > 0) { realizedMap.set(`${produto}|setup+licencas`, (realizedMap.get(`${produto}|setup+licencas`) || 0) + (licenca * multiplier)); hasDetail = true; }
+        if (manutencao > 0) { realizedMap.set(`${produto}|recorrente`, (realizedMap.get(`${produto}|recorrente`) || 0) + (manutencao * multiplier)); hasDetail = true; }
+        if (servico > 0) { realizedMap.set(`${produto}|servicosnaorecorrentes`, (realizedMap.get(`${produto}|servicosnaorecorrentes`) || 0) + (servico * multiplier)); hasDetail = true; }
+        
+        if (!hasDetail) {
+          const vLiquido = parseMoney(getSafeKey(pedido, ['VALOR LIQUIDO', 'Valor Fechado', 'VALOR TOTAL']));
+          if (vLiquido > 0) realizedMap.set(`${produto}|generico`, (realizedMap.get(`${produto}|generico`) || 0) + (vLiquido * multiplier));
         }
       }
     });
 
     const metrics: GoalMetric[] = [];
+    const normGlobalPeriod = normalizeString(globalPeriod);
 
-    goals.forEach((goal) => {
-      const gUserId = String(goal['Id Usuário ERP'] || goal.idUsuario || '').trim();
-      if (gUserId === safeUserId) {
-        const prod = normalizeString(goal['Produto'] || goal.produto);
-        const rubrica = normalizeString(goal['Rubrica'] || goal.rubrica).replace(/\s+/g, '');
+    goals.forEach(goal => {
+      if (String(goal.idUsuario) === safeUserId && (normalizeString(goal.periodo) === normGlobalPeriod || normGlobalPeriod === 'total ano')) {
+           const prodMeta = normalizeString(goal.produto);
+           const rubricaMetaKey = normalizeString(goal.rubrica).replace(/\s+/g, '');
+           let realizado = 0;
+           
+           for (const [key, val] of Array.from(realizedMap.entries())) {
+             const [pCRM, rCRM] = key.split('|');
+             const isMatchProd = pCRM.includes(prodMeta) || prodMeta.includes(pCRM) || (prodMeta.includes('hcm') && pCRM.includes('gestao de pessoas')) || (prodMeta.includes('erp') && pCRM.includes('gestao empresarial'));
+             if (isMatchProd && (rCRM === rubricaMetaKey || rCRM === 'generico')) realizado += val;
+           }
 
-        // 🚨 NOVO: Mapeamento dinâmico para pegar O MÊS/TRIMESTRE exato que o usuário escolheu no painel
-        const periodKeyMap: Record<string, string> = {
-          'janeiro': 'Janeiro', 'fevereiro': 'Fevereiro', 'março': 'Março', 'marco': 'Março',
-          '1º trimestre': '1º Trimestre', '1ºtri': '1º Trimestre',
-          'abril': 'Abril', 'maio': 'Maio', 'junho': 'Junho',
-          '2º trimestre': '2º Trimestre', '2ºtri': '2º Trimestre',
-          'julho': 'Julho', 'agosto': 'Agosto', 'setembro': 'Setembro',
-          '3º trimestre': '3º Trimestre', '3ºtri': '3º Trimestre',
-          'outubro': 'Outubro', 'novembro': 'Novembro', 'dezembro': 'Dezembro',
-          '4º trimestre': '4º Trimestre', '4ºtri': '4º Trimestre',
-          'total ano': 'Total Ano'
-        };
-
-        const normSelected = normalizeString(selectedPeriod);
-        const mappedKey = periodKeyMap[normSelected] || selectedPeriod;
-
-        const metaVal = Number(goal[mappedKey]) || 0;
-
-        if (metaVal > 0) {
-          let realizadoValue = 0;
-          for (const [key, val] of Array.from(realizedMap.entries())) {
-            const [keyProd, keyRub] = key.split('|');
-            if (prod.includes(keyProd) && (keyRub === rubrica || keyRub === 'generico')) {
-              realizadoValue += val;
-            }
-          }
-
-          metrics.push({
-            id: `meta-${prod}-${rubrica}-${Math.random()}`,
-            produto: goal['Produto'] || goal.produto,
-            rubrica: goal['Rubrica'] || goal.rubrica,
-            meta: metaVal,
-            realizado: realizadoValue,
-            percentual: (realizadoValue / metaVal) * 100
-          });
-        }
+           metrics.push({ id: goal.id, produto: goal.produto, rubrica: goal.rubrica, meta: goal.valor, realizado: realizado, percentual: (realizado / goal.valor) * 100 });
       }
     });
 
     return metrics.sort((a, b) => b.percentual - a.percentual);
-
-  }, [goals, pedidos, processedData, selectedPeriod, selectedUserId]);
+  }, [goals, pedidos, processedData, globalPeriod, selectedUserId]);
 }
