@@ -7,6 +7,7 @@ export interface GoalMetric {
   meta: number;
   realizado: number;
   percentual: number;
+  debugInfo?: any;
 }
 
 export function useGoalMetricsProcessor(
@@ -17,45 +18,46 @@ export function useGoalMetricsProcessor(
   selectedUserId?: string,
 ): GoalMetric[] {
   return useMemo(() => {
-    console.log('🚀 [GOAL METRICS]: Motor Blindado V3 Iniciado...', {
-      metasSize: goals?.length,
-      pedidosSize: pedidos?.length,
-      oppsSize: processedData?.length,
+    console.log('🎯 [GOAL METRICS]: Motor Analítico Profundo Iniciado...', {
+      metasSize: goals?.length || 0,
+      pedidosSize: pedidos?.length || 0,
+      oppsSize: processedData?.length || 0,
       periodoSelecionado: selectedPeriod,
       usuarioId: selectedUserId,
     });
 
-    if (!goals?.length || !selectedUserId) return [];
+    // TRAVA 1: Se os arquivos de metas não estiverem na memória
+    if (!goals || goals.length === 0) {
+      console.error('❌ [ERRO CRÍTICO]: O array de Metas está VAZIO! Se recarregou a página, os arquivos de Metas e Pedidos se perderam do cache. Por favor, faça o upload dos 4 arquivos novamente em "Novo Upload".');
+      return [];
+    }
 
-    // --- 1. UTILS SUPER BLINDADOS ---
-    // Remove acentos e converte para minúsculas
+    if (!selectedUserId) return [];
+
+    // --- 1. UTILS BLINDADOS ---
     const normalizeString = (str: any) =>
       String(str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 
-    // Remove espaços para bater chaves complexas (ex: "Setup + Licenças" -> "setup+licencas")
     const condense = (str: any) => normalizeString(str).replace(/\s+/g, '');
 
-    // Remove casas decimais espúrias de IDs (Ex: "11124.0" -> "11124")
     const normalizeId = (id: any) => {
       let str = String(id || '').trim();
       if (str.endsWith('.0')) str = str.slice(0, -2);
       return str;
     };
 
-    // Parser financeiro à prova de lixo (R$, €, espaços)
     const parseMoney = (val: any): number => {
-      if (!val) return 0;
+      if (val === null || val === undefined || val === '') return 0;
       if (typeof val === 'number') return val;
       let str = String(val).trim();
-      str = str.replace(/[^\d,\.-]/g, ''); // Mantém só números, vírgula, ponto e sinal negativo
+      str = str.replace(/[^\d,\.-]/g, '');
       if (str.includes(',')) {
-        str = str.replace(/\./g, '').replace(',', '.'); // Formato PT-BR para JS
+        str = str.replace(/\./g, '').replace(',', '.');
       }
       const num = parseFloat(str);
       return Number.isNaN(num) ? 0 : num;
     };
 
-    // Buscador tolerante a cabeçalhos mal formatados no CSV
     const getFuzzy = (obj: any, possibleKeys: string[]) => {
       if (!obj) return undefined;
       const normKeys = possibleKeys.map(normalizeString);
@@ -65,7 +67,24 @@ export function useGoalMetricsProcessor(
       return undefined;
     };
 
-    // --- 2. INTELIGÊNCIA TEMPORAL (Mês e Trimestre) ---
+    // --- 2. TRADUTOR DE COLUNAS DE PERÍODO (UI -> EXCEL) ---
+    // Resolve o descasamento entre "1º Trimestre" (Painel) e "1ºTri" (Planilha)
+    const resolveExcelColumn = (period: string) => {
+      const norm = condense(period);
+      if (norm.includes('1otri')) return '1ºTri';
+      if (norm.includes('2otri')) return '2ºTri';
+      if (norm.includes('3otri')) return '3ºTri';
+      if (norm.includes('4otri')) return '4ºTri';
+      if (norm.includes('total')) return 'Total Ano';
+
+      const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+      const found = months.find((m) => normalizeString(m) === normalizeString(period));
+      return found || period;
+    };
+
+    const exactExcelCol = resolveExcelColumn(selectedPeriod);
+
+    // --- 3. INTELIGÊNCIA TEMPORAL DE PEDIDOS ---
     const getMonthName = (dateStr: string) => {
       if (!dateStr) return '';
       let month = 0;
@@ -82,7 +101,7 @@ export function useGoalMetricsProcessor(
     };
 
     const isPeriodMatch = (mesPedido: string, selected: string) => {
-      if (!mesPedido) return true; // Na dúvida, não perde o dinheiro
+      if (!mesPedido) return true;
       const s = normalizeString(selected);
       if (s === 'total ano') return true;
       if (s === mesPedido) return true;
@@ -104,7 +123,7 @@ export function useGoalMetricsProcessor(
       return false;
     };
 
-    // --- 3. RESOLVER IDENTIDADE (A busca implacável do ID) ---
+    // --- 4. RESOLVER IDENTIDADE ---
     let erpUserId = normalizeId(selectedUserId);
 
     if (Number.isNaN(Number(erpUserId))) {
@@ -119,10 +138,9 @@ export function useGoalMetricsProcessor(
         'gisele silva': '10563',
       };
       erpUserId = knownUsers[searchName] || erpUserId;
-      console.log(`[GOAL METRICS]: Tradução de utilizador: "${selectedUserId}" -> "${erpUserId}"`);
     }
 
-    // --- 4. MAPA DE RECONHECIMENTO (Oportunidades do utilizador) ---
+    // --- 5. MAPA DE RECONHECIMENTO ---
     const userOpportunities = new Map<string, number>();
     (processedData || []).forEach((opp) => {
       const id = normalizeId(opp.id || opp.oportunidadeId || opp.oppId || opp['Oportunidade ID']);
@@ -133,7 +151,7 @@ export function useGoalMetricsProcessor(
       }
     });
 
-    // --- 5. DICIONÁRIO DE PRODUTOS ---
+    // --- 6. DICIONÁRIO DE PRODUTOS ---
     const isSameProduct = (mStr: string, pStr: string) => {
       const m = normalizeString(mStr);
       const p = normalizeString(pStr);
@@ -152,9 +170,8 @@ export function useGoalMetricsProcessor(
       return false;
     };
 
-    // --- 6. PROCESSAR PEDIDOS (REALIZADO) ---
+    // --- 7. PROCESSAR PEDIDOS (REALIZADO) ---
     const realizedMap = new Map<string, number>();
-    let pedidosProcessados = 0;
 
     (pedidos || []).forEach((pedido) => {
       const oppId = normalizeId(getFuzzy(pedido, ['ID OPORTUNIDADE', 'Oportunidade ID', 'idOportunidade']));
@@ -163,14 +180,12 @@ export function useGoalMetricsProcessor(
       const isOwner = pedidoOwnerId === erpUserId;
       const isETN = Boolean(oppId) && userOpportunities.has(oppId);
 
-      // Regra Ouro: Se for o dono do pedido OU participou na oportunidade, ganha dinheiro!
       if (isOwner || isETN) {
         const dataFechamento = String(getFuzzy(pedido, ['DATA FECHAMENTO', 'Data Fechamento', 'Data']) || '');
         const mesPedido = getMonthName(dataFechamento);
 
-        if (!isPeriodMatch(mesPedido, selectedPeriod)) return; // Bloqueia pedidos de meses fora da Meta
+        if (!isPeriodMatch(mesPedido, selectedPeriod)) return;
 
-        pedidosProcessados++;
         const multiplier = isOwner ? 1 : ((userOpportunities.get(oppId) || 100) / 100);
         const produto = String(getFuzzy(pedido, ['PRODUTO', 'Produto', 'produto']) || 'Diversos').trim();
 
@@ -191,23 +206,20 @@ export function useGoalMetricsProcessor(
         if (manutencao > 0) { realizedMap.set(`${produto}|Recorrente`, (realizedMap.get(`${produto}|Recorrente`) || 0) + (manutencao * multiplier)); addedSpecific = true; }
         if (servico > 0) { realizedMap.set(`${produto}|Serviços Não Recorrentes`, (realizedMap.get(`${produto}|Serviços Não Recorrentes`) || 0) + (servico * multiplier)); addedSpecific = true; }
 
-        // Se todas as colunas acima estão a zero, mas existe "Valor Fechado" (ex: os teus R$ 169,00)
         if (!addedSpecific) {
           const valorFechado =
-            parseMoney(getFuzzy(pedido, ['Valor Fechado', 'valorFechado'])) ||
-            parseMoney(getFuzzy(pedido, ['VALOR TOTAL']));
+            parseMoney(getFuzzy(pedido, ['Valor Fechado', 'VALOR TOTAL', 'VALOR LIQUIDO', 'valorFechado'])) ||
+            parseMoney(getFuzzy(pedido, ['valorFechado']));
           if (valorFechado > 0) {
-            // Marca como Genérico. Vai abastecer qualquer meta deste produto.
             realizedMap.set(`${produto}|Genérico`, (realizedMap.get(`${produto}|Genérico`) || 0) + (valorFechado * multiplier));
           }
         }
       }
     });
 
-    console.log(`[GOAL METRICS]: Pedidos validados para ${selectedPeriod}: ${pedidosProcessados}`);
-
-    // --- 7. CRUZAR METAS ---
+    // --- 8. CRUZAR METAS E GERAR AUDITORIA VISUAL ---
     const metrics: GoalMetric[] = [];
+    const debugListaMetas: any[] = [];
 
     (goals || []).forEach((goal) => {
       const gUserId = normalizeId(getFuzzy(goal, ['Id Usuário ERP', 'ID Usuário ERP', 'Id Usuário', 'Id Usuario', 'ID ERP', 'idUsuario']));
@@ -216,35 +228,58 @@ export function useGoalMetricsProcessor(
         const produtoMeta = String(getFuzzy(goal, ['Produto', 'PRODUTO', 'produto']) || '').trim();
         const rubricaMeta = String(getFuzzy(goal, ['Rubrica', 'RUBRICA', 'rubrica']) || '').trim();
 
-        // Localiza a coluna exata do mês/trimestre selecionado na planilha
-        const periodKey = Object.keys(goal).find((k) => condense(k) === condense(selectedPeriod)) || selectedPeriod;
-        const metaValue = parseMoney(goal[periodKey] || goal[selectedPeriod.toLowerCase()]);
+        const metaRawValue = goal[exactExcelCol] !== undefined ? goal[exactExcelCol] : getFuzzy(goal, [exactExcelCol, selectedPeriod]);
+        const metaValue = parseMoney(metaRawValue);
 
-        if (metaValue > 0) {
-          let realizadoValue = 0;
-          const condRubricaMeta = condense(rubricaMeta);
+        let realizadoValue = 0;
+        const condRubricaMeta = condense(rubricaMeta);
 
-          for (const [key, val] of Array.from(realizedMap.entries())) {
-            const [p, r] = key.split('|');
-            const condR = condense(r);
-
-            // Aceita a rubrica exata OU se for "Genérico" (veio apenas do campo Valor Fechado)
-            if ((condR === condRubricaMeta || condR === 'generico') && isSameProduct(produtoMeta, p)) {
-              realizadoValue += val;
-            }
+        for (const [key, val] of Array.from(realizedMap.entries())) {
+          const [p, r] = key.split('|');
+          const condR = condense(r);
+          if ((condR === condRubricaMeta || condR === 'generico') && isSameProduct(produtoMeta, p)) {
+            realizadoValue += val;
           }
+        }
 
+        const percentual = metaValue > 0 ? (realizadoValue / metaValue) * 100 : (realizadoValue > 0 ? 100 : 0);
+
+        // FORÇAMOS a exibição no gráfico mesmo se a meta for zero, para que você possa ver!
+        if (produtoMeta && rubricaMeta) {
           metrics.push({
-            id: `${produtoMeta}-${rubricaMeta}-${selectedPeriod}`,
+            id: `${produtoMeta}-${rubricaMeta}-${selectedPeriod}-${Math.random()}`,
             produto: produtoMeta,
             rubrica: rubricaMeta,
             meta: metaValue,
             realizado: realizadoValue,
-            percentual: (realizadoValue / metaValue) * 100,
+            percentual,
+            debugInfo: {
+              colunaBuscada: exactExcelCol,
+              valorPlanilhaRaw: metaRawValue,
+            },
+          });
+
+          // Prepara a tabela de auditoria para o Console
+          debugListaMetas.push({
+            'Produto Meta': produtoMeta,
+            Rubrica: rubricaMeta,
+            'Coluna Buscada': exactExcelCol,
+            'Valor Planilha (Raw)': metaRawValue,
+            'Meta Lida': metaValue,
+            'Valor Realizado': realizadoValue,
+            Atingimento: `${percentual.toFixed(2)}%`,
           });
         }
       }
     });
+
+    // 🚀 O TESTE DEFINITIVO: Tabela no Console (F12)
+    if (debugListaMetas.length > 0) {
+      console.log(`✅ [AUDITORIA DE METAS] Usuário ID: ${erpUserId} | Período: ${selectedPeriod} (Planilha: ${exactExcelCol})`);
+      console.table(debugListaMetas);
+    } else {
+      console.warn(`⚠️ [AVISO]: O Usuário ID ${erpUserId} não possui nenhuma linha atrelada a ele na planilha de Metas.`);
+    }
 
     return metrics.sort((a, b) => b.percentual - a.percentual);
   }, [goals, pedidos, processedData, selectedPeriod, selectedUserId]);
