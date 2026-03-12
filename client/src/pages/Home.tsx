@@ -12,6 +12,7 @@ import { useGoalMetricsProcessor } from '@/hooks/useGoalMetricsProcessor';
 import type { GoalRecord, PedidoRecord, GoalMetrics } from '@/types/goals';
 import { PeriodSelector } from '@/components/PeriodSelector';
 import { GoalChart } from '@/components/GoalChart';
+import { GoalManager } from '@/components/GoalManager';
 import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
 import { KPICard } from '@/components/KPICard';
 import { AnalyticsTable } from '@/components/AnalyticsTable';
@@ -31,9 +32,7 @@ export default function Home() {
   const [actFile, setActFile] = useState<File | null>(null);
   const [oppFileName, setOppFileName] = useState('');
   const [actFileName, setActFileName] = useState('');
-  const [goalFile, setGoalFile] = useState<File | null>(null);
   const [pedidoFile, setPedidoFile] = useState<File | null>(null);
-  const [goalFileName, setGoalFileName] = useState('');
   const [pedidoFileName, setPedidoFileName] = useState('');
   const [goals, setGoals] = useState<GoalRecord[]>([]);
   const [pedidos, setPedidos] = useState<PedidoRecord[]>([]);
@@ -41,7 +40,7 @@ export default function Home() {
 
   const { state: processingState, processFiles: processFilesLegacy, resetState } = useFileProcessor();
   const { processData: processDataWithWorker, processFiles: processFilesWithWorker, isProcessing: isWorkerProcessing, progress: workerProgress } = useWorkerDataProcessor();
-  const { parseGoalsFile, parsePedidosFile } = useGoalProcessor();
+  const { parsePedidosFile } = useGoalProcessor();
   const [workerResult, setWorkerResult] = useState<any>(null);
   const [useWorkerOnly, setUseWorkerOnly] = useState(false);
   const [lightOpportunities, setLightOpportunities] = useState<Opportunity[]>([]);
@@ -537,15 +536,6 @@ export default function Home() {
     try {
       const workerRes = await processFilesWithWorker(oppFile, actFile);
       setWorkerResult(workerRes);
-      // Processar metas e pedidos automaticamente se arquivos foram selecionados
-      if (goalFile) {
-        try {
-          const goalsData = await parseGoalsFile(goalFile);
-          setGoals(goalsData);
-        } catch (goalErr) {
-          console.warn('Erro ao processar metas:', goalErr);
-        }
-      }
       if (pedidoFile) {
         try {
           const pedidosData = await parsePedidosFile(pedidoFile);
@@ -577,7 +567,7 @@ export default function Home() {
       console.error('Erro no Web Worker:', err);
       setError(err instanceof Error ? err.message : 'Erro ao processar arquivos');
     }
-  }, [oppFile, actFile, goalFile, pedidoFile, processFilesWithWorker, parseGoalsFile, parsePedidosFile]);
+  }, [oppFile, actFile, pedidoFile, processFilesWithWorker, parsePedidosFile]);
 
   const handleOppFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -595,14 +585,6 @@ export default function Home() {
     }
   };
 
-  const handleGoalFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setGoalFile(file);
-      setGoalFileName(file.name);
-    }
-  };
-
   const handlePedidoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -610,26 +592,6 @@ export default function Home() {
       setPedidoFileName(file.name);
     }
   };
-
-  const handleLoadGoals = useCallback(async () => {
-    if (!goalFile || !pedidoFile) return;
-    setError(null);
-    try {
-      const goalsData = await parseGoalsFile(goalFile);
-      const pedidosData = await parsePedidosFile(pedidoFile);
-      setGoals(goalsData);
-      setPedidos(pedidosData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao processar metas e pedidos');
-    }
-  }, [goalFile, pedidoFile, parseGoalsFile, parsePedidosFile]);
-
-  // Processar metas automaticamente quando ambos arquivos são selecionados
-  useEffect(() => {
-    if (goalFile && pedidoFile) {
-      handleLoadGoals();
-    }
-  }, [goalFile, pedidoFile, handleLoadGoals]);
 
   const handleLoadCache = useCallback(async () => {
     setIsLoadingCache(true);
@@ -787,21 +749,12 @@ export default function Home() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <h3 className="text-xs font-bold text-purple-800">Metas</h3>
-                    <p className="text-[10px] text-purple-600/70">Base 3 - Metas (.xlsx)</p>
+                    <p className="text-[10px] text-purple-600/70">Base 3 - Gestor Interativo</p>
                   </div>
                 </div>
-                <label className="block">
-                  <input type="file" accept=".xlsx,.xls" onChange={handleGoalFile} className="hidden" />
-                  <span className="block w-full py-3 text-center text-sm font-medium rounded-lg border-2 border-dashed border-purple-300 hover:border-purple-500 hover:bg-purple-50 transition-all cursor-pointer">
-                    {goalFileName ? (
-                      <span className="text-purple-700 flex items-center justify-center gap-1.5">
-                        <FileText size={14} /> {goalFileName}
-                      </span>
-                    ) : (
-                      <span className="text-purple-500">Selecionar arquivo</span>
-                    )}
-                  </span>
-                </label>
+                <div className="flex flex-1 items-center justify-center">
+                  <GoalManager onSaveGoals={setGoals} currentGoals={goals} />
+                </div>
               </div>
 
               <div className="bg-white rounded-xl p-4 border-2 border-orange-200 hover:border-orange-400 transition-all hover:shadow-lg hover:shadow-orange-100 flex flex-col">
@@ -1013,18 +966,11 @@ export default function Home() {
                   Atingimento de Metas - {selectedPeriod}
                 </h3>
                 <div className="flex items-center gap-3">
-                  {goals.length === 0 && (
-                    <div className="flex items-center gap-2">
-                      <label className="cursor-pointer px-3 py-1.5 text-xs font-medium rounded-lg border border-purple-300 text-purple-700 hover:bg-purple-50 transition-all">
-                        <input type="file" accept=".xlsx,.xls" onChange={handleGoalFile} className="hidden" />
-                        {goalFileName || 'Metas (.xlsx)'}
-                      </label>
-                      <label className="cursor-pointer px-3 py-1.5 text-xs font-medium rounded-lg border border-orange-300 text-orange-700 hover:bg-orange-50 transition-all">
-                        <input type="file" accept=".csv" onChange={handlePedidoFile} className="hidden" />
-                        {pedidoFileName || 'Pedidos (.csv)'}
-                      </label>
-                    </div>
-                  )}
+                  <GoalManager onSaveGoals={setGoals} currentGoals={goals} />
+                  <label className="cursor-pointer px-3 py-1.5 text-xs font-medium rounded-lg border border-orange-300 text-orange-700 hover:bg-orange-50 transition-all">
+                    <input type="file" accept=".csv" onChange={handlePedidoFile} className="hidden" />
+                    {pedidoFileName || 'Pedidos (.csv)'}
+                  </label>
                   <PeriodSelector selectedPeriod={selectedPeriod} onPeriodChange={setSelectedPeriod} />
                 </div>
               </div>

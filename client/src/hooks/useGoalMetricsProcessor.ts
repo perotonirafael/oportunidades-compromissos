@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import type { GoalRecord, PedidoRecord } from '@/types/goals';
 
 export interface GoalMetric {
   id: string;
@@ -7,278 +8,152 @@ export interface GoalMetric {
   meta: number;
   realizado: number;
   percentual: number;
-  debugInfo?: any;
 }
 
+const normalize = (value: unknown): string =>
+  String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+const normalizeId = (value: unknown): string => {
+  const str = String(value ?? '').trim();
+  return str.endsWith('.0') ? str.slice(0, -2) : str;
+};
+
+const parseMoney = (value: unknown): number => {
+  if (value == null || value === '') return 0;
+  if (typeof value === 'number') return value;
+  let text = String(value).trim().replace(/[^\d,.-]/g, '');
+  if (text.includes(',')) text = text.replace(/\./g, '').replace(',', '.');
+  const num = parseFloat(text);
+  return Number.isNaN(num) ? 0 : num;
+};
+
+const normalizeRubrica = (rubrica: string): 'setup+licencas' | 'recorrente' | 'servicosnaorecorrentes' | 'generico' => {
+  const base = normalize(rubrica).replace(/\s+/g, '');
+  if (base.includes('recorrente') && !base.includes('naorecorrente')) return 'recorrente';
+  if (base.includes('servicosnaorecorrentes') || (base.includes('servico') && base.includes('naorecorrente'))) return 'servicosnaorecorrentes';
+  if (base.includes('generico')) return 'generico';
+  return 'setup+licencas';
+};
+
+const periodValue = (goal: GoalRecord, selectedPeriod: string): number => {
+  const p = normalize(selectedPeriod);
+  if (p === 'janeiro') return goal.janeiro;
+  if (p === 'fevereiro') return goal.fevereiro;
+  if (p === 'marco') return goal.marco;
+  if (p === 'abril') return goal.abril;
+  if (p === 'maio') return goal.maio;
+  if (p === 'junho') return goal.junho;
+  if (p === 'julho') return goal.julho;
+  if (p === 'agosto') return goal.agosto;
+  if (p === 'setembro') return goal.setembro;
+  if (p === 'outubro') return goal.outubro;
+  if (p === 'novembro') return goal.novembro;
+  if (p === 'dezembro') return goal.dezembro;
+  if (p.includes('1') && p.includes('tri')) return goal.primeiroTrimestre;
+  if (p.includes('2') && p.includes('tri')) return goal.segundoTrimestre;
+  if (p.includes('3') && p.includes('tri')) return goal.terceiroTrimestre;
+  if (p.includes('4') && p.includes('tri')) return goal.quartoTrimestre;
+  if (p.includes('total')) return goal.totalAno;
+  return 0;
+};
+
 export function useGoalMetricsProcessor(
-  goals: any[],
-  pedidos: any[],
+  goals: GoalRecord[],
+  pedidos: PedidoRecord[],
   processedData: any[],
   selectedPeriod: string,
   selectedUserId?: string,
 ): GoalMetric[] {
   return useMemo(() => {
-    console.log('🎯 [GOAL METRICS]: Motor Analítico Profundo Iniciado...', {
-      metasSize: goals?.length || 0,
-      pedidosSize: pedidos?.length || 0,
-      oppsSize: processedData?.length || 0,
-      periodoSelecionado: selectedPeriod,
-      usuarioId: selectedUserId,
-    });
+    if (!goals?.length || !selectedUserId) return [];
 
-    // TRAVA 1: Se os arquivos de metas não estiverem na memória
-    if (!goals || goals.length === 0) {
-      console.error('❌ [ERRO CRÍTICO]: O array de Metas está VAZIO! Se recarregou a página, os arquivos de Metas e Pedidos se perderam do cache. Por favor, faça o upload dos 4 arquivos novamente em "Novo Upload".');
-      return [];
-    }
+    const selectedId = normalizeId(selectedUserId);
 
-    if (!selectedUserId) return [];
-
-    // --- 1. UTILS BLINDADOS ---
-    const normalizeString = (str: any) =>
-      String(str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-
-    const condense = (str: any) => normalizeString(str).replace(/\s+/g, '');
-
-    const normalizeId = (id: any) => {
-      let str = String(id || '').trim();
-      if (str.endsWith('.0')) str = str.slice(0, -2);
-      return str;
-    };
-
-    const parseMoney = (val: any): number => {
-      if (val === null || val === undefined || val === '') return 0;
-      if (typeof val === 'number') return val;
-      let str = String(val).trim();
-      str = str.replace(/[^\d,\.-]/g, '');
-      if (str.includes(',')) {
-        str = str.replace(/\./g, '').replace(',', '.');
-      }
-      const num = parseFloat(str);
-      return Number.isNaN(num) ? 0 : num;
-    };
-
-    const getFuzzy = (obj: any, possibleKeys: string[]) => {
-      if (!obj) return undefined;
-      const normKeys = possibleKeys.map(normalizeString);
-      for (const [key, val] of Object.entries(obj)) {
-        if (normKeys.includes(normalizeString(key))) return val;
-      }
-      return undefined;
-    };
-
-    // --- 2. TRADUTOR DE COLUNAS DE PERÍODO (UI -> EXCEL) ---
-    // Resolve o descasamento entre "1º Trimestre" (Painel) e "1ºTri" (Planilha)
-    const resolveExcelColumn = (period: string) => {
-      const norm = condense(period);
-      if (norm.includes('1otri')) return '1ºTri';
-      if (norm.includes('2otri')) return '2ºTri';
-      if (norm.includes('3otri')) return '3ºTri';
-      if (norm.includes('4otri')) return '4ºTri';
-      if (norm.includes('total')) return 'Total Ano';
-
-      const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-      const found = months.find((m) => normalizeString(m) === normalizeString(period));
-      return found || period;
-    };
-
-    const exactExcelCol = resolveExcelColumn(selectedPeriod);
-
-    // --- 3. INTELIGÊNCIA TEMPORAL DE PEDIDOS ---
-    const getMonthName = (dateStr: string) => {
-      if (!dateStr) return '';
-      let month = 0;
-      if (dateStr.includes('/')) {
-        const parts = dateStr.split(' ')[0].split('/');
-        if (parts.length >= 2) month = parseInt(parts[1], 10);
-      } else if (dateStr.includes('-')) {
-        const parts = dateStr.split(' ')[0].split('-');
-        if (parts[0].length === 4) month = parseInt(parts[1], 10);
-        else month = parseInt(parts[1], 10);
-      }
-      const months = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-      return month >= 1 && month <= 12 ? months[month - 1] : '';
-    };
-
-    const isPeriodMatch = (mesPedido: string, selected: string) => {
-      if (!mesPedido) return true;
-      const s = normalizeString(selected);
-      if (s === 'total ano') return true;
-      if (s === mesPedido) return true;
-
-      const trimestres: Record<string, string[]> = {
-        '1ºtri': ['janeiro', 'fevereiro', 'marco'],
-        '1º trimestre': ['janeiro', 'fevereiro', 'marco'],
-        '2ºtri': ['abril', 'maio', 'junho'],
-        '2º trimestre': ['abril', 'maio', 'junho'],
-        '3ºtri': ['julho', 'agosto', 'setembro'],
-        '3º trimestre': ['julho', 'agosto', 'setembro'],
-        '4ºtri': ['outubro', 'novembro', 'dezembro'],
-        '4º trimestre': ['outubro', 'novembro', 'dezembro'],
-      };
-
-      for (const [key, months] of Object.entries(trimestres)) {
-        if ((s.includes(key.substring(0, 2)) || s === key) && months.includes(mesPedido)) return true;
-      }
-      return false;
-    };
-
-    // --- 4. RESOLVER IDENTIDADE ---
-    let erpUserId = normalizeId(selectedUserId);
-
-    if (Number.isNaN(Number(erpUserId))) {
-      const searchName = normalizeString(selectedUserId);
-      const knownUsers: Record<string, string> = {
-        'rafael perotoni': '11124',
-        'filipe cardoso': '2642',
-        'mariane sebaje': '9909',
-        'carina bruder': '11191',
-        'jonas pacheco': '11264',
-        'stefanie christen': '10655',
-        'gisele silva': '10563',
-      };
-      erpUserId = knownUsers[searchName] || erpUserId;
-    }
-
-    // --- 5. MAPA DE RECONHECIMENTO ---
+    // Mapa de oportunidades em que o usuário participou (via processedData)
     const userOpportunities = new Map<string, number>();
-    (processedData || []).forEach((opp) => {
-      const id = normalizeId(opp.id || opp.oportunidadeId || opp.oppId || opp['Oportunidade ID']);
-      if (id) {
-        let rec = Number(opp.percentualReconhecimento);
-        if (Number.isNaN(rec) || rec <= 0) rec = 100;
-        userOpportunities.set(id, rec);
-      }
-    });
+    for (const opp of processedData || []) {
+      const oppId = normalizeId(opp.oppId || opp.id || opp.oportunidadeId || opp['Oportunidade ID']);
+      if (!oppId) continue;
 
-    // --- 6. DICIONÁRIO DE PRODUTOS ---
-    const isSameProduct = (mStr: string, pStr: string) => {
-      const m = normalizeString(mStr);
-      const p = normalizeString(pStr);
-      if (!m || !p) return false;
-      if (m === p || m.includes(p) || p.includes(m)) return true;
+      const oppUserId = normalizeId(opp.idUsuario || opp.idErpUsuario || opp['Id Usuário ERP']);
+      if (oppUserId && oppUserId !== selectedId) continue;
 
-      const syn: Record<string, string[]> = {
-        hcm: ['hcm', 'gestao de pessoas', 'folha', 'seniorx'],
-        erp: ['erp', 'gestao empresarial', 'backoffice', 'sapiens'],
-        acesso: ['acesso', 'seguranca', 'ronda', 'portaria'],
-        ponto: ['ponto', 'marcacao'],
-      };
-      for (const terms of Object.values(syn)) {
-        if (terms.some((t) => m.includes(t)) && terms.some((t) => p.includes(t))) return true;
-      }
-      return false;
-    };
+      const rec = Number(opp.percentualReconhecimento);
+      userOpportunities.set(oppId, Number.isNaN(rec) || rec <= 0 ? 100 : rec);
+    }
 
-    // --- 7. PROCESSAR PEDIDOS (REALIZADO) ---
+    // Realizado por Produto|Categoria
     const realizedMap = new Map<string, number>();
 
-    (pedidos || []).forEach((pedido) => {
-      const oppId = normalizeId(getFuzzy(pedido, ['ID OPORTUNIDADE', 'Oportunidade ID', 'idOportunidade']));
-      const pedidoOwnerId = normalizeId(getFuzzy(pedido, ['ID ERP PROPRIETARIO', 'Id ERP Proprietário', 'Id Proprietario', 'idErpProprietario']));
+    for (const pedido of pedidos || []) {
+      const ownerId = normalizeId((pedido as any).idErpProprietario ?? (pedido as any)['ID ERP PROPRIETARIO']);
+      const oppId = normalizeId((pedido as any).idOportunidade ?? (pedido as any)['ID OPORTUNIDADE']);
 
-      const isOwner = pedidoOwnerId === erpUserId;
-      const isETN = Boolean(oppId) && userOpportunities.has(oppId);
+      const isOwner = ownerId === selectedId;
+      const isParticipant = oppId && userOpportunities.has(oppId);
+      if (!isOwner && !isParticipant) continue;
 
-      if (isOwner || isETN) {
-        const dataFechamento = String(getFuzzy(pedido, ['DATA FECHAMENTO', 'Data Fechamento', 'Data']) || '');
-        const mesPedido = getMonthName(dataFechamento);
+      const recognition = isOwner ? 100 : (userOpportunities.get(oppId) || 100);
+      const multiplier = recognition / 100;
+      const produto = String((pedido as any).produto || (pedido as any).PRODUTO || 'Diversos').trim();
 
-        if (!isPeriodMatch(mesPedido, selectedPeriod)) return;
+      const licenca = parseMoney((pedido as any).produtoValorLicenca) || parseMoney((pedido as any).produtoValorLicencaCanal);
+      const manutencao = parseMoney((pedido as any).produtoValorManutencao) || parseMoney((pedido as any).produtoValorManutencaoCanal);
 
-        const multiplier = isOwner ? 1 : ((userOpportunities.get(oppId) || 100) / 100);
-        const produto = String(getFuzzy(pedido, ['PRODUTO', 'Produto', 'produto']) || 'Diversos').trim();
+      let servico = parseMoney((pedido as any).servicoValorLiquido);
+      if (servico === 0) {
+        servico = parseMoney((pedido as any).servicoQtdeDeHoras) * parseMoney((pedido as any).servicoValorHora);
+      }
 
-        const licenca =
-          parseMoney(getFuzzy(pedido, ['PRODUTO - VALOR LICENCA', 'produtoValorLicenca'])) ||
-          parseMoney(getFuzzy(pedido, ['PRODUTO - VALOR LICENCA CANAL', 'produtoValorLicencaCanal']));
-        const manutencao =
-          parseMoney(getFuzzy(pedido, ['PRODUTO - VALOR MANUTENCAO', 'produtoValorManutencao'])) ||
-          parseMoney(getFuzzy(pedido, ['PRODUTO - VALOR MANUTENCAO CANAL', 'produtoValorManutencaoCanal']));
+      let added = false;
+      if (licenca > 0) {
+        const key = `${produto}|setup+licencas`;
+        realizedMap.set(key, (realizedMap.get(key) || 0) + licenca * multiplier);
+        added = true;
+      }
+      if (manutencao > 0) {
+        const key = `${produto}|recorrente`;
+        realizedMap.set(key, (realizedMap.get(key) || 0) + manutencao * multiplier);
+        added = true;
+      }
+      if (servico > 0) {
+        const key = `${produto}|servicosnaorecorrentes`;
+        realizedMap.set(key, (realizedMap.get(key) || 0) + servico * multiplier);
+        added = true;
+      }
 
-        let servico = parseMoney(getFuzzy(pedido, ['SERVICO - VALOR TOTAL', 'servicoValorLiquido']));
-        if (servico === 0) {
-          servico = parseMoney(getFuzzy(pedido, ['SERVICO - QTDE DE HORAS', 'servicoQtdeDeHoras'])) * parseMoney(getFuzzy(pedido, ['SERVICO - VALOR HORA', 'servicoValorHora']));
-        }
-
-        let addedSpecific = false;
-        if (licenca > 0) { realizedMap.set(`${produto}|Setup + Licenças`, (realizedMap.get(`${produto}|Setup + Licenças`) || 0) + (licenca * multiplier)); addedSpecific = true; }
-        if (manutencao > 0) { realizedMap.set(`${produto}|Recorrente`, (realizedMap.get(`${produto}|Recorrente`) || 0) + (manutencao * multiplier)); addedSpecific = true; }
-        if (servico > 0) { realizedMap.set(`${produto}|Serviços Não Recorrentes`, (realizedMap.get(`${produto}|Serviços Não Recorrentes`) || 0) + (servico * multiplier)); addedSpecific = true; }
-
-        if (!addedSpecific) {
-          const valorFechado =
-            parseMoney(getFuzzy(pedido, ['Valor Fechado', 'VALOR TOTAL', 'VALOR LIQUIDO', 'valorFechado'])) ||
-            parseMoney(getFuzzy(pedido, ['valorFechado']));
-          if (valorFechado > 0) {
-            realizedMap.set(`${produto}|Genérico`, (realizedMap.get(`${produto}|Genérico`) || 0) + (valorFechado * multiplier));
-          }
+      if (!added) {
+        const valorFechado = parseMoney((pedido as any).valorFechado || (pedido as any)['VALOR TOTAL']);
+        if (valorFechado > 0) {
+          const key = `${produto}|generico`;
+          realizedMap.set(key, (realizedMap.get(key) || 0) + valorFechado * multiplier);
         }
       }
-    });
+    }
 
-    // --- 8. CRUZAR METAS E GERAR AUDITORIA VISUAL ---
     const metrics: GoalMetric[] = [];
-    const debugListaMetas: any[] = [];
+    for (const goal of goals) {
+      const goalUserId = normalizeId(goal.idUsuario);
+      if (goalUserId !== selectedId) continue;
 
-    (goals || []).forEach((goal) => {
-      const gUserId = normalizeId(getFuzzy(goal, ['Id Usuário ERP', 'ID Usuário ERP', 'Id Usuário', 'Id Usuario', 'ID ERP', 'idUsuario']));
+      const meta = periodValue(goal, selectedPeriod);
+      const categoria = normalizeRubrica(goal.rubrica);
+      const exact = `${goal.produto}|${categoria}`;
+      const generic = `${goal.produto}|generico`;
+      const realizado = (realizedMap.get(exact) || 0) + (categoria !== 'generico' ? (realizedMap.get(generic) || 0) : 0);
 
-      if (gUserId === erpUserId) {
-        const produtoMeta = String(getFuzzy(goal, ['Produto', 'PRODUTO', 'produto']) || '').trim();
-        const rubricaMeta = String(getFuzzy(goal, ['Rubrica', 'RUBRICA', 'rubrica']) || '').trim();
-
-        const metaRawValue = goal[exactExcelCol] !== undefined ? goal[exactExcelCol] : getFuzzy(goal, [exactExcelCol, selectedPeriod]);
-        const metaValue = parseMoney(metaRawValue);
-
-        let realizadoValue = 0;
-        const condRubricaMeta = condense(rubricaMeta);
-
-        for (const [key, val] of Array.from(realizedMap.entries())) {
-          const [p, r] = key.split('|');
-          const condR = condense(r);
-          if ((condR === condRubricaMeta || condR === 'generico') && isSameProduct(produtoMeta, p)) {
-            realizadoValue += val;
-          }
-        }
-
-        const percentual = metaValue > 0 ? (realizadoValue / metaValue) * 100 : (realizadoValue > 0 ? 100 : 0);
-
-        // FORÇAMOS a exibição no gráfico mesmo se a meta for zero, para que você possa ver!
-        if (produtoMeta && rubricaMeta) {
-          metrics.push({
-            id: `${produtoMeta}-${rubricaMeta}-${selectedPeriod}-${Math.random()}`,
-            produto: produtoMeta,
-            rubrica: rubricaMeta,
-            meta: metaValue,
-            realizado: realizadoValue,
-            percentual,
-            debugInfo: {
-              colunaBuscada: exactExcelCol,
-              valorPlanilhaRaw: metaRawValue,
-            },
-          });
-
-          // Prepara a tabela de auditoria para o Console
-          debugListaMetas.push({
-            'Produto Meta': produtoMeta,
-            Rubrica: rubricaMeta,
-            'Coluna Buscada': exactExcelCol,
-            'Valor Planilha (Raw)': metaRawValue,
-            'Meta Lida': metaValue,
-            'Valor Realizado': realizadoValue,
-            Atingimento: `${percentual.toFixed(2)}%`,
-          });
-        }
-      }
-    });
-
-    // 🚀 O TESTE DEFINITIVO: Tabela no Console (F12)
-    if (debugListaMetas.length > 0) {
-      console.log(`✅ [AUDITORIA DE METAS] Usuário ID: ${erpUserId} | Período: ${selectedPeriod} (Planilha: ${exactExcelCol})`);
-      console.table(debugListaMetas);
-    } else {
-      console.warn(`⚠️ [AVISO]: O Usuário ID ${erpUserId} não possui nenhuma linha atrelada a ele na planilha de Metas.`);
+      metrics.push({
+        id: `${goal.idUsuario}-${goal.produto}-${goal.rubrica}-${selectedPeriod}`,
+        produto: goal.produto,
+        rubrica: goal.rubrica,
+        meta,
+        realizado,
+        percentual: meta > 0 ? (realizado / meta) * 100 : 0,
+      });
     }
 
     return metrics.sort((a, b) => b.percentual - a.percentual);
