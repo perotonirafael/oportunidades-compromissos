@@ -499,10 +499,12 @@ export default function Home() {
     try {
       const workerRes = await processFilesWithWorker(oppFile, actFile);
       setWorkerResult(workerRes);
+      let goalsData: GoalRecord[] = [];
+      let pedidosData: PedidoRecord[] = [];
       // Processar metas e pedidos automaticamente se arquivos foram selecionados
       if (goalFile) {
         try {
-          const goalsData = await parseGoalsFile(goalFile);
+          goalsData = await parseGoalsFile(goalFile);
           setGoals(goalsData);
         } catch (goalErr) {
           console.warn('Erro ao processar metas:', goalErr);
@@ -510,7 +512,7 @@ export default function Home() {
       }
       if (pedidoFile) {
         try {
-          const pedidosData = await parsePedidosFile(pedidoFile);
+          pedidosData = await parsePedidosFile(pedidoFile);
           setPedidos(pedidosData);
         } catch (pedErr) {
           console.warn('Erro ao processar pedidos:', pedErr);
@@ -522,7 +524,9 @@ export default function Home() {
           oppFile?.name || '',
           actFile?.name || '',
           workerRes?.records?.length || 0,
-          workerRes?.kpis?.totalAgendas || 0
+          workerRes?.kpis?.totalAgendas || 0,
+          goalsData,
+          pedidosData
         );
         setCacheInfo({
           exists: true,
@@ -621,6 +625,8 @@ export default function Home() {
           },
         };
         setWorkerResult(cleanedResult);
+        setGoals(cached.goals || []);
+        setPedidos(cached.pedidos || []);
       } else {
         setError('Cache não encontrado ou corrompido. Faça upload dos arquivos novamente.');
       }
