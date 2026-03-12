@@ -77,9 +77,23 @@ export function useGoalMetricsProcessor(
         const prod = normalizeString(goal['Produto'] || goal.produto);
         const rubrica = normalizeString(goal['Rubrica'] || goal.rubrica).replace(/\s+/g, '');
 
-        const metaVal = selectedPeriod === '1º Trimestre' || selectedPeriod === '1ºTri'
-          ? Number(goal['1º Trimestre'] ?? goal.primeiroTrimestre)
-          : Number(goal['Março'] ?? goal.marco);
+        // 🚨 NOVO: Mapeamento dinâmico para pegar O MÊS/TRIMESTRE exato que o usuário escolheu no painel
+        const periodKeyMap: Record<string, string> = {
+          'janeiro': 'Janeiro', 'fevereiro': 'Fevereiro', 'março': 'Março', 'marco': 'Março',
+          '1º trimestre': '1º Trimestre', '1ºtri': '1º Trimestre',
+          'abril': 'Abril', 'maio': 'Maio', 'junho': 'Junho',
+          '2º trimestre': '2º Trimestre', '2ºtri': '2º Trimestre',
+          'julho': 'Julho', 'agosto': 'Agosto', 'setembro': 'Setembro',
+          '3º trimestre': '3º Trimestre', '3ºtri': '3º Trimestre',
+          'outubro': 'Outubro', 'novembro': 'Novembro', 'dezembro': 'Dezembro',
+          '4º trimestre': '4º Trimestre', '4ºtri': '4º Trimestre',
+          'total ano': 'Total Ano'
+        };
+
+        const normSelected = normalizeString(selectedPeriod);
+        const mappedKey = periodKeyMap[normSelected] || selectedPeriod;
+
+        const metaVal = Number(goal[mappedKey]) || 0;
 
         if (metaVal > 0) {
           let realizadoValue = 0;
