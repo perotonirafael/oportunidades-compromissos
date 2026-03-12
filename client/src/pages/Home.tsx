@@ -1,7 +1,7 @@
 import {
   Upload, AlertCircle, TrendingUp, Target, Zap, DollarSign,
   Loader, BarChart3, Trophy, XCircle, FileText, RotateCcw,
-  Calendar, AlertTriangle, Search, Database, Trash2, Clock, ChevronDown,
+  Calendar, AlertTriangle, Search, Database, Trash2, Clock, ChevronDown, Briefcase,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { useDataProcessor, type Opportunity, type Action, type ProcessedRecord, type MissingAgendaRecord } from '@/hooks/useDataProcessor';
@@ -146,18 +146,30 @@ export default function Home() {
   const result = workerResult || normalResult;
 
   const processedData = result?.records ?? [];
-  const selectedUserId = goals[0]?.idUsuario;
-  const goalMetricsByRubrica = useGoalMetricsProcessor(goals, pedidos, processedData, globalPeriod, selectedUserId);
+  const oportunidadesData = opportunities || [];
+  const compromissosData = actions || [];
+  const { metrics, kpis: goalsKpis } = useGoalMetricsProcessor(
+    goals,
+    pedidos || [],
+    oportunidadesData,
+    compromissosData,
+    globalPeriod
+  );
+
+  const totalMeta = metrics.reduce((acc, curr) => acc + curr.meta, 0);
+  const totalRealizado = metrics.reduce((acc, curr) => acc + curr.realizado, 0);
+  const percentualGeral = totalMeta > 0 ? (totalRealizado / totalMeta) * 100 : 0;
+
   const goalMetricas = useMemo<GoalMetrics[]>(() => {
-    if (!goalMetricsByRubrica.length) return [];
+    if (!metrics.length) return [];
 
     let metaLicencasServicos = 0;
     let realLicencasServicos = 0;
     let metaRecorrente = 0;
     let realRecorrente = 0;
 
-    for (const metric of goalMetricsByRubrica) {
-      const rubricaNorm = metric.rubrica.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    for (const metric of metrics) {
+      const rubricaNorm = metric.rubrica.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
       const isRecorrente = rubricaNorm.includes('recorrente') && !rubricaNorm.includes('nao recorrente');
 
       if (isRecorrente) {
@@ -175,7 +187,7 @@ export default function Home() {
     const percentualAtingimento = percentualLicencas * 0.5 + percentualRecorrente * 0.5;
 
     return [{
-      idUsuario: selectedUserId || '',
+      idUsuario: '',
       etn: 'TOTAL',
       periodo: globalPeriod,
       metaLicencasServicos,
@@ -184,7 +196,7 @@ export default function Home() {
       realRecorrente,
       percentualAtingimento,
     }];
-  }, [goalMetricsByRubrica, globalPeriod, selectedUserId]);
+  }, [metrics, globalPeriod]);
   const missingAgendas = result?.missingAgendas ?? [];
   const kpis = result?.kpis ?? null;
   const motivosPerdaBrutos = result?.motivosPerda ?? [];
@@ -975,6 +987,12 @@ export default function Home() {
                   <PeriodSelector selectedPeriod={globalPeriod} onPeriodChange={setGlobalPeriod} />
                 </div>
               </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-6">
+                <KPICard title="Meta Global (Período)" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalMeta)} icon={<Target className="text-slate-500" />} />
+                <KPICard title="Realizado Global" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalRealizado)} icon={<TrendingUp className="text-blue-500" />} subtitle={`${percentualGeral.toFixed(1)}% da meta`} />
+                <KPICard title="Taxa de Conversão (Demos)" value={`${goalsKpis.taxaConversao.toFixed(1)}%`} icon={<Briefcase className="text-indigo-500" />} subtitle={`${goalsKpis.ganhas} Ganhas | ${goalsKpis.perdidas} Perdidas`} />
+                <KPICard title="Oportunidades Únicas" value={goalsKpis.total.toString()} icon={<Target className="text-emerald-500" />} subtitle="Oportunidades com Demos" />
+              </div>
               <GoalChart metricas={goalMetricas} globalPeriod={globalPeriod} title="" />
             </div>
 
@@ -1177,6 +1195,11 @@ export default function Home() {
             actions={actions}
             onClose={() => setSelectedETNDetail(null)}
             goalMetricas={goalMetricas}
+            goals={goals}
+            pedidosData={pedidos}
+            oportunidadesData={oportunidadesData}
+            compromissosData={compromissosData}
+            globalPeriod={globalPeriod}
           />
         )}
       </div>
