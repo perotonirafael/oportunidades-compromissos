@@ -41,7 +41,7 @@ export default function Home() {
   const [pedidos, setPedidos] = useState<PedidoRecord[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState<string>('Março'); // Período padrão
 
-  const { state: processingState, processFiles: processFilesLegacy, resetState } = useFileProcessor();
+  const { state: processingState, resetState } = useFileProcessor();
   const { processData: processDataWithWorker, processFiles: processFilesWithWorker, isProcessing: isWorkerProcessing, progress: workerProgress } = useWorkerDataProcessor();
   const { parseGoalsFile, parsePedidosFile } = useGoalProcessor();
   const [workerResult, setWorkerResult] = useState<any>(null);
@@ -146,8 +146,8 @@ export default function Home() {
     getCacheInfo().then(info => setCacheInfo(info));
   }, []);
 
-  const normalResult = useDataProcessor(lightOpportunities, lightActions);
-  const result = workerResult || normalResult;
+  const normalResult = useDataProcessor(workerResult ? [] : lightOpportunities, workerResult ? [] : lightActions);
+  const result = workerResult ?? normalResult;
 
   const processedData = result?.records ?? [];
   const goalMetricas = useGoalMetricsProcessor(goals, pedidos, processedData, selectedPeriod, actions, opportunities);
@@ -505,19 +505,8 @@ export default function Home() {
     let parsedPedidos: PedidoRecord[] = pedidos;
 
     try {
-      const [workerRes, legacyParsed] = await Promise.all([
-        processFilesWithWorker(oppFile, actFile),
-        processFilesLegacy(oppFile, actFile),
-      ]);
-
+      const workerRes = await processFilesWithWorker(oppFile, actFile);
       setWorkerResult(workerRes);
-
-      if (legacyParsed) {
-        setOpportunities(legacyParsed.opportunities as Opportunity[]);
-        setActions(legacyParsed.actions as Action[]);
-        setLightOpportunities(legacyParsed.opportunities as Opportunity[]);
-        setLightActions(legacyParsed.actions as Action[]);
-      }
 
       if (goalFile) {
         try {
@@ -541,43 +530,20 @@ export default function Home() {
         console.log('[home-goals] Fluxo upload concluído', {
           goals: parsedGoals.length,
           pedidos: parsedPedidos.length,
-          opportunities: legacyParsed?.opportunities?.length || 0,
-          actions: legacyParsed?.actions?.length || 0,
-          lightOpportunities: legacyParsed?.opportunities?.length || 0,
-          lightActions: legacyParsed?.actions?.length || 0,
+          records: workerRes?.records?.length || 0,
         });
       }
 
-      try {
-        await saveToCache({
-          result: workerRes,
-          oppFileName: oppFile?.name || '',
-          actFileName: actFile?.name || '',
-          oppCount: workerRes?.records?.length || 0,
-          actCount: workerRes?.kpis?.totalAgendas || 0,
-          goalFileName: goalFile?.name || '',
-          pedidoFileName: pedidoFile?.name || '',
-          goals: parsedGoals,
-          pedidos: parsedPedidos,
-          opportunities: (legacyParsed?.opportunities || []) as Opportunity[],
-          actions: (legacyParsed?.actions || []) as Action[],
-          lightOpportunities: (legacyParsed?.opportunities || []) as Opportunity[],
-          lightActions: (legacyParsed?.actions || []) as Action[],
-          selectedPeriod,
-        });
-        setCacheInfo({
-          exists: true,
-          timestamp: Date.now(),
-          oppFileName: oppFile?.name || '',
-          actFileName: actFile?.name || '',
-          goalFileName: goalFile?.name || '',
-          pedidoFileName: pedidoFile?.name || '',
-          oppCount: workerRes?.records?.length || 0,
-          actCount: workerRes?.kpis?.totalAgendas || 0,
-        });
-      } catch (cacheErr) {
-        console.warn('Erro ao salvar cache:', cacheErr);
-      }
+      setCacheInfo({
+        exists: true,
+        timestamp: Date.now(),
+        oppFileName: oppFile?.name || '',
+        actFileName: actFile?.name || '',
+        goalFileName: goalFile?.name || '',
+        pedidoFileName: pedidoFile?.name || '',
+        oppCount: workerRes?.records?.length || 0,
+        actCount: workerRes?.kpis?.totalAgendas || 0,
+      });
     } catch (err) {
       console.error('Erro no Web Worker:', err);
       setError(err instanceof Error ? err.message : 'Erro ao processar arquivos');
@@ -590,10 +556,8 @@ export default function Home() {
     goalFile,
     pedidoFile,
     processFilesWithWorker,
-    processFilesLegacy,
     parseGoalsFile,
     parsePedidosFile,
-    selectedPeriod,
   ]);
 
   const handleOppFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -651,24 +615,30 @@ export default function Home() {
   useEffect(() => {
     if (!workerResult) return;
 
-    saveToCache({
-      result: workerResult,
-      oppFileName,
-      actFileName,
-      oppCount: workerResult?.records?.length || 0,
-      actCount: workerResult?.kpis?.totalAgendas || 0,
-      goalFileName,
-      pedidoFileName,
-      goals,
-      pedidos,
-      opportunities,
-      actions,
-      lightOpportunities,
-      lightActions,
-      selectedPeriod,
-    }).catch((cacheErr) => {
-      console.warn('Erro ao atualizar cache com metas/pedidos:', cacheErr);
-    });
+    const persistCache = () => {
+      saveToCache({
+        result: workerResult,
+        oppFileName,
+        actFileName,
+        oppCount: workerResult?.records?.length || 0,
+        actCount: workerResult?.kpis?.totalAgendas || 0,
+        goalFileName,
+        pedidoFileName,
+        goals,
+        pedidos,
+        selectedPeriod,
+      }).catch((cacheErr) => {
+        console.warn('Erro ao atualizar cache com metas/pedidos:', cacheErr);
+      });
+    };
+
+    if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+      const idleId = window.requestIdleCallback(persistCache, { timeout: 1500 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+
+    const timeoutId = globalThis.setTimeout(persistCache, 0);
+    return () => globalThis.clearTimeout(timeoutId);
   }, [
     workerResult,
     oppFileName,
@@ -677,10 +647,6 @@ export default function Home() {
     pedidoFileName,
     goals,
     pedidos,
-    opportunities,
-    actions,
-    lightOpportunities,
-    lightActions,
     selectedPeriod,
   ]);
 
@@ -714,10 +680,10 @@ export default function Home() {
         setWorkerResult(cleanedResult);
         setGoals(cached.goals || []);
         setPedidos(cached.pedidos || []);
-        setOpportunities(cached.opportunities || []);
-        setActions(cached.actions || []);
-        setLightOpportunities(cached.lightOpportunities || cached.opportunities || []);
-        setLightActions(cached.lightActions || cached.actions || []);
+        setOpportunities([]);
+        setActions([]);
+        setLightOpportunities([]);
+        setLightActions([]);
         setOppFileName(cached.oppFileName || '');
         setActFileName(cached.actFileName || '');
         setGoalFileName(cached.goalFileName || '');
@@ -730,10 +696,7 @@ export default function Home() {
           console.log('[home-goals] Cache restaurado', {
             goals: cached.goals?.length || 0,
             pedidos: cached.pedidos?.length || 0,
-            opportunities: cached.opportunities?.length || 0,
-            actions: cached.actions?.length || 0,
-            lightOpportunities: cached.lightOpportunities?.length || 0,
-            lightActions: cached.lightActions?.length || 0,
+            records: cached.result?.records?.length || 0,
           });
         }
       } else {

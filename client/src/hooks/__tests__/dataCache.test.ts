@@ -60,7 +60,7 @@ describe('useDataCache', () => {
     vi.stubGlobal('indexedDB', createFakeIndexedDB());
   });
 
-  it('preserva goals/pedidos/actions/opportunities/result no save/load', async () => {
+  it('preserva goals/pedidos/result no save/load com payload enxuto', async () => {
     await saveToCache({
       result: { records: [{ oppId: '1' }] },
       oppFileName: 'opp.csv',
@@ -69,10 +69,6 @@ describe('useDataCache', () => {
       actCount: 1,
       goals: [{ produto: 'x', idUsuario: '1', rubrica: 'Setup + Licenças', marco: 100 } as any],
       pedidos: [{ idOportunidade: '1', dataFechamento: '01/03/2025' } as any],
-      opportunities: [{ 'Oportunidade ID': '1' }],
-      actions: [{ 'Oportunidade ID': '1', Categoria: 'Demonstracao Presencial' }],
-      lightOpportunities: [{ 'Oportunidade ID': '1' }],
-      lightActions: [{ 'Oportunidade ID': '1' }],
     });
 
     const cached = await loadFromCache();
@@ -80,7 +76,5 @@ describe('useDataCache', () => {
     expect(cached?.result.records).toHaveLength(1);
     expect(cached?.goals).toHaveLength(1);
     expect(cached?.pedidos).toHaveLength(1);
-    expect(cached?.opportunities).toHaveLength(1);
-    expect(cached?.actions).toHaveLength(1);
   });
 });
