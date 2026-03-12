@@ -1,8 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Calculator, Check, Edit2, Save, Upload } from 'lucide-react';
+import { Upload, Save, Edit2, Check, Calculator } from 'lucide-react';
 import Papa from 'papaparse';
 import { toast } from 'sonner';
 
@@ -25,13 +25,13 @@ interface GoalManagerProps {
 }
 
 const periods: { key: PeriodKey, label: string, isQuarter?: boolean, isTotal?: boolean, readOnly?: boolean }[] = [
-  { key: 'jan', label: 'Jan' }, { key: 'fev', label: 'Fev' }, { key: 'mar', label: 'Mar' },
+  { key: 'jan', label: 'Jan' }, { key: 'fev', label: 'Fev' }, { key: 'mar', label: 'Mar' }, 
   { key: 'tri1', label: '1º Tri', isQuarter: true, readOnly: true },
-  { key: 'abr', label: 'Abr' }, { key: 'mai', label: 'Mai' }, { key: 'jun', label: 'Jun' },
+  { key: 'abr', label: 'Abr' }, { key: 'mai', label: 'Mai' }, { key: 'jun', label: 'Jun' }, 
   { key: 'tri2', label: '2º Tri', isQuarter: true, readOnly: true },
-  { key: 'jul', label: 'Jul' }, { key: 'ago', label: 'Ago' }, { key: 'set', label: 'Set' },
+  { key: 'jul', label: 'Jul' }, { key: 'ago', label: 'Ago' }, { key: 'set', label: 'Set' }, 
   { key: 'tri3', label: '3º Tri', isQuarter: true, readOnly: true },
-  { key: 'out', label: 'Out' }, { key: 'nov', label: 'Nov' }, { key: 'dez', label: 'Dez' },
+  { key: 'out', label: 'Out' }, { key: 'nov', label: 'Nov' }, { key: 'dez', label: 'Dez' }, 
   { key: 'tri4', label: '4º Tri', isQuarter: true, readOnly: true },
   { key: 'total', label: 'Total Ano', isTotal: true, readOnly: true }
 ];
@@ -53,16 +53,16 @@ export function GoalManager({ onSaveGoals }: GoalManagerProps) {
       return;
     }
 
-    // AQUI ESTAVA O SEGREDO: Forçar explicitamente o delimitador como ';'
+    // AQUI ESTAVA O SEGREDO: Forçar explicitamente o delimitador como ';' 
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
-      delimiter: ';',
+      delimiter: ";", // <--- Correção que evita colunas espremidas
       complete: (results) => {
         try {
           const parsedData: GoalRow[] = (results.data as any[]).map((row: any, index: number) => {
-            const findKey = (searchStr: string) => Object.keys(row).find((k) => k.toLowerCase().replace(/\s/g, '').includes(searchStr));
-
+            const findKey = (searchStr: string) => Object.keys(row).find(k => k.toLowerCase().replace(/\s/g,'').includes(searchStr));
+            
             const prodKey = findKey('produto');
             const userKey = findKey('usuário') || findKey('usuario') || findKey('iderp');
             const rubricaKey = findKey('rubrica');
@@ -72,12 +72,12 @@ export function GoalManager({ onSaveGoals }: GoalManagerProps) {
               if (!val) return 0;
               let str = String(val).trim();
               if (str === '-' || str === '') return 0;
-              str = str.replace(/R\$\s?/g, '').trim();
+              str = str.replace(/R\$\s?/g, '').trim(); 
               if (str.includes(',')) {
                 str = str.replace(/\./g, '').replace(',', '.');
               }
               const num = parseFloat(str);
-              return Number.isNaN(num) ? 0 : num;
+              return isNaN(num) ? 0 : num;
             };
 
             const jan = parseMoney(row[findKey('janeiro') || 'Janeiro']);
@@ -110,17 +110,17 @@ export function GoalManager({ onSaveGoals }: GoalManagerProps) {
               out, nov, dez, tri4,
               total
             };
-          }).filter((g) => g.produto && g.idUsuario && g.idUsuario !== 'undefined');
+          }).filter(g => g.produto && g.idUsuario && g.idUsuario !== "undefined");
 
           if (parsedData.length === 0) {
-            toast.error('Erro: Colunas não encontradas. O arquivo está vazio ou fora do formato esperado.');
+            toast.error("Erro: Colunas não encontradas. O arquivo está vazio ou fora do formato esperado.");
             return;
           }
 
           setGoals(parsedData);
           toast.success(`${parsedData.length} metas do ano todo importadas e calculadas!`);
         } catch (error) {
-          toast.error('Erro ao processar o arquivo CSV.');
+          toast.error("Erro ao processar o arquivo CSV.");
         }
       }
     });
@@ -132,9 +132,9 @@ export function GoalManager({ onSaveGoals }: GoalManagerProps) {
   };
 
   const handleFieldChange = (field: PeriodKey, value: number) => {
-    setEditForm((prev) => {
+    setEditForm(prev => {
       const next = { ...prev, [field]: value } as Partial<GoalRow>;
-
+      
       if (['jan', 'fev', 'mar'].includes(field)) {
         next.tri1 = (next.jan ?? prev.jan ?? 0) + (next.fev ?? prev.fev ?? 0) + (next.mar ?? prev.mar ?? 0);
       }
@@ -148,32 +148,32 @@ export function GoalManager({ onSaveGoals }: GoalManagerProps) {
         next.tri4 = (next.out ?? prev.out ?? 0) + (next.nov ?? prev.nov ?? 0) + (next.dez ?? prev.dez ?? 0);
       }
 
-      next.total = (next.tri1 ?? prev.tri1 ?? 0) + (next.tri2 ?? prev.tri2 ?? 0) +
+      next.total = (next.tri1 ?? prev.tri1 ?? 0) + (next.tri2 ?? prev.tri2 ?? 0) + 
                    (next.tri3 ?? prev.tri3 ?? 0) + (next.tri4 ?? prev.tri4 ?? 0);
-
+                   
       return next;
     });
   };
 
   const handleSaveEdit = () => {
-    setGoals(goals.map((g) => g.id === editingId ? { ...g, ...editForm } as GoalRow : g));
+    setGoals(goals.map(g => g.id === editingId ? { ...g, ...editForm } as GoalRow : g));
     setEditingId(null);
   };
 
   const handleFinalSave = () => {
-    const finalGoals = goals.map((g) => ({
-      'Produto': g.produto,
-      'Id Usuário ERP': g.idUsuario,
-      'Rubrica': g.rubrica,
-      'Janeiro': g.jan, 'Fevereiro': g.fev, 'Março': g.mar, '1º Trimestre': g.tri1,
-      'Abril': g.abr, 'Maio': g.mai, 'Junho': g.jun, '2º Trimestre': g.tri2,
-      'Julho': g.jul, 'Agosto': g.ago, 'Setembro': g.set, '3º Trimestre': g.tri3,
-      'Outubro': g.out, 'Novembro': g.nov, 'Dezembro': g.dez, '4º Trimestre': g.tri4,
-      'Total Ano': g.total
+    const finalGoals = goals.map(g => ({
+      "Produto": g.produto,
+      "Id Usuário ERP": g.idUsuario,
+      "Rubrica": g.rubrica,
+      "Janeiro": g.jan, "Fevereiro": g.fev, "Março": g.mar, "1º Trimestre": g.tri1,
+      "Abril": g.abr, "Maio": g.mai, "Junho": g.jun, "2º Trimestre": g.tri2,
+      "Julho": g.jul, "Agosto": g.ago, "Setembro": g.set, "3º Trimestre": g.tri3,
+      "Outubro": g.out, "Novembro": g.nov, "Dezembro": g.dez, "4º Trimestre": g.tri4,
+      "Total Ano": g.total 
     }));
-
+    
     onSaveGoals(finalGoals);
-    toast.success('Metas guardadas e injetadas no Dashboard com sucesso!');
+    toast.success("Metas guardadas e injetadas no Dashboard com sucesso!");
     setIsOpen(false);
   };
 
@@ -184,7 +184,7 @@ export function GoalManager({ onSaveGoals }: GoalManagerProps) {
           <Upload className="h-4 w-4" /> Importar e Validar Metas
         </Button>
       </DialogTrigger>
-
+      
       <DialogContent className="max-w-[98vw] w-[98vw] h-[95vh] overflow-hidden flex flex-col bg-slate-50 rounded-xl p-0">
         <DialogHeader className="px-6 py-4 border-b bg-white shrink-0">
           <DialogTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -210,7 +210,7 @@ export function GoalManager({ onSaveGoals }: GoalManagerProps) {
                     <th className="px-4 py-3 font-bold bg-slate-200 sticky left-0 z-40 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] border-b border-gray-300">
                       Usuário / Produto / Rubrica
                     </th>
-                    {periods.map((p) => (
+                    {periods.map(p => (
                       <th key={p.key} className={`px-4 py-3 font-bold min-w-[110px] border-l border-b border-gray-300 ${p.isQuarter ? 'bg-blue-100 text-blue-900' : p.isTotal ? 'bg-green-100 text-green-900' : 'bg-slate-100'}`}>
                         {p.label}
                       </th>
@@ -223,25 +223,25 @@ export function GoalManager({ onSaveGoals }: GoalManagerProps) {
                 <tbody className="divide-y divide-gray-200">
                   {goals.map((goal, idx) => (
                     <tr key={goal.id} className={`hover:bg-blue-50/50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
-
+                      
                       <td className="px-4 py-3 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-inherit border-r border-gray-200">
                         <div className="text-xs font-bold text-gray-400 mb-1">ID: {goal.idUsuario}</div>
                         <div className="font-semibold text-gray-800 truncate max-w-[220px]" title={goal.produto}>{goal.produto}</div>
                         <div className="text-xs font-medium text-slate-500 truncate max-w-[220px]" title={goal.rubrica}>{goal.rubrica}</div>
                       </td>
-
-                      {periods.map((p) => (
+                      
+                      {periods.map(p => (
                         <td key={p.key} className={`px-4 py-2 border-l border-gray-200 ${p.isQuarter ? 'bg-blue-50/40' : p.isTotal ? 'bg-green-50/40' : ''}`}>
                           {editingId === goal.id && !p.readOnly ? (
-                            <Input
-                              type="number"
-                              value={editForm[p.key] ?? ''}
+                            <Input 
+                              type="number" 
+                              value={editForm[p.key] ?? ''} 
                               onChange={(e) => handleFieldChange(p.key, Number(e.target.value))}
                               className="w-24 h-8 text-sm px-2 font-medium text-blue-700 border-blue-400 focus-visible:ring-blue-500"
                             />
                           ) : (
                             <span className={`text-sm tracking-tight ${p.isQuarter ? 'font-bold text-blue-700' : p.isTotal ? 'font-bold text-green-700' : 'text-gray-600'}`}>
-                              {editingId === goal.id && p.readOnly
+                              {editingId === goal.id && p.readOnly 
                                 ? (editForm[p.key] || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
                                 : goal[p.key].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
                               }
@@ -253,11 +253,11 @@ export function GoalManager({ onSaveGoals }: GoalManagerProps) {
                       <td className="px-4 py-3 sticky right-0 z-20 shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-inherit text-center border-l border-gray-200">
                         {editingId === goal.id ? (
                           <Button size="sm" onClick={handleSaveEdit} className="bg-green-600 hover:bg-green-700 text-white shadow-sm w-[90px] font-semibold">
-                            <Check className="h-4 w-4 mr-1" /> Salvar
+                            <Check className="h-4 w-4 mr-1"/> Salvar
                           </Button>
                         ) : (
                           <Button size="sm" variant="outline" onClick={() => handleEdit(goal)} className="text-gray-700 bg-white hover:bg-gray-100 border-gray-300 w-[90px] font-medium shadow-sm">
-                            <Edit2 className="h-3 w-3 mr-2" /> Editar
+                            <Edit2 className="h-3 w-3 mr-2"/> Editar
                           </Button>
                         )}
                       </td>
@@ -268,7 +268,7 @@ export function GoalManager({ onSaveGoals }: GoalManagerProps) {
             </div>
           )}
         </div>
-
+        
         {goals.length > 0 && (
           <div className="p-4 border-t border-gray-200 bg-white flex justify-end shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-30">
             <Button onClick={handleFinalSave} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-5 shadow-lg text-md font-bold">
