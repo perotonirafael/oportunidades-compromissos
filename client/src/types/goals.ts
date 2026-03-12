@@ -12,6 +12,9 @@ export type MonthKey =
   | 'novembro'
   | 'dezembro';
 
+export type ProductFamily = 'HCM Senior' | 'HCM Konviva' | 'HCM JobConvo' | 'Total Gestão';
+export type GoalRubrica = 'Setup + Licenças' | 'Serviços Não Recorrentes' | 'Recorrente';
+
 export const MONTH_KEYS: MonthKey[] = [
   'janeiro',
   'fevereiro',
@@ -42,35 +45,30 @@ export const MONTH_LABELS: Record<MonthKey, string> = {
   dezembro: 'Dezembro',
 };
 
-export interface GoalMonthlyValues {
-  janeiro: number;
-  fevereiro: number;
-  marco: number;
-  abril: number;
-  maio: number;
-  junho: number;
-  julho: number;
-  agosto: number;
-  setembro: number;
-  outubro: number;
-  novembro: number;
-  dezembro: number;
-}
+export const PRODUCT_FAMILIES: Exclude<ProductFamily, 'Total Gestão'>[] = ['HCM Senior', 'HCM Konviva', 'HCM JobConvo'];
+export const GOAL_RUBRICAS: GoalRubrica[] = ['Setup + Licenças', 'Serviços Não Recorrentes', 'Recorrente'];
 
-export interface GoalRow extends GoalMonthlyValues {
+export interface ManualGoal {
   id: string;
   ano: number;
   idUsuarioErp: string;
   etnNome: string;
+  produto: Exclude<ProductFamily, 'Total Gestão'>;
+  rubrica: GoalRubrica;
+  mes: MonthKey;
+  valor: number;
 }
 
 export interface PedidoCRM {
   id: string;
   idOportunidade: string;
+  etapaOportunidade: string;
   dataFechamento: string | null;
-  licencasServicos: number;
-  recorrente: number;
-  total: number;
+  produto: string;
+  produtoModulo: string;
+  produtoValorLicenca: number;
+  produtoValorManutencao: number;
+  servicoValorLiquido: number;
 }
 
 export interface GoalMonthDetail {

@@ -2,6 +2,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { X, TrendingUp, Award, Target, Calendar, Trophy, XCircle, DollarSign, Search, Filter, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, Cell, PieChart, Pie } from 'recharts';
 import { KPICard } from './KPICard';
+import { GoalChart } from './GoalChart';
 import type { GoalMetricByETN, MonthKey } from '@/types/goals';
 
 interface ProcessedRecord {
@@ -884,10 +885,12 @@ export function ETNDetailModal({ etn, data, actions = [], onClose, goalMetricas 
             </div>
             <div className="p-5">
               {(() => {
-                const selectedETN: { idUsuarioErp?: string } | null = null;
+                const selectedETNIdFromActions = etnActions
+                  .map((action) => String(action['Id Usuário ERP'] ?? action['ID Usuário ERP'] ?? '').trim())
+                  .find(Boolean);
                 const selectedGoalMetric = goalMetricas?.find((item) => {
                   const byName = item.etnNome?.trim().toLowerCase() === etn?.trim().toLowerCase();
-                  const byId = selectedETN?.idUsuarioErp && item.idUsuarioErp === selectedETN.idUsuarioErp;
+                  const byId = Boolean(selectedETNIdFromActions && item.idUsuarioErp === selectedETNIdFromActions);
                   return Boolean(byId || byName);
                 });
 
@@ -913,6 +916,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose, goalMetricas 
 
                 return (
                   <div className="space-y-4">
+                    <GoalChart metricas={[selectedGoalMetric]} title="Desempenho individual" />
                     <div className="rounded-2xl border bg-card p-4 shadow-sm">
                       <div className="mb-2 text-sm text-muted-foreground">
                         Ano de referência: {selectedGoalMetric.ano}

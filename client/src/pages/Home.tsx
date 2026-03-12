@@ -8,6 +8,7 @@ import { useDataProcessor, type Opportunity, type Action, type ProcessedRecord, 
 import { useFileProcessor } from '@/hooks/useFileProcessor';
 import { useWorkerDataProcessor } from '@/hooks/useWorkerDataProcessor';
 import { useGoalProcessor } from '@/hooks/useGoalProcessor';
+import { useManualGoalsStore } from '@/hooks/useManualGoalsStore';
 import { useGoalMetricsProcessor } from '@/hooks/useGoalMetricsProcessor';
 import { PeriodSelector } from '@/components/PeriodSelector';
 import { GoalChart } from '@/components/GoalChart';
@@ -18,10 +19,12 @@ import { ChartsSection } from '@/components/ChartsSection';
 import { ProgressBar } from '@/components/ProgressBar';
 import { ETNDetailModal } from '@/components/ETNDetailModal';
 import { ETNComparativeAnalysis } from '@/components/ETNComparativeAnalysis';
-import GoalEntryPanel from '@/components/GoalEntryPanel';
-import type { GoalRow, PedidoCRM } from '@/types/goals';
+import ManualGoalsModal from '@/components/ManualGoalsModal';
+import type { PedidoCRM } from '@/types/goals';
 import { DEMO_DATA } from '@/lib/demoData';
 import { saveToCache, loadFromCache, clearCache, getCacheInfo } from '@/hooks/useDataCache';
+import { getPeriodMonths } from '@/utils/goalAggregation';
+import { MONTH_LABELS, type MonthKey } from '@/types/goals';
 
 const DEBUG_GOALS_FLOW = import.meta.env.DEV && import.meta.env.VITE_DEBUG_GOALS === 'true';
 
@@ -34,23 +37,15 @@ export default function Home() {
   const [actFile, setActFile] = useState<File | null>(null);
   const [oppFileName, setOppFileName] = useState('');
   const [actFileName, setActFileName] = useState('');
-  const [goalFile, setGoalFile] = useState<File | null>(null);
   const [pedidoFile, setPedidoFile] = useState<File | null>(null);
-  const [goalFileName, setGoalFileName] = useState('');
   const [pedidoFileName, setPedidoFileName] = useState('');
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('Março'); // Período padrão
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('Todos');
+  const [isManualGoalsModalOpen, setIsManualGoalsModalOpen] = useState(false);
 
   const { state: processingState, resetState } = useFileProcessor();
   const { processData: processDataWithWorker, processFiles: processFilesWithWorker, isProcessing: isWorkerProcessing, progress: workerProgress } = useWorkerDataProcessor();
-  const {
-    goals,
-    pedidos,
-    setGoals,
-    setPedidos,
-    updateGoalValue,
-    processGoalsFile,
-    processPedidosFile,
-  } = useGoalProcessor();
+  const { pedidos, setPedidos, processPedidosFile } = useGoalProcessor();
+  const { manualGoals, persistManualGoals } = useManualGoalsStore();
   const [workerResult, setWorkerResult] = useState<any>(null);
   const [useWorkerOnly, setUseWorkerOnly] = useState(false);
   const [lightOpportunities, setLightOpportunities] = useState<Opportunity[]>([]);
@@ -142,7 +137,6 @@ export default function Home() {
     timestamp?: number;
     oppFileName?: string;
     actFileName?: string;
-    goalFileName?: string;
     pedidoFileName?: string;
     oppCount?: number;
     actCount?: number;
@@ -157,7 +151,7 @@ export default function Home() {
   const result = workerResult ?? normalResult;
 
   const processedData = result?.records ?? [];
-  const goalMetricas = useGoalMetricsProcessor(goals, pedidos, processedData, selectedPeriod, actions, opportunities);
+  const goalMetricas = useGoalMetricsProcessor(manualGoals, pedidos, selectedPeriod, actions, opportunities);
   const missingAgendas = result?.missingAgendas ?? [];
   const kpis = result?.kpis ?? null;
   const motivosPerdaBrutos = result?.motivosPerda ?? [];
@@ -170,9 +164,21 @@ export default function Home() {
     etapas: [], probabilidades: [], agenda: [], contas: [], tipos: [], subtipos: [], segmentos: [],
   };
 
+  const etnOptions = useMemo(() => {
+    const map = new Map<string, { etnNome: string; idUsuarioErp: string }>();
+    actions.forEach((action) => {
+      const id = String(action['Id Usuário ERP'] ?? action['ID Usuário ERP'] ?? '').trim();
+      const name = String(action['Usuário'] ?? action['Usuario'] ?? action['Responsável'] ?? '').trim();
+      if (id && name && !map.has(id)) map.set(id, { etnNome: name, idUsuarioErp: id });
+    });
+    return Array.from(map.values()).sort((a, b) => a.etnNome.localeCompare(b.etnNome));
+  }, [actions]);
+
   // ITEM 5: Filtrar dados com probabilidade agrupada >75%
   const filteredData = useMemo(() => {
+    const periodMonths = new Set(getPeriodMonths(selectedPeriod).map((month) => MONTH_LABELS[month as MonthKey]));
     return processedData.filter((r: ProcessedRecord) => {
+      if (selectedPeriod !== 'Todos' && !periodMonths.has(r.mesPrevisao)) return false;
       if (selYears.length > 0 && !selYears.includes(r.anoPrevisao)) return false;
       if (selMonths.length > 0 && !selMonths.includes(r.mesPrevisao)) return false;
       if (selReps.length > 0 && !selReps.includes(r.representante)) return false;
@@ -196,7 +202,7 @@ export default function Home() {
       }
       return true;
     });
-  }, [processedData, selYears, selMonths, selReps, selResp, selETN, selStages, selProbs, selAgenda, selAccounts, selTypes, selSubtipos]);
+  }, [processedData, selectedPeriod, selYears, selMonths, selReps, selResp, selETN, selStages, selProbs, selAgenda, selAccounts, selTypes, selSubtipos]);
 
   // Ajuste: Taxa de Conversão por ETN (somente Demonstração Presencial/Remota)
   // Quando actions está disponível (upload direto ou demo), calcular localmente.
@@ -508,21 +514,11 @@ export default function Home() {
     setLightOpportunities([]);
     setLightActions([]);
 
-    let parsedGoals: GoalRow[] = goals;
     let parsedPedidos: PedidoCRM[] = pedidos;
 
     try {
       const workerRes = await processFilesWithWorker(oppFile, actFile);
       setWorkerResult(workerRes);
-
-      if (goalFile) {
-        try {
-          parsedGoals = await processGoalsFile(goalFile);
-          setGoals(parsedGoals);
-        } catch (goalErr) {
-          console.warn('Erro ao processar metas:', goalErr);
-        }
-      }
 
       if (pedidoFile) {
         try {
@@ -535,7 +531,6 @@ export default function Home() {
 
       if (DEBUG_GOALS_FLOW) {
         console.log('[home-goals] Fluxo upload concluído', {
-          goals: parsedGoals.length,
           pedidos: parsedPedidos.length,
           records: workerRes?.records?.length || 0,
         });
@@ -546,7 +541,6 @@ export default function Home() {
         timestamp: Date.now(),
         oppFileName: oppFile?.name || '',
         actFileName: actFile?.name || '',
-        goalFileName: goalFile?.name || '',
         pedidoFileName: pedidoFile?.name || '',
         oppCount: workerRes?.records?.length || 0,
         actCount: workerRes?.kpis?.totalAgendas || 0,
@@ -558,12 +552,9 @@ export default function Home() {
   }, [
     oppFile,
     actFile,
-    goals,
     pedidos,
-    goalFile,
     pedidoFile,
     processFilesWithWorker,
-    processGoalsFile,
     processPedidosFile,
   ]);
 
@@ -583,14 +574,6 @@ export default function Home() {
     }
   };
 
-  const handleGoalFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setGoalFile(file);
-      setGoalFileName(file.name);
-    }
-  };
-
   const handlePedidoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -599,26 +582,12 @@ export default function Home() {
     }
   };
 
-  const handleLoadGoals = useCallback(async () => {
-    if (!goalFile && !pedidoFile) return;
-    setError(null);
-    try {
-      if (goalFile) {
-        await processGoalsFile(goalFile);
-      }
-      if (pedidoFile) {
-        await processPedidosFile(pedidoFile);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao processar metas e pedidos');
-    }
-  }, [goalFile, pedidoFile, processGoalsFile, processPedidosFile]);
-
   useEffect(() => {
-    if (goalFile || pedidoFile) {
-      handleLoadGoals();
-    }
-  }, [goalFile, pedidoFile, handleLoadGoals]);
+    if (!pedidoFile) return;
+    processPedidosFile(pedidoFile).catch((err) => {
+      setError(err instanceof Error ? err.message : 'Erro ao processar pedidos');
+    });
+  }, [pedidoFile, processPedidosFile]);
 
   useEffect(() => {
     if (!workerResult) return;
@@ -630,9 +599,7 @@ export default function Home() {
         actFileName,
         oppCount: workerResult?.records?.length || 0,
         actCount: workerResult?.kpis?.totalAgendas || 0,
-        goalFileName,
         pedidoFileName,
-        goals,
         pedidos,
         selectedPeriod,
       }).catch((cacheErr) => {
@@ -651,9 +618,7 @@ export default function Home() {
     workerResult,
     oppFileName,
     actFileName,
-    goalFileName,
     pedidoFileName,
-    goals,
     pedidos,
     selectedPeriod,
   ]);
@@ -667,26 +632,26 @@ export default function Home() {
     try {
       const cached = await loadFromCache();
       if (cached && cached.result) {
+        const cachedResult = cached.result as any;
         const isOLD = (name: string): boolean => {
           const upper = name.trim().toUpperCase();
           return upper.includes('OLD') || upper.includes('INATIVO');
         };
         const cleanedResult = {
-          ...cached.result,
+          ...cachedResult,
           filterOptions: {
-            ...cached.result.filterOptions,
-            representantes: cached.result.filterOptions.representantes?.filter((s: string) => !isOLD(s)) || [],
-            responsaveis: cached.result.filterOptions.responsaveis?.filter((s: string) => !isOLD(s)) || [],
-            etns: cached.result.filterOptions.etns?.filter((s: string) => !isOLD(s)) || [],
-            tipos: cached.result.filterOptions.tipos?.filter((s: string) => !isOLD(s)) || [],
-            contas: cached.result.filterOptions.contas?.filter((s: string) => !isOLD(s)) || [],
-            subtipos: cached.result.filterOptions.subtipos?.filter((s: string) => !isOLD(s)) || [],
-            segmentos: cached.result.filterOptions.segmentos?.filter((s: string) => !isOLD(s)) || [],
+            ...(cachedResult.filterOptions || {}),
+            representantes: cachedResult.filterOptions?.representantes?.filter((s: string) => !isOLD(s)) || [],
+            responsaveis: cachedResult.filterOptions?.responsaveis?.filter((s: string) => !isOLD(s)) || [],
+            etns: cachedResult.filterOptions?.etns?.filter((s: string) => !isOLD(s)) || [],
+            tipos: cachedResult.filterOptions?.tipos?.filter((s: string) => !isOLD(s)) || [],
+            contas: cachedResult.filterOptions?.contas?.filter((s: string) => !isOLD(s)) || [],
+            subtipos: cachedResult.filterOptions?.subtipos?.filter((s: string) => !isOLD(s)) || [],
+            segmentos: cachedResult.filterOptions?.segmentos?.filter((s: string) => !isOLD(s)) || [],
           },
         };
 
         setWorkerResult(cleanedResult);
-        setGoals(cached.goals || []);
         setPedidos(cached.pedidos || []);
         setOpportunities([]);
         setActions([]);
@@ -694,7 +659,6 @@ export default function Home() {
         setLightActions([]);
         setOppFileName(cached.oppFileName || '');
         setActFileName(cached.actFileName || '');
-        setGoalFileName(cached.goalFileName || '');
         setPedidoFileName(cached.pedidoFileName || '');
         if (cached.selectedPeriod) {
           setSelectedPeriod(cached.selectedPeriod);
@@ -702,9 +666,8 @@ export default function Home() {
 
         if (DEBUG_GOALS_FLOW) {
           console.log('[home-goals] Cache restaurado', {
-            goals: cached.goals?.length || 0,
             pedidos: cached.pedidos?.length || 0,
-            records: cached.result?.records?.length || 0,
+            records: cachedResult?.records?.length || 0,
           });
         }
       } else {
@@ -834,22 +797,16 @@ export default function Home() {
                     <Target className="text-white" size={16} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-xs font-bold text-purple-800">Metas</h3>
-                    <p className="text-[10px] text-purple-600/70">Metas (.csv, .xlsx)</p>
+                    <h3 className="text-xs font-bold text-purple-800">Metas Manuais</h3>
+                    <p className="text-[10px] text-purple-600/70">Lançamento em modal full screen</p>
                   </div>
                 </div>
-                <label className="block">
-                  <input type="file" accept=".csv,.xlsx,.xls" onChange={handleGoalFile} className="hidden" />
-                  <span className="block w-full py-3 text-center text-sm font-medium rounded-lg border-2 border-dashed border-purple-300 hover:border-purple-500 hover:bg-purple-50 transition-all cursor-pointer">
-                    {goalFileName ? (
-                      <span className="text-purple-700 flex items-center justify-center gap-1.5">
-                        <FileText size={14} /> {goalFileName}
-                      </span>
-                    ) : (
-                      <span className="text-purple-500">Selecionar arquivo</span>
-                    )}
-                  </span>
-                </label>
+                <button
+                  onClick={() => setIsManualGoalsModalOpen(true)}
+                  className="block w-full py-3 text-center text-sm font-medium rounded-lg border-2 border-dashed border-purple-300 hover:border-purple-500 hover:bg-purple-50 transition-all"
+                >
+                  Abrir lançamento manual
+                </button>
               </div>
 
               <div className="bg-white rounded-xl p-4 border-2 border-orange-200 hover:border-orange-400 transition-all hover:shadow-lg hover:shadow-orange-100 flex flex-col">
@@ -877,14 +834,7 @@ export default function Home() {
               </div>
             </div>
 
-            <p className="mt-4 text-sm text-muted-foreground">Após o upload, os valores podem ser editados manualmente.</p>
-
-            <div className="mt-4">
-              <GoalEntryPanel
-                goals={goals}
-                onUpdateGoalValue={updateGoalValue}
-              />
-            </div>
+            <p className="mt-4 text-sm text-muted-foreground">Sem upload de metas: use o modal de lançamento manual.</p>
 
             <div className="flex justify-center gap-4">
               <button
@@ -995,6 +945,10 @@ export default function Home() {
               />
             </div>
 
+            <div className="bg-white rounded-xl p-4 border border-border shadow-sm flex justify-end">
+              <PeriodSelector selectedPeriod={selectedPeriod} onPeriodChange={setSelectedPeriod} />
+            </div>
+
             {/* Botão para resetar */}
             <div className="flex justify-end">
               <button
@@ -1010,7 +964,6 @@ export default function Home() {
                   setUseWorkerOnly(false);
                   setLightOpportunities([]);
                   setLightActions([]);
-                  setGoals([]);
                   setPedidos([]);
                   resetState();
                 }}
@@ -1071,21 +1024,12 @@ export default function Home() {
                   <Target size={20} className="text-purple-600" />
                   Atingimento de Metas - {selectedPeriod}
                 </h3>
-                <div className="flex items-center gap-3">
-                  {goals.length === 0 && (
-                    <div className="flex items-center gap-2">
-                      <label className="cursor-pointer px-3 py-1.5 text-xs font-medium rounded-lg border border-purple-300 text-purple-700 hover:bg-purple-50 transition-all">
-                        <input type="file" accept=".csv,.xlsx,.xls" onChange={handleGoalFile} className="hidden" />
-                        {goalFileName || 'Metas (.csv, .xlsx)'}
-                      </label>
-                      <label className="cursor-pointer px-3 py-1.5 text-xs font-medium rounded-lg border border-orange-300 text-orange-700 hover:bg-orange-50 transition-all">
-                        <input type="file" accept=".csv" onChange={handlePedidoFile} className="hidden" />
-                        {pedidoFileName || 'Pedidos (.csv)'}
-                      </label>
-                    </div>
-                  )}
-                  <PeriodSelector selectedPeriod={selectedPeriod} onPeriodChange={setSelectedPeriod} />
-                </div>
+                <button
+                  onClick={() => setIsManualGoalsModalOpen(true)}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg border border-purple-300 text-purple-700 hover:bg-purple-50 transition-all"
+                >
+                  Lançar metas manualmente
+                </button>
               </div>
               <GoalChart metricas={goalMetricas} title="" />
             </div>
@@ -1292,6 +1236,13 @@ export default function Home() {
             selectedPeriod={selectedPeriod}
           />
         )}
+        <ManualGoalsModal
+          isOpen={isManualGoalsModalOpen}
+          goals={manualGoals}
+          etnOptions={etnOptions}
+          onClose={() => setIsManualGoalsModalOpen(false)}
+          onSave={persistManualGoals}
+        />
       </div>
     </div>
   );

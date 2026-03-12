@@ -39,7 +39,7 @@ export const GoalChart: React.FC<GoalChartProps> = ({ metricas, title }) => {
           <Target size={32} className="text-muted-foreground/50 mb-3" />
           <p className="text-muted-foreground text-sm font-medium">Nenhum dado de meta disponível</p>
           <p className="text-muted-foreground/70 text-xs mt-1">
-            Carregue os arquivos de Metas (.xlsx) e Pedidos CRM (.csv) junto com Oportunidades e Ações
+            Cadastre metas manualmente e carregue os pedidos CRM para calcular o realizado
           </p>
         </div>
       </div>

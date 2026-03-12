@@ -1,35 +1,18 @@
 import { useCallback, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { GoalRow, MonthKey, MONTH_KEYS, PedidoCRM } from '@/types/goals';
+import { PedidoCRM } from '@/types/goals';
 
 type GenericRow = Record<string, unknown>;
 
-const KEY_ALIASES = {
-  idUsuarioErp: ['ID Usuário ERP', 'Id Usuário ERP', 'ID Usuário', 'Id Usuário'],
-  ano: ['Ano', 'ANO'],
-  etnNome: ['ETN', 'Nome', 'Usuário', 'Usuario', 'Colaborador', 'Responsável', 'Responsavel'],
-  janeiro: ['Janeiro'],
-  fevereiro: ['Fevereiro'],
-  marco: ['Março', 'Marco'],
-  abril: ['Abril'],
-  maio: ['Maio'],
-  junho: ['Junho'],
-  julho: ['Julho'],
-  agosto: ['Agosto'],
-  setembro: ['Setembro'],
-  outubro: ['Outubro'],
-  novembro: ['Novembro'],
-  dezembro: ['Dezembro'],
-  pedidoIdOpp: ['ID OPORTUNIDADE', '"ID OPORTUNIDADE"', 'Id Oportunidade'],
-  pedidoDataFechamento: ['DATA FECHAMENTO', '"DATA FECHAMENTO"', 'Data Fechamento'],
-  pedidoLicencasServicos: [
-    'LICENCAS+SERVICOS',
-    'LICENÇAS+SERVIÇOS',
-    '"LICENCAS+SERVICOS"',
-    '"LICENÇAS+SERVIÇOS"',
-    'Licenças+Serviços',
-  ],
-  pedidoRecorrente: ['RECORRENTE', '"RECORRENTE"', 'Recorrente'],
+const PEDIDO_ALIASES = {
+  idOportunidade: ['ID OPORTUNIDADE', 'Id Oportunidade', '"ID OPORTUNIDADE"'],
+  dataFechamento: ['DATA FECHAMENTO', 'Data Fechamento', '"DATA FECHAMENTO"'],
+  etapaOportunidade: ['ETAPA OPORTUNIDADE', 'Etapa Oportunidade'],
+  produto: ['PRODUTO', 'Produto'],
+  produtoModulo: ['PRODUTO - MODULO', 'PRODUTO - MÓDULO', 'Produto - Módulo'],
+  produtoValorLicenca: ['PRODUTO - VALOR LICENCA', 'PRODUTO - VALOR LICENÇA'],
+  produtoValorManutencao: ['PRODUTO - VALOR MANUTENCAO', 'PRODUTO - VALOR MANUTENÇÃO'],
+  servicoValorLiquido: ['SERVICO - VALOR LIQUIDO', 'SERVIÇO - VALOR LÍQUIDO'],
 } as const;
 
 function normalizeKey(input: string): string {
@@ -42,224 +25,81 @@ function normalizeKey(input: string): string {
     .toLowerCase();
 }
 
-function findValue(row: GenericRow, aliases: readonly string[]): unknown {
-  const normalizedMap = new Map<string, unknown>();
-
-  Object.entries(row).forEach(([key, value]) => {
-    normalizedMap.set(normalizeKey(key), value);
-  });
-
+function findValue(row: GenericRow, aliases: readonly string[]): string {
+  const keys = new Map<string, unknown>();
+  Object.entries(row).forEach(([key, value]) => keys.set(normalizeKey(key), value));
   for (const alias of aliases) {
-    const found = normalizedMap.get(normalizeKey(alias));
-    if (found !== undefined && found !== null && String(found).trim() !== '') {
-      return found;
-    }
+    const value = keys.get(normalizeKey(alias));
+    if (value !== undefined && value !== null && String(value).trim() !== '') return String(value).trim();
   }
-
-  return undefined;
+  return '';
 }
 
-function parseNumberBr(value: unknown): number {
-  if (value === null || value === undefined) return 0;
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-
-  const raw = String(value).trim();
+function parseNumberBr(input: unknown): number {
+  const raw = String(input ?? '').trim();
   if (!raw) return 0;
-
-  const cleaned = raw
+  const normalized = raw
     .replace(/R\$/gi, '')
     .replace(/\s/g, '')
-    .replace(/\./g, '')
-    .replace(/,/g, '.')
+    .replace(/\.(?=\d{3}(\D|$))/g, '')
+    .replace(',', '.')
     .replace(/[^0-9.-]/g, '');
-
-  const parsed = Number(cleaned);
+  const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function parseYear(value: unknown): number {
-  const year = Number(String(value ?? '').replace(/\D/g, ''));
-  return Number.isFinite(year) && year > 2000 ? year : new Date().getFullYear();
+function decodeArrayBuffer(buffer: ArrayBuffer): string {
+  const utf8 = new TextDecoder('utf-8', { fatal: false }).decode(buffer);
+  if (utf8.includes('ID OPORTUNIDADE') || utf8.includes(';')) return utf8;
+  return new TextDecoder('iso-8859-1', { fatal: false }).decode(buffer);
 }
 
-function parseCsvLine(line: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i];
-    const next = line[i + 1];
-
-    if (char === '"') {
-      if (inQuotes && next === '"') {
-        current += '"';
-        i += 1;
-      } else {
-        inQuotes = !inQuotes;
-      }
-      continue;
-    }
-
-    if (char === ';' && !inQuotes) {
-      result.push(current);
-      current = '';
-      continue;
-    }
-
-    current += char;
-  }
-
-  result.push(current);
-  return result.map((item) => item.trim());
+function parseCsvRows(text: string): GenericRow[] {
+  const workbook = XLSX.read(text, { type: 'string', raw: false, FS: ';' });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  return XLSX.utils.sheet_to_json<GenericRow>(sheet, { defval: '' });
 }
 
-function parseCsv(text: string): GenericRow[] {
-  const lines = text
-    .replace(/^\uFEFF/, '')
-    .split(/\r?\n/)
-    .filter((line) => line.trim().length > 0);
-
-  if (!lines.length) return [];
-
-  const header = parseCsvLine(lines[0]);
-
-  return lines.slice(1).map((line) => {
-    const values = parseCsvLine(line);
-    const row: GenericRow = {};
-    header.forEach((key, index) => {
-      row[key] = values[index] ?? '';
-    });
-    return row;
-  });
-}
-
-function buildGoalRow(row: GenericRow, index: number): GoalRow | null {
-  const idUsuarioErpRaw = findValue(row, KEY_ALIASES.idUsuarioErp);
-  if (!idUsuarioErpRaw) return null;
-
-  const idUsuarioErp = String(idUsuarioErpRaw).trim();
-  const etnNome = String(findValue(row, KEY_ALIASES.etnNome) ?? idUsuarioErp).trim();
-  const ano = parseYear(findValue(row, KEY_ALIASES.ano));
-
-  const monthly = {
-    janeiro: parseNumberBr(findValue(row, KEY_ALIASES.janeiro)),
-    fevereiro: parseNumberBr(findValue(row, KEY_ALIASES.fevereiro)),
-    marco: parseNumberBr(findValue(row, KEY_ALIASES.marco)),
-    abril: parseNumberBr(findValue(row, KEY_ALIASES.abril)),
-    maio: parseNumberBr(findValue(row, KEY_ALIASES.maio)),
-    junho: parseNumberBr(findValue(row, KEY_ALIASES.junho)),
-    julho: parseNumberBr(findValue(row, KEY_ALIASES.julho)),
-    agosto: parseNumberBr(findValue(row, KEY_ALIASES.agosto)),
-    setembro: parseNumberBr(findValue(row, KEY_ALIASES.setembro)),
-    outubro: parseNumberBr(findValue(row, KEY_ALIASES.outubro)),
-    novembro: parseNumberBr(findValue(row, KEY_ALIASES.novembro)),
-    dezembro: parseNumberBr(findValue(row, KEY_ALIASES.dezembro)),
-  };
-
-  return {
-    id: `${idUsuarioErp}-${ano}-${index}`,
-    idUsuarioErp,
-    etnNome,
-    ano,
-    ...monthly,
-  };
-}
-
-function buildPedidoRow(row: GenericRow, index: number): PedidoCRM | null {
-  const idOportunidadeRaw = findValue(row, KEY_ALIASES.pedidoIdOpp);
-  if (!idOportunidadeRaw) return null;
-
-  const idOportunidade = String(idOportunidadeRaw).trim();
+function buildPedido(row: GenericRow, index: number): PedidoCRM | null {
+  const idOportunidade = findValue(row, PEDIDO_ALIASES.idOportunidade);
   if (!idOportunidade) return null;
 
-  const licencasServicos = parseNumberBr(findValue(row, KEY_ALIASES.pedidoLicencasServicos));
-  const recorrente = parseNumberBr(findValue(row, KEY_ALIASES.pedidoRecorrente));
-  const dataFechamentoRaw = findValue(row, KEY_ALIASES.pedidoDataFechamento);
+  const produtoValorLicenca = parseNumberBr(findValue(row, PEDIDO_ALIASES.produtoValorLicenca));
+  const produtoValorManutencao = parseNumberBr(findValue(row, PEDIDO_ALIASES.produtoValorManutencao));
+  const servicoValorLiquido = parseNumberBr(findValue(row, PEDIDO_ALIASES.servicoValorLiquido));
 
   return {
     id: `${idOportunidade}-${index}`,
     idOportunidade,
-    dataFechamento: dataFechamentoRaw ? String(dataFechamentoRaw).trim() : null,
-    licencasServicos,
-    recorrente,
-    total: licencasServicos + recorrente,
+    etapaOportunidade: findValue(row, PEDIDO_ALIASES.etapaOportunidade),
+    dataFechamento: findValue(row, PEDIDO_ALIASES.dataFechamento) || null,
+    produto: findValue(row, PEDIDO_ALIASES.produto),
+    produtoModulo: findValue(row, PEDIDO_ALIASES.produtoModulo),
+    produtoValorLicenca,
+    produtoValorManutencao,
+    servicoValorLiquido,
   };
 }
 
-async function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
-  return await file.arrayBuffer();
-}
-
-async function readFileAsText(file: File): Promise<string> {
-  return await file.text();
-}
-
 export function useGoalProcessor() {
-  const [goals, setGoals] = useState<GoalRow[]>([]);
   const [pedidos, setPedidos] = useState<PedidoCRM[]>([]);
 
-  const processGoalsFile = useCallback(async (file: File) => {
-    const extension = file.name.toLowerCase().split('.').pop();
-
-    let rows: GenericRow[] = [];
-
-    if (extension === 'csv') {
-      const text = await readFileAsText(file);
-      rows = parseCsv(text);
-    } else {
-      const buffer = await readFileAsArrayBuffer(file);
-      const workbook = XLSX.read(buffer, { type: 'array' });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      rows = XLSX.utils.sheet_to_json<GenericRow>(sheet, { defval: '' });
-    }
-
-    const parsed = rows
-      .map((row, index) => buildGoalRow(row, index))
-      .filter((row): row is GoalRow => Boolean(row));
-
-    setGoals(parsed);
-    return parsed;
-  }, []);
-
   const processPedidosFile = useCallback(async (file: File) => {
-    const text = await readFileAsText(file);
-    const rows = parseCsv(text);
+    const buffer = await file.arrayBuffer();
+    const text = decodeArrayBuffer(buffer);
+    const rows = parseCsvRows(text);
+
     const parsed = rows
-      .map((row, index) => buildPedidoRow(row, index))
+      .map((row, index) => buildPedido(row, index))
       .filter((row): row is PedidoCRM => Boolean(row));
 
     setPedidos(parsed);
     return parsed;
   }, []);
 
-  const updateGoalValue = useCallback((goalId: string, month: MonthKey, value: number) => {
-    setGoals((current) =>
-      current.map((goal) =>
-        goal.id === goalId
-          ? {
-              ...goal,
-              [month]: Number.isFinite(value) ? value : 0,
-            }
-          : goal,
-      ),
-    );
-  }, []);
-
-  const replaceGoals = useCallback((nextGoals: GoalRow[]) => {
-    setGoals(nextGoals);
-  }, []);
-
   return {
-    goals,
     pedidos,
-    setGoals,
     setPedidos,
-    replaceGoals,
-    updateGoalValue,
-    processGoalsFile,
     processPedidosFile,
   };
 }
-
-export { MONTH_KEYS };
