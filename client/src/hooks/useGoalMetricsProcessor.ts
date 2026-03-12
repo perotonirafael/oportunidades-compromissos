@@ -104,7 +104,13 @@ export function useGoalMetricsProcessor(
     const normGlobalPeriod = normalizeString(globalPeriod);
 
     goals.forEach(goal => {
-      if (String(goal.idUsuario) === safeUserId && (normalizeString(goal.periodo) === normGlobalPeriod || normGlobalPeriod === 'total ano')) {
+      const sameUser = String(goal.idUsuario) === safeUserId;
+      const samePeriod =
+        normalizeString(goal.mes) === normGlobalPeriod ||
+        normalizeString(goal.trimestre) === normGlobalPeriod ||
+        normGlobalPeriod === 'total ano';
+
+      if (sameUser && samePeriod) {
            const prodMeta = normalizeString(goal.produto);
            const rubricaMetaKey = normalizeString(goal.rubrica).replace(/\s+/g, '');
            let realizado = 0;
