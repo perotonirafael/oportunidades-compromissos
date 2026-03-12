@@ -4,6 +4,8 @@
  * automaticamente ao reabrir a página, sem precisar fazer upload novamente.
  */
 
+import type { GoalRecord, PedidoRecord } from '@/types/goals';
+
 const DB_NAME = 'pipeline-analytics-cache';
 const DB_VERSION = 1;
 const STORE_NAME = 'processed-data';
@@ -12,6 +14,8 @@ const CACHE_KEY = 'last-upload';
 interface CacheEntry {
   key: string;
   result: any;
+  goals: GoalRecord[];
+  pedidos: PedidoRecord[];
   timestamp: number;
   oppFileName: string;
   actFileName: string;
@@ -38,7 +42,9 @@ export async function saveToCache(
   oppFileName: string,
   actFileName: string,
   oppCount: number,
-  actCount: number
+  actCount: number,
+  goals: GoalRecord[] = [],
+  pedidos: PedidoRecord[] = []
 ): Promise<void> {
   try {
     const db = await openDB();
@@ -47,6 +53,8 @@ export async function saveToCache(
     const entry: CacheEntry = {
       key: CACHE_KEY,
       result,
+      goals,
+      pedidos,
       timestamp: Date.now(),
       oppFileName,
       actFileName,
@@ -78,7 +86,16 @@ export async function loadFromCache(): Promise<CacheEntry | null> {
     return new Promise((resolve, reject) => {
       request.onsuccess = () => {
         db.close();
-        resolve(request.result || null);
+        if (!request.result) {
+          resolve(null);
+          return;
+        }
+
+        resolve({
+          ...request.result,
+          goals: request.result.goals || [],
+          pedidos: request.result.pedidos || [],
+        });
       };
       request.onerror = () => {
         db.close();
