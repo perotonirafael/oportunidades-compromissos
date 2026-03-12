@@ -1,7 +1,7 @@
 import {
   Upload, AlertCircle, TrendingUp, Target, Zap, DollarSign,
   Loader, BarChart3, Trophy, XCircle, FileText, RotateCcw,
-  Calendar, AlertTriangle, Search, Database, Trash2, Clock, ChevronDown,
+  Calendar, AlertTriangle, Search, Database, Trash2, Clock, ChevronDown, Briefcase,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { useDataProcessor, type Opportunity, type Action, type ProcessedRecord, type MissingAgendaRecord } from '@/hooks/useDataProcessor';
@@ -9,9 +9,11 @@ import { useFileProcessor } from '@/hooks/useFileProcessor';
 import { useWorkerDataProcessor } from '@/hooks/useWorkerDataProcessor';
 import { useGoalProcessor } from '@/hooks/useGoalProcessor';
 import { useGoalMetricsProcessor } from '@/hooks/useGoalMetricsProcessor';
-import type { GoalRecord, PedidoRecord } from '@/types/goals';
+import type { PedidoRecord, GoalMetrics } from '@/types/goals';
+import type { ManualGoal } from '@/components/GoalManager';
 import { PeriodSelector } from '@/components/PeriodSelector';
 import { GoalChart } from '@/components/GoalChart';
+import { GoalManager } from '@/components/GoalManager';
 import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
 import { KPICard } from '@/components/KPICard';
 import { AnalyticsTable } from '@/components/AnalyticsTable';
@@ -31,17 +33,15 @@ export default function Home() {
   const [actFile, setActFile] = useState<File | null>(null);
   const [oppFileName, setOppFileName] = useState('');
   const [actFileName, setActFileName] = useState('');
-  const [goalFile, setGoalFile] = useState<File | null>(null);
   const [pedidoFile, setPedidoFile] = useState<File | null>(null);
-  const [goalFileName, setGoalFileName] = useState('');
   const [pedidoFileName, setPedidoFileName] = useState('');
-  const [goals, setGoals] = useState<GoalRecord[]>([]);
+  const [goals, setGoals] = useState<ManualGoal[]>([]);
   const [pedidos, setPedidos] = useState<PedidoRecord[]>([]);
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('Março'); // Período padrão
+  const [globalPeriod, setGlobalPeriod] = useState<string>('1º Trimestre');
 
   const { state: processingState, processFiles: processFilesLegacy, resetState } = useFileProcessor();
   const { processData: processDataWithWorker, processFiles: processFilesWithWorker, isProcessing: isWorkerProcessing, progress: workerProgress } = useWorkerDataProcessor();
-  const { parseGoalsFile, parsePedidosFile } = useGoalProcessor();
+  const { parsePedidosFile } = useGoalProcessor();
   const [workerResult, setWorkerResult] = useState<any>(null);
   const [useWorkerOnly, setUseWorkerOnly] = useState(false);
   const [lightOpportunities, setLightOpportunities] = useState<Opportunity[]>([]);
@@ -146,7 +146,57 @@ export default function Home() {
   const result = workerResult || normalResult;
 
   const processedData = result?.records ?? [];
-  const goalMetricas = useGoalMetricsProcessor(goals, pedidos, processedData, selectedPeriod, actions, opportunities);
+  const oportunidadesData = opportunities || [];
+  const compromissosData = actions || [];
+  const { metrics, kpis: goalsKpis } = useGoalMetricsProcessor(
+    goals,
+    pedidos || [],
+    oportunidadesData,
+    compromissosData,
+    globalPeriod
+  );
+
+  const totalMeta = metrics.reduce((acc, curr) => acc + curr.meta, 0);
+  const totalRealizado = metrics.reduce((acc, curr) => acc + curr.realizado, 0);
+  const percentualGeral = totalMeta > 0 ? (totalRealizado / totalMeta) * 100 : 0;
+
+  const goalMetricas = useMemo<GoalMetrics[]>(() => {
+    if (!metrics.length) return [];
+
+    let metaLicencasServicos = 0;
+    let realLicencasServicos = 0;
+    let metaRecorrente = 0;
+    let realRecorrente = 0;
+
+    for (const metric of metrics) {
+      const rubricaNorm = metric.rubrica.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+      const isRecorrente = rubricaNorm.includes('recorrente') && !rubricaNorm.includes('nao recorrente');
+
+      if (isRecorrente) {
+        metaRecorrente += metric.meta;
+        realRecorrente += metric.realizado;
+      } else {
+        metaLicencasServicos += metric.meta;
+        realLicencasServicos += metric.realizado;
+      }
+    }
+
+    const percentualLicencas =
+      metaLicencasServicos > 0 ? (realLicencasServicos / metaLicencasServicos) * 100 : 0;
+    const percentualRecorrente = metaRecorrente > 0 ? (realRecorrente / metaRecorrente) * 100 : 0;
+    const percentualAtingimento = percentualLicencas * 0.5 + percentualRecorrente * 0.5;
+
+    return [{
+      idUsuario: '',
+      etn: 'TOTAL',
+      periodo: globalPeriod,
+      metaLicencasServicos,
+      realLicencasServicos,
+      metaRecorrente,
+      realRecorrente,
+      percentualAtingimento,
+    }];
+  }, [metrics, globalPeriod]);
   const missingAgendas = result?.missingAgendas ?? [];
   const kpis = result?.kpis ?? null;
   const motivosPerdaBrutos = result?.motivosPerda ?? [];
@@ -499,15 +549,6 @@ export default function Home() {
     try {
       const workerRes = await processFilesWithWorker(oppFile, actFile);
       setWorkerResult(workerRes);
-      // Processar metas e pedidos automaticamente se arquivos foram selecionados
-      if (goalFile) {
-        try {
-          const goalsData = await parseGoalsFile(goalFile);
-          setGoals(goalsData);
-        } catch (goalErr) {
-          console.warn('Erro ao processar metas:', goalErr);
-        }
-      }
       if (pedidoFile) {
         try {
           const pedidosData = await parsePedidosFile(pedidoFile);
@@ -539,7 +580,7 @@ export default function Home() {
       console.error('Erro no Web Worker:', err);
       setError(err instanceof Error ? err.message : 'Erro ao processar arquivos');
     }
-  }, [oppFile, actFile, goalFile, pedidoFile, processFilesWithWorker, parseGoalsFile, parsePedidosFile]);
+  }, [oppFile, actFile, pedidoFile, processFilesWithWorker, parsePedidosFile]);
 
   const handleOppFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -557,14 +598,6 @@ export default function Home() {
     }
   };
 
-  const handleGoalFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setGoalFile(file);
-      setGoalFileName(file.name);
-    }
-  };
-
   const handlePedidoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -572,26 +605,6 @@ export default function Home() {
       setPedidoFileName(file.name);
     }
   };
-
-  const handleLoadGoals = useCallback(async () => {
-    if (!goalFile || !pedidoFile) return;
-    setError(null);
-    try {
-      const goalsData = await parseGoalsFile(goalFile);
-      const pedidosData = await parsePedidosFile(pedidoFile);
-      setGoals(goalsData);
-      setPedidos(pedidosData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao processar metas e pedidos');
-    }
-  }, [goalFile, pedidoFile, parseGoalsFile, parsePedidosFile]);
-
-  // Processar metas automaticamente quando ambos arquivos são selecionados
-  useEffect(() => {
-    if (goalFile && pedidoFile) {
-      handleLoadGoals();
-    }
-  }, [goalFile, pedidoFile, handleLoadGoals]);
 
   const handleLoadCache = useCallback(async () => {
     setIsLoadingCache(true);
@@ -749,21 +762,12 @@ export default function Home() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <h3 className="text-xs font-bold text-purple-800">Metas</h3>
-                    <p className="text-[10px] text-purple-600/70">Base 3 - Metas (.xlsx)</p>
+                    <p className="text-[10px] text-purple-600/70">Base 3 - Gestor Interativo</p>
                   </div>
                 </div>
-                <label className="block">
-                  <input type="file" accept=".xlsx,.xls" onChange={handleGoalFile} className="hidden" />
-                  <span className="block w-full py-3 text-center text-sm font-medium rounded-lg border-2 border-dashed border-purple-300 hover:border-purple-500 hover:bg-purple-50 transition-all cursor-pointer">
-                    {goalFileName ? (
-                      <span className="text-purple-700 flex items-center justify-center gap-1.5">
-                        <FileText size={14} /> {goalFileName}
-                      </span>
-                    ) : (
-                      <span className="text-purple-500">Selecionar arquivo</span>
-                    )}
-                  </span>
-                </label>
+                <div className="flex flex-1 items-center justify-center">
+                  <GoalManager onSaveGoals={setGoals} existingGoals={goals} />
+                </div>
               </div>
 
               <div className="bg-white rounded-xl p-4 border-2 border-orange-200 hover:border-orange-400 transition-all hover:shadow-lg hover:shadow-orange-100 flex flex-col">
@@ -972,25 +976,24 @@ export default function Home() {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                   <Target size={20} className="text-purple-600" />
-                  Atingimento de Metas - {selectedPeriod}
+                  Atingimento de Metas - {globalPeriod}
                 </h3>
                 <div className="flex items-center gap-3">
-                  {goals.length === 0 && (
-                    <div className="flex items-center gap-2">
-                      <label className="cursor-pointer px-3 py-1.5 text-xs font-medium rounded-lg border border-purple-300 text-purple-700 hover:bg-purple-50 transition-all">
-                        <input type="file" accept=".xlsx,.xls" onChange={handleGoalFile} className="hidden" />
-                        {goalFileName || 'Metas (.xlsx)'}
-                      </label>
-                      <label className="cursor-pointer px-3 py-1.5 text-xs font-medium rounded-lg border border-orange-300 text-orange-700 hover:bg-orange-50 transition-all">
-                        <input type="file" accept=".csv" onChange={handlePedidoFile} className="hidden" />
-                        {pedidoFileName || 'Pedidos (.csv)'}
-                      </label>
-                    </div>
-                  )}
-                  <PeriodSelector selectedPeriod={selectedPeriod} onPeriodChange={setSelectedPeriod} />
+                  <GoalManager onSaveGoals={setGoals} existingGoals={goals} />
+                  <label className="cursor-pointer px-3 py-1.5 text-xs font-medium rounded-lg border border-orange-300 text-orange-700 hover:bg-orange-50 transition-all">
+                    <input type="file" accept=".csv" onChange={handlePedidoFile} className="hidden" />
+                    {pedidoFileName || 'Pedidos (.csv)'}
+                  </label>
+                  <PeriodSelector selectedPeriod={globalPeriod} onPeriodChange={setGlobalPeriod} />
                 </div>
               </div>
-              <GoalChart metricas={goalMetricas} title="" />
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-6">
+                <KPICard title="Meta Global (Período)" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalMeta)} icon={<Target className="text-slate-500" />} />
+                <KPICard title="Realizado Global" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalRealizado)} icon={<TrendingUp className="text-blue-500" />} subtitle={`${percentualGeral.toFixed(1)}% da meta`} />
+                <KPICard title="Taxa de Conversão (Demos)" value={`${goalsKpis.taxaConversao.toFixed(1)}%`} icon={<Briefcase className="text-indigo-500" />} subtitle={`${goalsKpis.ganhas} Ganhas | ${goalsKpis.perdidas} Perdidas`} />
+                <KPICard title="Oportunidades Únicas" value={goalsKpis.total.toString()} icon={<Target className="text-emerald-500" />} subtitle="Oportunidades com Demos" />
+              </div>
+              <GoalChart metricas={goalMetricas} globalPeriod={globalPeriod} title="" />
             </div>
 
             {/* Table */}
@@ -1192,6 +1195,11 @@ export default function Home() {
             actions={actions}
             onClose={() => setSelectedETNDetail(null)}
             goalMetricas={goalMetricas}
+            goals={goals}
+            pedidosData={pedidos}
+            oportunidadesData={oportunidadesData}
+            compromissosData={compromissosData}
+            globalPeriod={globalPeriod}
           />
         )}
       </div>

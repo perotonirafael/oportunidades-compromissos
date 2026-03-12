@@ -16,6 +16,7 @@ import type { GoalMetrics } from '@/types/goals';
 
 interface GoalChartProps {
   metricas: GoalMetrics[];
+  globalPeriod: string;
   title?: string;
 }
 
@@ -29,7 +30,7 @@ const getColor = (percentage: number): string => {
   return '#ef4444';
 };
 
-export const GoalChart: React.FC<GoalChartProps> = ({ metricas, title }) => {
+export const GoalChart: React.FC<GoalChartProps> = ({ metricas, globalPeriod, title }) => {
   // Estado vazio
   if (!metricas || metricas.length === 0) {
     return (
@@ -225,7 +226,7 @@ export const GoalChart: React.FC<GoalChartProps> = ({ metricas, title }) => {
                 .filter(m => m.realLicencasServicos > 0 || m.realRecorrente > 0)
                 .sort((a, b) => (b.realLicencasServicos + b.realRecorrente) - (a.realLicencasServicos + a.realRecorrente))
                 .map((m) => (
-                  <tr key={`${m.etn}-${m.periodo}`} className="border-b border-border hover:bg-muted/20">
+                  <tr key={`${m.etn}-${globalPeriod}`} className="border-b border-border hover:bg-muted/20">
                     <td className="px-4 py-2 font-medium">{m.etn}</td>
                     <td className="px-4 py-2 text-right">{formatCurrency(m.realLicencasServicos)}</td>
                     <td className="px-4 py-2 text-right">{formatCurrency(m.realRecorrente)}</td>

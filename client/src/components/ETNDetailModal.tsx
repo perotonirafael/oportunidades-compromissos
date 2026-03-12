@@ -1,8 +1,10 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { X, TrendingUp, Award, Target, Calendar, Trophy, XCircle, DollarSign, Search, Filter, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { X, TrendingUp, Award, Target, Calendar, Trophy, XCircle, DollarSign, Search, Filter, ChevronUp, ChevronDown, ChevronsUpDown, Briefcase } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, Cell, PieChart, Pie } from 'recharts';
 import { KPICard } from './KPICard';
 import type { GoalMetrics } from '@/types/goals';
+import type { ManualGoal } from './GoalManager';
+import { useGoalMetricsProcessor } from '@/hooks/useGoalMetricsProcessor';
 
 interface ProcessedRecord {
   oppId: string;
@@ -46,6 +48,11 @@ interface ETNDetailModalProps {
   actions?: Action[];
   onClose: () => void;
   goalMetricas?: GoalMetrics[];
+  goals?: ManualGoal[];
+  pedidosData?: any[];
+  oportunidadesData?: any[];
+  compromissosData?: any[];
+  globalPeriod?: string;
 }
 
 const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6'];
@@ -75,7 +82,7 @@ function normalize(val: string): string {
     .trim();
 }
 
-export function ETNDetailModal({ etn, data, actions = [], onClose, goalMetricas = [] }: ETNDetailModalProps) {
+export function ETNDetailModal({ etn, data, actions = [], onClose, goalMetricas = [], goals = [], pedidosData = [], oportunidadesData = [], compromissosData = [], globalPeriod = 'Total Ano' }: ETNDetailModalProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEtapa, setFilterEtapa] = useState('');
   const [filterProb, setFilterProb] = useState('');
@@ -89,6 +96,22 @@ export function ETNDetailModal({ etn, data, actions = [], onClose, goalMetricas 
   const etnData = useMemo(() => {
     return data.filter(r => r.etn === etn);
   }, [etn, data]);
+
+  const selectedEtnGoal = goals.find(g => g.nomeUsuario === etn || g.idUsuario === etn);
+  const selectedUserId = selectedEtnGoal?.idUsuario || etn;
+
+  const { metrics: individualMetrics, kpis: individualKpis } = useGoalMetricsProcessor(
+    goals,
+    pedidosData || [],
+    oportunidadesData || [],
+    compromissosData || [],
+    globalPeriod,
+    selectedUserId
+  );
+
+  const totalMetaIndividual = individualMetrics.reduce((acc, curr) => acc + curr.meta, 0);
+  const totalRealizadoIndividual = individualMetrics.reduce((acc, curr) => acc + curr.realizado, 0);
+  const percentualGeralIndividual = totalMetaIndividual > 0 ? (totalRealizadoIndividual / totalMetaIndividual) * 100 : 0;
 
   // Compromissos do ETN (da planilha de compromissos/ações)
   const etnActions = useMemo(() => {
@@ -552,6 +575,12 @@ export function ETNDetailModal({ etn, data, actions = [], onClose, goalMetricas 
             <KPICard title="Taxa de Conversão" value={`${kpis.winRate}%`} icon={<TrendingUp size={18} />} color="amber" />
             <KPICard title="Total de Agendas" value={kpis.totalAgendas.toString()} icon={<Calendar size={18} />} color="purple" />
 
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <KPICard title="Meta Individual (R$)" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalMetaIndividual)} icon={<Target className="text-slate-400" />} />
+            <KPICard title="Realizado Individual" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalRealizadoIndividual)} icon={<TrendingUp className="text-blue-500" />} subtitle={`${percentualGeralIndividual.toFixed(1)}%`} />
+            <KPICard title="Taxa de Conversão" value={`${individualKpis.taxaConversao.toFixed(1)}%`} icon={<Briefcase className="text-indigo-500" />} subtitle={`${individualKpis.ganhas} G | ${individualKpis.perdidas} P`} />
           </div>
 
           {/* Filtro ativo */}
