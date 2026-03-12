@@ -1,313 +1,264 @@
 import { useMemo } from 'react';
-import type { GoalRecord, PedidoRecord, GoalMetrics } from '@/types/goals';
-import type { ProcessedRecord } from './useDataProcessor';
-import type { Action, Opportunity } from './useDataProcessor';
+import {
+  GoalMetricByETN,
+  GoalMonthDetail,
+  GoalRow,
+  MONTH_KEYS,
+  MONTH_LABELS,
+  MonthKey,
+  PedidoCRM,
+} from '@/types/goals';
 
-const DEBUG_GOALS_METRICS = import.meta.env.DEV && import.meta.env.VITE_DEBUG_GOALS === 'true';
+type GenericAction = Record<string, unknown>;
+type GenericOpportunity = Record<string, unknown>;
 
-/**
- * Categorias de compromisso válidas para cálculo de metas.
- */
 const VALID_CATEGORIES = new Set([
-  'Demonstracao Presencial',
-  'Demonstracao Remota',
-  'Analise de aderencia',
-  'Analise de RFP/RFI',
-  'ETN Apoio',
-  'Termo de Referencia',
-  'Edital',
-  'Analise arquiteto de software - Exclusivo GTN',
+  'demonstracao presencial',
+  'demonstracao remota',
+  'analise de aderencia',
+  'etn apoio',
+  'analise de rfp/rfi',
+  'termo de referencia',
+  'edital',
 ]);
 
-const PERIOD_TO_MONTHS: Record<string, number[]> = {
-  Janeiro: [1],
-  Fevereiro: [2],
-  Março: [3],
-  '1ºTrimestre': [1, 2, 3],
-  Abril: [4],
-  Maio: [5],
-  Junho: [6],
-  '2ºTrimestre': [4, 5, 6],
-  Julho: [7],
-  Agosto: [8],
-  Setembro: [9],
-  '3ºTrimestre': [7, 8, 9],
-  Outubro: [10],
-  Novembro: [11],
-  Dezembro: [12],
-  '4ºTrimestre': [10, 11, 12],
-};
+function normalize(input: unknown): string {
+  return String(input ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
 
-const MONTH_NUMBER_TO_GOAL_KEY: Record<number, keyof GoalRecord> = {
-  1: 'janeiro',
-  2: 'fevereiro',
-  3: 'marco',
-  4: 'abril',
-  5: 'maio',
-  6: 'junho',
-  7: 'julho',
-  8: 'agosto',
-  9: 'setembro',
-  10: 'outubro',
-  11: 'novembro',
-  12: 'dezembro',
-};
+function parseDate(value: string | null): Date | null {
+  if (!value) return null;
+  const raw = value.trim();
 
-const normalizeText = (value: unknown): string => (value == null ? '' : String(value).trim());
-const normalizeSpaces = (value: string): string => value.replace(/\s+/g, ' ').trim();
-
-const parseDateFromDDMMYYYY = (date: string): { day: number; month: number; year: number } | null => {
-  const normalized = normalizeText(date);
-  if (!normalized) return null;
-
-  const match = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!match) return null;
-
-  const day = Number.parseInt(match[1], 10);
-  const month = Number.parseInt(match[2], 10);
-  const year = Number.parseInt(match[3], 10);
-
-  if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) return null;
-  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-
-  return { day, month, year };
-};
-
-export const getPeriodMonths = (selectedPeriod: string): number[] => PERIOD_TO_MONTHS[selectedPeriod] || [];
-
-export const resolveReferenceYear = (goals: GoalRecord[]): number | null => {
-  const years = new Set<number>();
-  for (const goal of goals) {
-    const year = goal.ano;
-    if (!Number.isFinite(year) || !year) continue;
-    const yearInt = Math.trunc(year);
-    if (yearInt >= 2000 && yearInt <= 2100) {
-      years.add(yearInt);
-    }
+  const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (br) {
+    const [, dd, mm, yyyy] = br;
+    const date = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
-  if (years.size === 1) return Array.from(years)[0];
-  return null;
-};
+  const iso = new Date(raw);
+  return Number.isNaN(iso.getTime()) ? null : iso;
+}
 
-export const isPedidoInsideSelectedPeriod = (
-  pedidoDate: string,
-  selectedPeriod: string,
-  referenceYear: number | null
-): boolean => {
-  const parsedDate = parseDateFromDDMMYYYY(pedidoDate);
-  if (!parsedDate) return false;
+function getPeriodMonths(selectedPeriod: string): MonthKey[] {
+  const normalized = normalize(selectedPeriod);
 
-  if (referenceYear && parsedDate.year !== referenceYear) return false;
+  if (normalized === 'janeiro') return ['janeiro'];
+  if (normalized === 'fevereiro') return ['fevereiro'];
+  if (normalized === 'marco') return ['marco'];
+  if (normalized === 'abril') return ['abril'];
+  if (normalized === 'maio') return ['maio'];
+  if (normalized === 'junho') return ['junho'];
+  if (normalized === 'julho') return ['julho'];
+  if (normalized === 'agosto') return ['agosto'];
+  if (normalized === 'setembro') return ['setembro'];
+  if (normalized === 'outubro') return ['outubro'];
+  if (normalized === 'novembro') return ['novembro'];
+  if (normalized === 'dezembro') return ['dezembro'];
 
-  const months = getPeriodMonths(selectedPeriod);
-  if (months.length === 0) return false;
+  if (normalized.includes('1') && normalized.includes('trimestre')) return ['janeiro', 'fevereiro', 'marco'];
+  if (normalized.includes('2') && normalized.includes('trimestre')) return ['abril', 'maio', 'junho'];
+  if (normalized.includes('3') && normalized.includes('trimestre')) return ['julho', 'agosto', 'setembro'];
+  if (normalized.includes('4') && normalized.includes('trimestre')) return ['outubro', 'novembro', 'dezembro'];
 
-  return months.includes(parsedDate.month);
-};
+  return MONTH_KEYS;
+}
 
-const isValidCategory = (value: string): boolean => {
-  const normalizedCategory = normalizeSpaces(normalizeText(value));
-  return VALID_CATEGORIES.has(normalizedCategory);
-};
+function getMonthKeyFromDate(date: Date): MonthKey {
+  return MONTH_KEYS[date.getMonth()];
+}
 
-const isFechadaGanha = (etapa: string): boolean => normalizeSpaces(normalizeText(etapa)) === 'Fechada e Ganha';
+function isClosedWon(opportunity: GenericOpportunity): boolean {
+  const statusValues = [
+    opportunity['Situação'],
+    opportunity['Situacao'],
+    opportunity['Status'],
+    opportunity['Etapa'],
+    opportunity['Pipeline'],
+  ];
 
-const isLicencaOuServico = (rubrica: string): boolean => {
-  const normalized = normalizeSpaces(normalizeText(rubrica));
-  return (
-    normalized.includes('Setup') ||
-    normalized.includes('Licença') ||
-    normalized.includes('Licenças') ||
-    normalized.includes('Serviços Não Recorrentes') ||
-    normalized.includes('Servicos Nao Recorrentes')
+  return statusValues.some((value) => {
+    const norm = normalize(value);
+    return norm.includes('fechada e ganha') || norm.includes('closed won');
+  });
+}
+
+function getOpportunityId(obj: Record<string, unknown>): string {
+  return String(
+    obj['ID Oportunidade'] ??
+      obj['Id Oportunidade'] ??
+      obj['Oportunidade ID'] ??
+      obj['idOportunidade'] ??
+      obj['id'] ??
+      '',
+  ).trim();
+}
+
+function getActionUserId(action: GenericAction): string {
+  return String(
+    action['Id Usuário ERP'] ??
+      action['ID Usuário ERP'] ??
+      action['Id Usuario ERP'] ??
+      action['ID Usuario ERP'] ??
+      action['idUsuarioErp'] ??
+      '',
+  ).trim();
+}
+
+function getActionUserName(action: GenericAction): string {
+  return String(
+    action['Usuário'] ??
+      action['Usuario'] ??
+      action['Responsável'] ??
+      action['Responsavel'] ??
+      action['ETN'] ??
+      '',
+  ).trim();
+}
+
+function getActionCategory(action: GenericAction): string {
+  return normalize(
+    action['Categoria'] ??
+      action['Tipo Compromisso'] ??
+      action['Tipo'] ??
+      action['categoria'] ??
+      '',
   );
-};
+}
 
-const isRecorrente = (rubrica: string): boolean => normalizeSpaces(normalizeText(rubrica)).includes('Recorrente');
-
-const logDebug = (message: string, payload: Record<string, unknown>) => {
-  if (!DEBUG_GOALS_METRICS) return;
-  console.log(`[goals-metrics] ${message}`, payload);
-};
-
-/**
- * Processa metas e pedidos para calcular % de atingimento.
- */
-export const computeGoalMetrics = (
-  goals: GoalRecord[],
-  pedidos: PedidoRecord[],
-  processedData: ProcessedRecord[],
-  selectedPeriod: string,
-  actions: Action[],
-  opportunities: Opportunity[]
-): GoalMetrics[] => {
-  const months = getPeriodMonths(selectedPeriod);
-  if (!months.length || !goals.length) return [];
-
-  const referenceYear = resolveReferenceYear(goals);
-
-  let metaTotalLicencasServicos = 0;
-  let metaTotalRecorrente = 0;
-
-  for (const goal of goals) {
-    const metaValue = months.reduce((acc, monthNumber) => {
-      const goalKey = MONTH_NUMBER_TO_GOAL_KEY[monthNumber];
-      return acc + (Number(goal[goalKey]) || 0);
-    }, 0);
-
-    if (isLicencaOuServico(goal.rubrica)) {
-      metaTotalLicencasServicos += metaValue;
-    } else if (isRecorrente(goal.rubrica)) {
-      metaTotalRecorrente += metaValue;
-    }
-  }
-
-  const oppIdsWithValidCategory = new Set<string>();
-  const oppIdToEtn = new Map<string, Set<string>>();
-
-  if (actions.length > 0) {
-    for (const action of actions) {
-      const categoria = String(action['Categoria'] || '');
-      if (!isValidCategory(categoria)) continue;
-
-      const oppId = normalizeText(action['Oportunidade ID']);
-      if (!oppId) continue;
-
-      oppIdsWithValidCategory.add(oppId);
-
-      const etn = normalizeText(action['Usuário'] || action['Usuario']);
-      if (etn) {
-        if (!oppIdToEtn.has(oppId)) oppIdToEtn.set(oppId, new Set());
-        oppIdToEtn.get(oppId)!.add(etn);
-      }
-    }
-  } else {
-    for (const record of processedData) {
-      if (!isValidCategory(record.categoriaCompromisso || '')) continue;
-      const oppId = normalizeText(record.oppId);
-      if (!oppId) continue;
-      oppIdsWithValidCategory.add(oppId);
-
-      const etn = normalizeText(record.etn);
-      if (etn && etn !== 'Sem Agenda') {
-        if (!oppIdToEtn.has(oppId)) oppIdToEtn.set(oppId, new Set());
-        oppIdToEtn.get(oppId)!.add(etn);
-      }
-    }
-  }
-
-  const oppIdsFechadaGanha = new Set<string>();
-
-  if (opportunities.length > 0) {
-    for (const opp of opportunities) {
-      const oppId = normalizeText(opp['Oportunidade ID']);
-      const etapa = normalizeText(opp['Etapa']);
-      if (isFechadaGanha(etapa) && oppIdsWithValidCategory.has(oppId)) {
-        oppIdsFechadaGanha.add(oppId);
-      }
-    }
-  } else {
-    for (const record of processedData) {
-      const oppId = normalizeText(record.oppId);
-      if (!oppIdsWithValidCategory.has(oppId)) continue;
-      if (isFechadaGanha(record.etapa || '')) oppIdsFechadaGanha.add(oppId);
-    }
-  }
-
-  const allEtns = new Set<string>();
-  for (const [oppId, etns] of Array.from(oppIdToEtn.entries())) {
-    if (oppIdsFechadaGanha.has(oppId)) {
-      for (const etn of Array.from(etns)) allEtns.add(etn);
-    }
-  }
-
-  if (allEtns.size === 0 && processedData.length > 0) {
-    for (const etn of processedData.map((record) => record.etn)) {
-      if (normalizeText(etn)) allEtns.add(etn);
-    }
-  }
-
-  if (allEtns.size === 0) {
-    allEtns.add('Total');
-  }
-
-  const etnRealizacao = new Map<string, { realLicencasServicos: number; realRecorrente: number }>();
-  for (const etn of Array.from(allEtns)) {
-    etnRealizacao.set(etn, { realLicencasServicos: 0, realRecorrente: 0 });
-  }
-
-  const pedidosNoPeriodo = pedidos.filter((pedido) =>
-    isPedidoInsideSelectedPeriod(pedido.dataFechamento, selectedPeriod, referenceYear)
+function collectQualifiedOpps(actions: GenericAction[], opportunities: GenericOpportunity[]) {
+  const closedWonOppIds = new Set(
+    opportunities.filter(isClosedWon).map((opp) => getOpportunityId(opp)).filter(Boolean),
   );
 
-  for (const pedido of pedidosNoPeriodo) {
-    const oppId = normalizeText(pedido.idOportunidade);
-    if (!oppIdsFechadaGanha.has(oppId)) continue;
-
-    const licServicos = (pedido.produtoValorLicenca || 0) + (pedido.servicoValorLiquido || 0);
-    const recorrente = pedido.produtoValorManutencao || 0;
-
-    const etns = oppIdToEtn.get(oppId);
-    if (etns && etns.size > 0) {
-      const numEtns = etns.size;
-      for (const etn of Array.from(etns)) {
-        const real = etnRealizacao.get(etn);
-        if (!real) continue;
-        real.realLicencasServicos += licServicos / numEtns;
-        real.realRecorrente += recorrente / numEtns;
-      }
+  const qualifiedByUser = new Map<
+    string,
+    {
+      etnNome: string;
+      oppIds: Set<string>;
     }
-  }
+  >();
 
-  logDebug('Resumo de entrada e filtros', {
-    goals: goals.length,
-    pedidos: pedidos.length,
-    pedidosNoPeriodo: pedidosNoPeriodo.length,
-    opportunities: opportunities.length,
-    actions: actions.length,
-    oppIdsQualificadas: oppIdsFechadaGanha.size,
-    etnsCalculados: allEtns.size,
-    selectedPeriod,
-    referenceYear,
+  actions.forEach((action) => {
+    const idUsuarioErp = getActionUserId(action);
+    if (!idUsuarioErp) return;
+
+    const categoria = getActionCategory(action);
+    if (!VALID_CATEGORIES.has(categoria)) return;
+
+    const oppId = getOpportunityId(action);
+    if (!oppId || !closedWonOppIds.has(oppId)) return;
+
+    if (!qualifiedByUser.has(idUsuarioErp)) {
+      qualifiedByUser.set(idUsuarioErp, {
+        etnNome: getActionUserName(action) || idUsuarioErp,
+        oppIds: new Set<string>(),
+      });
+    }
+
+    qualifiedByUser.get(idUsuarioErp)!.oppIds.add(oppId);
   });
 
-  return Array.from(allEtns).map((etn) => {
-    const real = etnRealizacao.get(etn) || {
-      realLicencasServicos: 0,
-      realRecorrente: 0,
-    };
+  return qualifiedByUser;
+}
 
-    const percentualLicencas =
-      metaTotalLicencasServicos > 0 ? (real.realLicencasServicos / metaTotalLicencasServicos) * 100 : 0;
-    const percentualRecorrente = metaTotalRecorrente > 0 ? (real.realRecorrente / metaTotalRecorrente) * 100 : 0;
-    const percentualAtingimento = percentualLicencas * 0.5 + percentualRecorrente * 0.5;
+function aggregatePedidosByMonth(
+  pedidos: PedidoCRM[],
+  oppIds: Set<string>,
+  ano: number,
+) {
+  const monthly = new Map<MonthKey, { licencasServicos: number; recorrente: number }>();
 
-    return {
-      idUsuario: goals[0]?.idUsuario || '',
-      etn,
-      periodo: selectedPeriod,
-      metaLicencasServicos: metaTotalLicencasServicos,
-      realLicencasServicos: real.realLicencasServicos,
-      metaRecorrente: metaTotalRecorrente,
-      realRecorrente: real.realRecorrente,
-      percentualAtingimento,
-    };
+  MONTH_KEYS.forEach((month) => {
+    monthly.set(month, { licencasServicos: 0, recorrente: 0 });
   });
-};
 
-export const useGoalMetricsProcessor = (
-  goals: GoalRecord[],
-  pedidos: PedidoRecord[],
-  processedData: ProcessedRecord[],
+  pedidos.forEach((pedido) => {
+    if (!oppIds.has(pedido.idOportunidade)) return;
+
+    const date = parseDate(pedido.dataFechamento);
+    if (!date || date.getFullYear() !== ano) return;
+
+    const monthKey = getMonthKeyFromDate(date);
+    const bucket = monthly.get(monthKey)!;
+    bucket.licencasServicos += pedido.licencasServicos;
+    bucket.recorrente += pedido.recorrente;
+  });
+
+  return monthly;
+}
+
+export function useGoalMetricsProcessor(
+  goals: GoalRow[],
+  pedidos: PedidoCRM[],
+  _processedData: unknown[],
   selectedPeriod: string,
-  actions: Action[],
-  opportunities: Opportunity[]
-) => {
-  const metricas = useMemo(
-    () => computeGoalMetrics(goals, pedidos, processedData, selectedPeriod, actions, opportunities),
-    [goals, pedidos, processedData, selectedPeriod, actions, opportunities]
-  );
+  actions: GenericAction[],
+  opportunities: GenericOpportunity[],
+) {
+  return useMemo<GoalMetricByETN[]>(() => {
+    if (!goals.length) return [];
 
-  return metricas;
-};
+    const periodMonths = getPeriodMonths(selectedPeriod);
+    const qualifiedByUser = collectQualifiedOpps(actions ?? [], opportunities ?? []);
+
+    const metrics = goals.map((goal) => {
+      const qualified = qualifiedByUser.get(goal.idUsuarioErp);
+      const oppIds = qualified?.oppIds ?? new Set<string>();
+      const monthlyPedidos = aggregatePedidosByMonth(pedidos ?? [], oppIds, goal.ano);
+
+      const meses: GoalMonthDetail[] = MONTH_KEYS.map((month) => {
+        const pedidoValues = monthlyPedidos.get(month) ?? {
+          licencasServicos: 0,
+          recorrente: 0,
+        };
+
+        const meta = goal[month] ?? 0;
+        const realizadoLicencasServicos = pedidoValues.licencasServicos;
+        const realizadoRecorrente = pedidoValues.recorrente;
+        const realizadoTotal = realizadoLicencasServicos + realizadoRecorrente;
+        const atingimentoPercentual = meta > 0 ? (realizadoTotal / meta) * 100 : 0;
+
+        return {
+          mes: month,
+          label: MONTH_LABELS[month],
+          meta,
+          realizadoLicencasServicos,
+          realizadoRecorrente,
+          realizadoTotal,
+          atingimentoPercentual,
+        };
+      });
+
+      const selected = meses.filter((item) => periodMonths.includes(item.mes));
+
+      const metaTotal = selected.reduce((acc, item) => acc + item.meta, 0);
+      const realizadoLicencasServicos = selected.reduce((acc, item) => acc + item.realizadoLicencasServicos, 0);
+      const realizadoRecorrente = selected.reduce((acc, item) => acc + item.realizadoRecorrente, 0);
+      const realizadoTotal = selected.reduce((acc, item) => acc + item.realizadoTotal, 0);
+      const atingimentoPercentual = metaTotal > 0 ? (realizadoTotal / metaTotal) * 100 : 0;
+
+      return {
+        idUsuarioErp: goal.idUsuarioErp,
+        etnNome: goal.etnNome || qualified?.etnNome || goal.idUsuarioErp,
+        ano: goal.ano,
+        metaLicencasServicos: metaTotal,
+        metaRecorrente: 0,
+        metaTotal,
+        realizadoLicencasServicos,
+        realizadoRecorrente,
+        realizadoTotal,
+        atingimentoPercentual,
+        meses,
+      };
+    });
+
+    return metrics.sort((a, b) => b.realizadoTotal - a.realizadoTotal);
+  }, [goals, pedidos, selectedPeriod, actions, opportunities]);
+}

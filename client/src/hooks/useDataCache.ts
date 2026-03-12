@@ -4,7 +4,7 @@
  * automaticamente ao reabrir a página, sem precisar fazer upload novamente.
  */
 
-import type { GoalRecord, PedidoRecord } from '@/types/goals';
+import type { GoalRow, PedidoCRM } from '@/types/goals';
 
 const DB_NAME = 'pipeline-analytics-cache';
 const DB_VERSION = 1;
@@ -23,8 +23,8 @@ export interface CacheEntry {
   actCount: number;
   goalFileName?: string;
   pedidoFileName?: string;
-  goals: GoalRecord[];
-  pedidos: PedidoRecord[];
+  goals: GoalRow[];
+  pedidos: PedidoCRM[];
   selectedPeriod?: string;
 }
 
@@ -39,8 +39,8 @@ interface LegacyCacheEntry {
   actCount: number;
   goalFileName?: string;
   pedidoFileName?: string;
-  goals?: GoalRecord[];
-  pedidos?: PedidoRecord[];
+  goals?: GoalRow[];
+  pedidos?: PedidoCRM[];
   selectedPeriod?: string;
 }
 
@@ -52,8 +52,8 @@ export interface SaveToCacheInput {
   actCount: number;
   goalFileName?: string;
   pedidoFileName?: string;
-  goals: GoalRecord[];
-  pedidos: PedidoRecord[];
+  goals: GoalRow[];
+  pedidos: PedidoCRM[];
   selectedPeriod?: string;
 }
 

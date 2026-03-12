@@ -12,10 +12,10 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { Target } from 'lucide-react';
-import type { GoalMetrics } from '@/types/goals';
+import type { GoalMetricByETN } from '@/types/goals';
 
 interface GoalChartProps {
-  metricas: GoalMetrics[];
+  metricas: GoalMetricByETN[];
   title?: string;
 }
 
@@ -47,20 +47,27 @@ export const GoalChart: React.FC<GoalChartProps> = ({ metricas, title }) => {
   }
 
   // Separar TOTAL e ETNs individuais
-  const totalMetrica = metricas.find(m => m.etn === 'TOTAL');
-  const etnMetricas = metricas.filter(m => m.etn !== 'TOTAL');
+  const totalMetrica = metricas.reduce((acc, m) => ({
+    metaLicencasServicos: acc.metaLicencasServicos + m.metaLicencasServicos,
+    metaRecorrente: acc.metaRecorrente + m.metaRecorrente,
+    realizadoLicencasServicos: acc.realizadoLicencasServicos + m.realizadoLicencasServicos,
+    realizadoRecorrente: acc.realizadoRecorrente + m.realizadoRecorrente,
+    metaTotal: acc.metaTotal + m.metaTotal,
+  }), { metaLicencasServicos: 0, metaRecorrente: 0, realizadoLicencasServicos: 0, realizadoRecorrente: 0, metaTotal: 0 });
+  const totalPercentual = totalMetrica.metaTotal > 0 ? ((totalMetrica.realizadoLicencasServicos + totalMetrica.realizadoRecorrente) / totalMetrica.metaTotal) * 100 : 0;
+  const etnMetricas = metricas;
 
   // Dados para gráfico de barras por ETN (top 15 por realização)
   const topEtns = [...etnMetricas]
-    .sort((a, b) => (b.realLicencasServicos + b.realRecorrente) - (a.realLicencasServicos + a.realRecorrente))
+    .sort((a, b) => (b.realizadoLicencasServicos + b.realizadoRecorrente) - (a.realizadoLicencasServicos + a.realizadoRecorrente))
     .slice(0, 15);
 
   const chartData = topEtns.map(m => ({
-    name: m.etn.length > 18 ? m.etn.substring(0, 18) + '...' : m.etn,
-    fullName: m.etn,
-    'Licenças+Serviços': m.realLicencasServicos,
-    'Recorrente': m.realRecorrente,
-    total: m.realLicencasServicos + m.realRecorrente,
+    name: m.etnNome.length > 18 ? m.etnNome.substring(0, 18) + '...' : m.etnNome,
+    fullName: m.etnNome,
+    'Licenças+Serviços': m.realizadoLicencasServicos,
+    'Recorrente': m.realizadoRecorrente,
+    total: m.realizadoLicencasServicos + m.realizadoRecorrente,
   }));
 
   return (
@@ -75,19 +82,19 @@ export const GoalChart: React.FC<GoalChartProps> = ({ metricas, title }) => {
             <p className="text-xs font-medium text-blue-700 mb-1">Licenças + Serviços (50%)</p>
             <div className="flex items-end justify-between">
               <div>
-                <p className="text-lg font-bold text-blue-900">{formatCurrency(totalMetrica.realLicencasServicos)}</p>
+                <p className="text-lg font-bold text-blue-900">{formatCurrency(totalMetrica.realizadoLicencasServicos)}</p>
                 <p className="text-xs text-blue-600">Meta: {formatCurrency(totalMetrica.metaLicencasServicos)}</p>
               </div>
               <span className={`px-2 py-1 rounded-full text-white text-xs font-bold ${
                 totalMetrica.metaLicencasServicos > 0
-                  ? getColor((totalMetrica.realLicencasServicos / totalMetrica.metaLicencasServicos) * 100) === '#10b981' ? 'bg-green-600'
-                    : getColor((totalMetrica.realLicencasServicos / totalMetrica.metaLicencasServicos) * 100) === '#f59e0b' ? 'bg-amber-600'
-                    : getColor((totalMetrica.realLicencasServicos / totalMetrica.metaLicencasServicos) * 100) === '#f97316' ? 'bg-orange-600'
+                  ? getColor((totalMetrica.realizadoLicencasServicos / totalMetrica.metaLicencasServicos) * 100) === '#10b981' ? 'bg-green-600'
+                    : getColor((totalMetrica.realizadoLicencasServicos / totalMetrica.metaLicencasServicos) * 100) === '#f59e0b' ? 'bg-amber-600'
+                    : getColor((totalMetrica.realizadoLicencasServicos / totalMetrica.metaLicencasServicos) * 100) === '#f97316' ? 'bg-orange-600'
                     : 'bg-red-600'
                   : 'bg-gray-400'
               }`}>
                 {totalMetrica.metaLicencasServicos > 0
-                  ? `${((totalMetrica.realLicencasServicos / totalMetrica.metaLicencasServicos) * 100).toFixed(1)}%`
+                  ? `${((totalMetrica.realizadoLicencasServicos / totalMetrica.metaLicencasServicos) * 100).toFixed(1)}%`
                   : 'N/A'}
               </span>
             </div>
@@ -96,8 +103,8 @@ export const GoalChart: React.FC<GoalChartProps> = ({ metricas, title }) => {
                 <div
                   className="h-full rounded-full transition-all duration-500"
                   style={{
-                    width: `${Math.min((totalMetrica.realLicencasServicos / totalMetrica.metaLicencasServicos) * 100, 100)}%`,
-                    backgroundColor: getColor((totalMetrica.realLicencasServicos / totalMetrica.metaLicencasServicos) * 100),
+                    width: `${Math.min((totalMetrica.realizadoLicencasServicos / totalMetrica.metaLicencasServicos) * 100, 100)}%`,
+                    backgroundColor: getColor((totalMetrica.realizadoLicencasServicos / totalMetrica.metaLicencasServicos) * 100),
                   }}
                 />
               </div>
@@ -109,19 +116,19 @@ export const GoalChart: React.FC<GoalChartProps> = ({ metricas, title }) => {
             <p className="text-xs font-medium text-purple-700 mb-1">Recorrente (50%)</p>
             <div className="flex items-end justify-between">
               <div>
-                <p className="text-lg font-bold text-purple-900">{formatCurrency(totalMetrica.realRecorrente)}</p>
+                <p className="text-lg font-bold text-purple-900">{formatCurrency(totalMetrica.realizadoRecorrente)}</p>
                 <p className="text-xs text-purple-600">Meta: {formatCurrency(totalMetrica.metaRecorrente)}</p>
               </div>
               <span className={`px-2 py-1 rounded-full text-white text-xs font-bold ${
                 totalMetrica.metaRecorrente > 0
-                  ? getColor((totalMetrica.realRecorrente / totalMetrica.metaRecorrente) * 100) === '#10b981' ? 'bg-green-600'
-                    : getColor((totalMetrica.realRecorrente / totalMetrica.metaRecorrente) * 100) === '#f59e0b' ? 'bg-amber-600'
-                    : getColor((totalMetrica.realRecorrente / totalMetrica.metaRecorrente) * 100) === '#f97316' ? 'bg-orange-600'
+                  ? getColor((totalMetrica.realizadoRecorrente / totalMetrica.metaRecorrente) * 100) === '#10b981' ? 'bg-green-600'
+                    : getColor((totalMetrica.realizadoRecorrente / totalMetrica.metaRecorrente) * 100) === '#f59e0b' ? 'bg-amber-600'
+                    : getColor((totalMetrica.realizadoRecorrente / totalMetrica.metaRecorrente) * 100) === '#f97316' ? 'bg-orange-600'
                     : 'bg-red-600'
                   : 'bg-gray-400'
               }`}>
                 {totalMetrica.metaRecorrente > 0
-                  ? `${((totalMetrica.realRecorrente / totalMetrica.metaRecorrente) * 100).toFixed(1)}%`
+                  ? `${((totalMetrica.realizadoRecorrente / totalMetrica.metaRecorrente) * 100).toFixed(1)}%`
                   : 'N/A'}
               </span>
             </div>
@@ -130,8 +137,8 @@ export const GoalChart: React.FC<GoalChartProps> = ({ metricas, title }) => {
                 <div
                   className="h-full rounded-full transition-all duration-500"
                   style={{
-                    width: `${Math.min((totalMetrica.realRecorrente / totalMetrica.metaRecorrente) * 100, 100)}%`,
-                    backgroundColor: getColor((totalMetrica.realRecorrente / totalMetrica.metaRecorrente) * 100),
+                    width: `${Math.min((totalMetrica.realizadoRecorrente / totalMetrica.metaRecorrente) * 100, 100)}%`,
+                    backgroundColor: getColor((totalMetrica.realizadoRecorrente / totalMetrica.metaRecorrente) * 100),
                   }}
                 />
               </div>
@@ -142,24 +149,24 @@ export const GoalChart: React.FC<GoalChartProps> = ({ metricas, title }) => {
           <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-4 border border-emerald-200">
             <p className="text-xs font-medium text-emerald-700 mb-1">Atingimento Ponderado</p>
             <div className="flex items-end justify-between">
-              <p className="text-3xl font-bold" style={{ color: getColor(totalMetrica.percentualAtingimento) }}>
-                {totalMetrica.percentualAtingimento.toFixed(1)}%
+              <p className="text-3xl font-bold" style={{ color: getColor(totalPercentual) }}>
+                {totalPercentual.toFixed(1)}%
               </p>
               <span className={`px-3 py-1.5 rounded-full text-white text-sm font-bold ${
-                totalMetrica.percentualAtingimento >= 100 ? 'bg-green-600'
-                : totalMetrica.percentualAtingimento >= 75 ? 'bg-amber-600'
-                : totalMetrica.percentualAtingimento >= 50 ? 'bg-orange-600'
+                totalPercentual >= 100 ? 'bg-green-600'
+                : totalPercentual >= 75 ? 'bg-amber-600'
+                : totalPercentual >= 50 ? 'bg-orange-600'
                 : 'bg-red-600'
               }`}>
-                {totalMetrica.percentualAtingimento >= 100 ? 'Atingida' : 'Em andamento'}
+                {totalPercentual >= 100 ? 'Atingida' : 'Em andamento'}
               </span>
             </div>
             <div className="mt-2 h-2 bg-emerald-200 rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-500"
                 style={{
-                  width: `${Math.min(totalMetrica.percentualAtingimento, 100)}%`,
-                  backgroundColor: getColor(totalMetrica.percentualAtingimento),
+                  width: `${Math.min(totalPercentual, 100)}%`,
+                  backgroundColor: getColor(totalPercentual),
                 }}
               />
             </div>
@@ -208,7 +215,7 @@ export const GoalChart: React.FC<GoalChartProps> = ({ metricas, title }) => {
       )}
 
       {/* Tabela de detalhes - apenas ETNs com realização */}
-      {etnMetricas.filter(m => m.realLicencasServicos > 0 || m.realRecorrente > 0).length > 0 && (
+      {etnMetricas.filter(m => m.realizadoLicencasServicos > 0 || m.realizadoRecorrente > 0).length > 0 && (
         <div className="overflow-x-auto">
           <h4 className="text-sm font-semibold text-foreground mb-3">Detalhamento por ETN</h4>
           <table className="w-full text-sm">
@@ -222,15 +229,15 @@ export const GoalChart: React.FC<GoalChartProps> = ({ metricas, title }) => {
             </thead>
             <tbody>
               {etnMetricas
-                .filter(m => m.realLicencasServicos > 0 || m.realRecorrente > 0)
-                .sort((a, b) => (b.realLicencasServicos + b.realRecorrente) - (a.realLicencasServicos + a.realRecorrente))
+                .filter(m => m.realizadoLicencasServicos > 0 || m.realizadoRecorrente > 0)
+                .sort((a, b) => (b.realizadoLicencasServicos + b.realizadoRecorrente) - (a.realizadoLicencasServicos + a.realizadoRecorrente))
                 .map((m) => (
-                  <tr key={`${m.etn}-${m.periodo}`} className="border-b border-border hover:bg-muted/20">
-                    <td className="px-4 py-2 font-medium">{m.etn}</td>
-                    <td className="px-4 py-2 text-right">{formatCurrency(m.realLicencasServicos)}</td>
-                    <td className="px-4 py-2 text-right">{formatCurrency(m.realRecorrente)}</td>
+                  <tr key={`${m.idUsuarioErp}-${m.ano}`} className="border-b border-border hover:bg-muted/20">
+                    <td className="px-4 py-2 font-medium">{m.etnNome}</td>
+                    <td className="px-4 py-2 text-right">{formatCurrency(m.realizadoLicencasServicos)}</td>
+                    <td className="px-4 py-2 text-right">{formatCurrency(m.realizadoRecorrente)}</td>
                     <td className="px-4 py-2 text-right font-bold">
-                      {formatCurrency(m.realLicencasServicos + m.realRecorrente)}
+                      {formatCurrency(m.realizadoLicencasServicos + m.realizadoRecorrente)}
                     </td>
                   </tr>
                 ))}

@@ -2,7 +2,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { X, TrendingUp, Award, Target, Calendar, Trophy, XCircle, DollarSign, Search, Filter, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, Cell, PieChart, Pie } from 'recharts';
 import { KPICard } from './KPICard';
-import type { GoalMetrics } from '@/types/goals';
+import type { GoalMetricByETN, MonthKey } from '@/types/goals';
 
 interface ProcessedRecord {
   oppId: string;
@@ -45,7 +45,8 @@ interface ETNDetailModalProps {
   data: ProcessedRecord[];
   actions?: Action[];
   onClose: () => void;
-  goalMetricas?: GoalMetrics[];
+  goalMetricas?: GoalMetricByETN[];
+  selectedPeriod?: string;
 }
 
 const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6'];
@@ -75,7 +76,22 @@ function normalize(val: string): string {
     .trim();
 }
 
-export function ETNDetailModal({ etn, data, actions = [], onClose, goalMetricas = [] }: ETNDetailModalProps) {
+
+
+function getSelectedPeriodMonths(period: string): MonthKey[] {
+  const p = normalize(period);
+  if (p.includes('1') && p.includes('trimestre')) return ['janeiro', 'fevereiro', 'marco'];
+  if (p.includes('2') && p.includes('trimestre')) return ['abril', 'maio', 'junho'];
+  if (p.includes('3') && p.includes('trimestre')) return ['julho', 'agosto', 'setembro'];
+  if (p.includes('4') && p.includes('trimestre')) return ['outubro', 'novembro', 'dezembro'];
+
+  const byMonth: Record<string, MonthKey> = {
+    janeiro: 'janeiro', fevereiro: 'fevereiro', marco: 'marco', abril: 'abril', maio: 'maio', junho: 'junho',
+    julho: 'julho', agosto: 'agosto', setembro: 'setembro', outubro: 'outubro', novembro: 'novembro', dezembro: 'dezembro',
+  };
+  return byMonth[p] ? [byMonth[p]] : [];
+}
+export function ETNDetailModal({ etn, data, actions = [], onClose, goalMetricas = [], selectedPeriod = "" }: ETNDetailModalProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEtapa, setFilterEtapa] = useState('');
   const [filterProb, setFilterProb] = useState('');
@@ -868,32 +884,77 @@ export function ETNDetailModal({ etn, data, actions = [], onClose, goalMetricas 
             </div>
             <div className="p-5">
               {(() => {
-                const etnGoal = goalMetricas.find(m => m.etn === etn);
-                if (!etnGoal || (etnGoal.realLicencasServicos === 0 && etnGoal.realRecorrente === 0)) {
+                const selectedETN: { idUsuarioErp?: string } | null = null;
+                const selectedGoalMetric = goalMetricas?.find((item) => {
+                  const byName = item.etnNome?.trim().toLowerCase() === etn?.trim().toLowerCase();
+                  const byId = selectedETN?.idUsuarioErp && item.idUsuarioErp === selectedETN.idUsuarioErp;
+                  return Boolean(byId || byName);
+                });
+
+                const hasGoalsLoaded = Array.isArray(goalMetricas) && goalMetricas.length > 0;
+                const hasSelectedMetric = Boolean(selectedGoalMetric);
+                const highlightedMonths = new Set(getSelectedPeriodMonths(selectedPeriod));
+
+                if (!hasGoalsLoaded) {
                   return (
-                    <div className="h-32 flex flex-col items-center justify-center text-muted-foreground">
-                      <Target size={24} className="mb-2 opacity-50" />
-                      <p className="text-sm">Sem dados de realização de meta para este ETN</p>
-                      <p className="text-xs opacity-70 mt-1">Carregue os arquivos de Metas e Pedidos CRM</p>
+                    <div className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">
+                      Carregue os arquivos de Metas e Pedidos CRM.
                     </div>
                   );
                 }
+
+                if (!hasSelectedMetric || !selectedGoalMetric) {
+                  return (
+                    <div className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">
+                      Não existe meta cadastrada para este ETN.
+                    </div>
+                  );
+                }
+
                 return (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                        <p className="text-xs font-medium text-blue-700">Licenças + Serviços</p>
-                        <p className="text-lg font-bold text-blue-900">R$ {etnGoal.realLicencasServicos.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+                    <div className="rounded-2xl border bg-card p-4 shadow-sm">
+                      <div className="mb-2 text-sm text-muted-foreground">
+                        Ano de referência: {selectedGoalMetric.ano}
                       </div>
-                      <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
-                        <p className="text-xs font-medium text-purple-700">Recorrente</p>
-                        <p className="text-lg font-bold text-purple-900">R$ {etnGoal.realRecorrente.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        {selectedGoalMetric.meses.map((mes) => (
+                          <div
+                            key={mes.mes}
+                            className={`rounded-xl border p-3 ${highlightedMonths.has(mes.mes) ? 'border-purple-400 bg-purple-50/40' : ''}`}
+                          >
+                            <div className="mb-2 font-medium">{mes.label}</div>
+                            <div className="space-y-1 text-sm">
+                              <div>Meta: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(mes.meta || 0)}</div>
+                              <div>Licenças+Serviços: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(mes.realizadoLicencasServicos || 0)}</div>
+                              <div>Recorrente: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(mes.realizadoRecorrente || 0)}</div>
+                              <div>Total realizado: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(mes.realizadoTotal || 0)}</div>
+                              <div>Atingimento: {mes.atingimentoPercentual.toFixed(1)}%</div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                    <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-200">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-medium text-emerald-700">Total Realizado</p>
-                        <p className="text-lg font-bold text-emerald-900">R$ {(etnGoal.realLicencasServicos + etnGoal.realRecorrente).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+
+                    <div className="rounded-2xl border bg-card p-4 shadow-sm">
+                      <div className="mb-2 font-medium">Resumo do período selecionado</div>
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                        <div className="rounded-xl border p-3">
+                          <div className="text-xs text-muted-foreground">Meta</div>
+                          <div className="font-medium">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(selectedGoalMetric.metaTotal || 0)}</div>
+                        </div>
+                        <div className="rounded-xl border p-3">
+                          <div className="text-xs text-muted-foreground">Licenças+Serviços</div>
+                          <div className="font-medium">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(selectedGoalMetric.realizadoLicencasServicos || 0)}</div>
+                        </div>
+                        <div className="rounded-xl border p-3">
+                          <div className="text-xs text-muted-foreground">Recorrente</div>
+                          <div className="font-medium">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(selectedGoalMetric.realizadoRecorrente || 0)}</div>
+                        </div>
+                        <div className="rounded-xl border p-3">
+                          <div className="text-xs text-muted-foreground">Atingimento</div>
+                          <div className="font-medium">{selectedGoalMetric.atingimentoPercentual.toFixed(1)}%</div>
+                        </div>
                       </div>
                     </div>
                   </div>

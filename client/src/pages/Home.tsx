@@ -9,7 +9,6 @@ import { useFileProcessor } from '@/hooks/useFileProcessor';
 import { useWorkerDataProcessor } from '@/hooks/useWorkerDataProcessor';
 import { useGoalProcessor } from '@/hooks/useGoalProcessor';
 import { useGoalMetricsProcessor } from '@/hooks/useGoalMetricsProcessor';
-import type { GoalRecord, PedidoRecord } from '@/types/goals';
 import { PeriodSelector } from '@/components/PeriodSelector';
 import { GoalChart } from '@/components/GoalChart';
 import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
@@ -19,6 +18,8 @@ import { ChartsSection } from '@/components/ChartsSection';
 import { ProgressBar } from '@/components/ProgressBar';
 import { ETNDetailModal } from '@/components/ETNDetailModal';
 import { ETNComparativeAnalysis } from '@/components/ETNComparativeAnalysis';
+import GoalEntryPanel from '@/components/GoalEntryPanel';
+import type { GoalRow, PedidoCRM } from '@/types/goals';
 import { DEMO_DATA } from '@/lib/demoData';
 import { saveToCache, loadFromCache, clearCache, getCacheInfo } from '@/hooks/useDataCache';
 
@@ -37,13 +38,19 @@ export default function Home() {
   const [pedidoFile, setPedidoFile] = useState<File | null>(null);
   const [goalFileName, setGoalFileName] = useState('');
   const [pedidoFileName, setPedidoFileName] = useState('');
-  const [goals, setGoals] = useState<GoalRecord[]>([]);
-  const [pedidos, setPedidos] = useState<PedidoRecord[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState<string>('Março'); // Período padrão
 
   const { state: processingState, resetState } = useFileProcessor();
   const { processData: processDataWithWorker, processFiles: processFilesWithWorker, isProcessing: isWorkerProcessing, progress: workerProgress } = useWorkerDataProcessor();
-  const { parseGoalsFile, parsePedidosFile } = useGoalProcessor();
+  const {
+    goals,
+    pedidos,
+    setGoals,
+    setPedidos,
+    updateGoalValue,
+    processGoalsFile,
+    processPedidosFile,
+  } = useGoalProcessor();
   const [workerResult, setWorkerResult] = useState<any>(null);
   const [useWorkerOnly, setUseWorkerOnly] = useState(false);
   const [lightOpportunities, setLightOpportunities] = useState<Opportunity[]>([]);
@@ -501,8 +508,8 @@ export default function Home() {
     setLightOpportunities([]);
     setLightActions([]);
 
-    let parsedGoals: GoalRecord[] = goals;
-    let parsedPedidos: PedidoRecord[] = pedidos;
+    let parsedGoals: GoalRow[] = goals;
+    let parsedPedidos: PedidoCRM[] = pedidos;
 
     try {
       const workerRes = await processFilesWithWorker(oppFile, actFile);
@@ -510,7 +517,7 @@ export default function Home() {
 
       if (goalFile) {
         try {
-          parsedGoals = await parseGoalsFile(goalFile);
+          parsedGoals = await processGoalsFile(goalFile);
           setGoals(parsedGoals);
         } catch (goalErr) {
           console.warn('Erro ao processar metas:', goalErr);
@@ -519,7 +526,7 @@ export default function Home() {
 
       if (pedidoFile) {
         try {
-          parsedPedidos = await parsePedidosFile(pedidoFile);
+          parsedPedidos = await processPedidosFile(pedidoFile);
           setPedidos(parsedPedidos);
         } catch (pedErr) {
           console.warn('Erro ao processar pedidos:', pedErr);
@@ -556,8 +563,8 @@ export default function Home() {
     goalFile,
     pedidoFile,
     processFilesWithWorker,
-    parseGoalsFile,
-    parsePedidosFile,
+    processGoalsFile,
+    processPedidosFile,
   ]);
 
   const handleOppFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -593,21 +600,22 @@ export default function Home() {
   };
 
   const handleLoadGoals = useCallback(async () => {
-    if (!goalFile || !pedidoFile) return;
+    if (!goalFile && !pedidoFile) return;
     setError(null);
     try {
-      const goalsData = await parseGoalsFile(goalFile);
-      const pedidosData = await parsePedidosFile(pedidoFile);
-      setGoals(goalsData);
-      setPedidos(pedidosData);
+      if (goalFile) {
+        await processGoalsFile(goalFile);
+      }
+      if (pedidoFile) {
+        await processPedidosFile(pedidoFile);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao processar metas e pedidos');
     }
-  }, [goalFile, pedidoFile, parseGoalsFile, parsePedidosFile]);
+  }, [goalFile, pedidoFile, processGoalsFile, processPedidosFile]);
 
-  // Processar metas automaticamente quando ambos arquivos são selecionados
   useEffect(() => {
-    if (goalFile && pedidoFile) {
+    if (goalFile || pedidoFile) {
       handleLoadGoals();
     }
   }, [goalFile, pedidoFile, handleLoadGoals]);
@@ -827,11 +835,11 @@ export default function Home() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <h3 className="text-xs font-bold text-purple-800">Metas</h3>
-                    <p className="text-[10px] text-purple-600/70">Base 3 - Metas (.xlsx)</p>
+                    <p className="text-[10px] text-purple-600/70">Metas (.csv, .xlsx)</p>
                   </div>
                 </div>
                 <label className="block">
-                  <input type="file" accept=".xlsx,.xls" onChange={handleGoalFile} className="hidden" />
+                  <input type="file" accept=".csv,.xlsx,.xls" onChange={handleGoalFile} className="hidden" />
                   <span className="block w-full py-3 text-center text-sm font-medium rounded-lg border-2 border-dashed border-purple-300 hover:border-purple-500 hover:bg-purple-50 transition-all cursor-pointer">
                     {goalFileName ? (
                       <span className="text-purple-700 flex items-center justify-center gap-1.5">
@@ -867,6 +875,15 @@ export default function Home() {
                   </span>
                 </label>
               </div>
+            </div>
+
+            <p className="mt-4 text-sm text-muted-foreground">Após o upload, os valores podem ser editados manualmente.</p>
+
+            <div className="mt-4">
+              <GoalEntryPanel
+                goals={goals}
+                onUpdateGoalValue={updateGoalValue}
+              />
             </div>
 
             <div className="flex justify-center gap-4">
@@ -993,6 +1010,8 @@ export default function Home() {
                   setUseWorkerOnly(false);
                   setLightOpportunities([]);
                   setLightActions([]);
+                  setGoals([]);
+                  setPedidos([]);
                   resetState();
                 }}
                 className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all"
@@ -1056,8 +1075,8 @@ export default function Home() {
                   {goals.length === 0 && (
                     <div className="flex items-center gap-2">
                       <label className="cursor-pointer px-3 py-1.5 text-xs font-medium rounded-lg border border-purple-300 text-purple-700 hover:bg-purple-50 transition-all">
-                        <input type="file" accept=".xlsx,.xls" onChange={handleGoalFile} className="hidden" />
-                        {goalFileName || 'Metas (.xlsx)'}
+                        <input type="file" accept=".csv,.xlsx,.xls" onChange={handleGoalFile} className="hidden" />
+                        {goalFileName || 'Metas (.csv, .xlsx)'}
                       </label>
                       <label className="cursor-pointer px-3 py-1.5 text-xs font-medium rounded-lg border border-orange-300 text-orange-700 hover:bg-orange-50 transition-all">
                         <input type="file" accept=".csv" onChange={handlePedidoFile} className="hidden" />
@@ -1270,6 +1289,7 @@ export default function Home() {
             actions={actions}
             onClose={() => setSelectedETNDetail(null)}
             goalMetricas={goalMetricas}
+            selectedPeriod={selectedPeriod}
           />
         )}
       </div>
