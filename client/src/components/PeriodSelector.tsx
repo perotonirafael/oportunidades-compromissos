@@ -7,6 +7,7 @@ interface PeriodSelectorProps {
 }
 
 const PERIODS = [
+  { label: 'Todos', value: 'Todos' },
   // Meses
   { label: 'Janeiro', value: 'Janeiro' },
   { label: 'Fevereiro', value: 'Fevereiro' },

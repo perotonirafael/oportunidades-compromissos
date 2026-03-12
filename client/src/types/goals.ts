@@ -1,64 +1,96 @@
-// Tipos para Metas e Pedidos
+export type MonthKey =
+  | 'janeiro'
+  | 'fevereiro'
+  | 'marco'
+  | 'abril'
+  | 'maio'
+  | 'junho'
+  | 'julho'
+  | 'agosto'
+  | 'setembro'
+  | 'outubro'
+  | 'novembro'
+  | 'dezembro';
 
-export interface GoalRecord {
-  produto: string; // "HCM Senior", "HCM Konviva", "HCM JobConvo", "Total Gestão"
-  idUsuario: string; // ID do usuário (ex: "11124")
-  rubrica: string; // "Setup + Licenças", "Serviços Não Recorrentes", "Recorrente"
-  janeiro: number;
-  fevereiro: number;
-  marco: number;
-  primeiroTrimestre: number;
-  abril: number;
-  maio: number;
-  junho: number;
-  segundoTrimestre: number;
-  julho: number;
-  agosto: number;
-  setembro: number;
-  terceiroTrimestre: number;
-  outubro: number;
-  novembro: number;
-  dezembro: number;
-  quartoTrimestre: number;
-  totalAno: number;
+export type ProductFamily = 'HCM Senior' | 'HCM Konviva' | 'HCM JobConvo' | 'Total Gestão';
+export type GoalRubrica = 'Setup + Licenças' | 'Serviços Não Recorrentes' | 'Recorrente';
+
+export const MONTH_KEYS: MonthKey[] = [
+  'janeiro',
+  'fevereiro',
+  'marco',
+  'abril',
+  'maio',
+  'junho',
+  'julho',
+  'agosto',
+  'setembro',
+  'outubro',
+  'novembro',
+  'dezembro',
+];
+
+export const MONTH_LABELS: Record<MonthKey, string> = {
+  janeiro: 'Janeiro',
+  fevereiro: 'Fevereiro',
+  marco: 'Março',
+  abril: 'Abril',
+  maio: 'Maio',
+  junho: 'Junho',
+  julho: 'Julho',
+  agosto: 'Agosto',
+  setembro: 'Setembro',
+  outubro: 'Outubro',
+  novembro: 'Novembro',
+  dezembro: 'Dezembro',
+};
+
+export const PRODUCT_FAMILIES: Exclude<ProductFamily, 'Total Gestão'>[] = ['HCM Senior', 'HCM Konviva', 'HCM JobConvo'];
+export const GOAL_RUBRICAS: GoalRubrica[] = ['Setup + Licenças', 'Serviços Não Recorrentes', 'Recorrente'];
+
+export interface ManualGoal {
+  id: string;
+  ano: number;
+  idUsuarioErp: string;
+  etnNome: string;
+  produto: Exclude<ProductFamily, 'Total Gestão'>;
+  rubrica: GoalRubrica;
+  mes: MonthKey;
+  valor: number;
 }
 
-export interface PedidoRecord {
+export interface PedidoCRM {
+  id: string;
   idOportunidade: string;
-  idEtapaOportunidade: string;
-  proprietarioOportunidade: string;
-  idErpProprietario: string;
+  etapaOportunidade: string;
+  dataFechamento: string | null;
   produto: string;
-  produtoCodigoModulo: string;
   produtoModulo: string;
   produtoValorLicenca: number;
-  produtoValorLicencaCanal: number;
   produtoValorManutencao: number;
-  produtoValorManutencaoCanal: number;
-  servico: string;
-  servicoTipoDeFaturamento: string;
-  servicoQtdeDeHoras: number;
-  servicoValorHora: number;
-  servicoValorBruto: number;
-  servicoValorOver: number;
-  servicoValorDesconto: number;
-  servicoValorCanal: number;
   servicoValorLiquido: number;
 }
 
-export interface GoalMetrics {
-  idUsuario: string;
-  etn: string;
-  periodo: string; // "Janeiro", "1ºTrimestre", etc
-  metaLicencasServicos: number; // Setup + Licenças + Serviços Não Recorrentes
-  realLicencasServicos: number;
-  metaRecorrente: number;
-  realRecorrente: number;
-  percentualAtingimento: number; // (realLicencasServicos/metaLicencasServicos * 0.5) + (realRecorrente/metaRecorrente * 0.5)
+export interface GoalMonthDetail {
+  mes: MonthKey;
+  label: string;
+  meta: number;
+  realizadoLicencasServicos: number;
+  realizadoRecorrente: number;
+  realizadoTotal: number;
+  atingimentoPercentual: number;
 }
 
-export interface GoalData {
-  goals: GoalRecord[];
-  pedidos: PedidoRecord[];
-  metricas: GoalMetrics[];
+export interface GoalMetricByETN {
+  idUsuarioErp: string;
+  etnNome: string;
+  ano: number;
+  metaLicencasServicos: number;
+  metaRecorrente: number;
+  metaTotal: number;
+  realizadoLicencasServicos: number;
+  realizadoRecorrente: number;
+  realizadoTotal: number;
+  atingimentoPercentual: number;
+  meses: GoalMonthDetail[];
 }
