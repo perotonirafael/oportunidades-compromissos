@@ -60,7 +60,7 @@ export function GoalManager({ onSaveGoals }: GoalManagerProps) {
       delimiter: ";", // <--- Correção que evita colunas espremidas
       complete: (results) => {
         try {
-          const parsedData: GoalRow[] = (results.data as any[]).map((row: any, index: number) => {
+          const parsedData: GoalRow[] = results.data.map((row: any, index: number) => {
             const findKey = (searchStr: string) => Object.keys(row).find(k => k.toLowerCase().replace(/\s/g,'').includes(searchStr));
             
             const prodKey = findKey('produto');
