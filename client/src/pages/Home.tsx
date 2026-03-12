@@ -25,6 +25,7 @@ import { DEMO_DATA } from '@/lib/demoData';
 import { saveToCache, loadFromCache, clearCache, getCacheInfo } from '@/hooks/useDataCache';
 import { getPeriodMonths } from '@/utils/goalAggregation';
 import { MONTH_LABELS, type MonthKey } from '@/types/goals';
+import { buildEtnRegistry } from '@/utils/etnRegistry';
 
 const DEBUG_GOALS_FLOW = import.meta.env.DEV && import.meta.env.VITE_DEBUG_GOALS === 'true';
 
@@ -164,15 +165,7 @@ export default function Home() {
     etapas: [], probabilidades: [], agenda: [], contas: [], tipos: [], subtipos: [], segmentos: [],
   };
 
-  const etnOptions = useMemo(() => {
-    const map = new Map<string, { etnNome: string; idUsuarioErp: string }>();
-    actions.forEach((action) => {
-      const id = String(action['Id Usuário ERP'] ?? action['ID Usuário ERP'] ?? '').trim();
-      const name = String(action['Usuário'] ?? action['Usuario'] ?? action['Responsável'] ?? '').trim();
-      if (id && name && !map.has(id)) map.set(id, { etnNome: name, idUsuarioErp: id });
-    });
-    return Array.from(map.values()).sort((a, b) => a.etnNome.localeCompare(b.etnNome));
-  }, [actions]);
+  const etnRegistry = useMemo(() => buildEtnRegistry(actions, opportunities), [actions, opportunities]);
 
   // ITEM 5: Filtrar dados com probabilidade agrupada >75%
   const filteredData = useMemo(() => {
@@ -1234,12 +1227,13 @@ export default function Home() {
             onClose={() => setSelectedETNDetail(null)}
             goalMetricas={goalMetricas}
             selectedPeriod={selectedPeriod}
+            etnRegistry={etnRegistry}
           />
         )}
         <ManualGoalsModal
           isOpen={isManualGoalsModalOpen}
           goals={manualGoals}
-          etnOptions={etnOptions}
+          etnRegistry={etnRegistry}
           onClose={() => setIsManualGoalsModalOpen(false)}
           onSave={persistManualGoals}
         />

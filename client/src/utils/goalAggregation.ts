@@ -143,10 +143,18 @@ export function computeGoalMetrics(
       const bucket = monthlyMap.get(month)!;
       const family = mapPedidoToProduct(pedido);
       if (!family) return;
-      const hasProductMeta = goals.some((g) => g.produto === family && g.mes === month);
-      if (!hasProductMeta) return;
-      bucket.realLicServ += pedido.produtoValorLicenca + pedido.servicoValorLiquido;
-      bucket.realRec += pedido.produtoValorManutencao;
+      const hasMeta = (rubrica: GoalRubrica) =>
+        goals.some((goal) => goal.produto === family && goal.rubrica === rubrica && goal.mes === month);
+
+      if (hasMeta('Setup + Licenças')) {
+        bucket.realLicServ += pedido.produtoValorLicenca;
+      }
+      if (hasMeta('Serviços Não Recorrentes')) {
+        bucket.realLicServ += pedido.servicoValorLiquido;
+      }
+      if (hasMeta('Recorrente')) {
+        bucket.realRec += pedido.produtoValorManutencao;
+      }
     });
 
     const meses: GoalMonthDetail[] = MONTH_KEYS.map((month) => {

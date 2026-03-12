@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { KPICard } from './KPICard';
 import { GoalChart } from './GoalChart';
 import type { GoalMetricByETN, MonthKey } from '@/types/goals';
+import type { EtnRegistryItem } from '@/utils/etnRegistry';
 
 interface ProcessedRecord {
   oppId: string;
@@ -48,6 +49,7 @@ interface ETNDetailModalProps {
   onClose: () => void;
   goalMetricas?: GoalMetricByETN[];
   selectedPeriod?: string;
+  etnRegistry?: EtnRegistryItem[];
 }
 
 const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6'];
@@ -92,7 +94,7 @@ function getSelectedPeriodMonths(period: string): MonthKey[] {
   };
   return byMonth[p] ? [byMonth[p]] : [];
 }
-export function ETNDetailModal({ etn, data, actions = [], onClose, goalMetricas = [], selectedPeriod = "" }: ETNDetailModalProps) {
+export function ETNDetailModal({ etn, data, actions = [], onClose, goalMetricas = [], selectedPeriod = "", etnRegistry = [] }: ETNDetailModalProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEtapa, setFilterEtapa] = useState('');
   const [filterProb, setFilterProb] = useState('');
@@ -885,13 +887,18 @@ export function ETNDetailModal({ etn, data, actions = [], onClose, goalMetricas 
             </div>
             <div className="p-5">
               {(() => {
+                const selectedETNIdFromRegistry = etnRegistry.find((item) => {
+                  const etnNorm = normalize(etn);
+                  return normalize(item.etnNome) === etnNorm || item.aliases.some((alias) => normalize(alias) === etnNorm);
+                })?.idUsuarioErp;
                 const selectedETNIdFromActions = etnActions
                   .map((action) => String(action['Id Usuário ERP'] ?? action['ID Usuário ERP'] ?? '').trim())
                   .find(Boolean);
+                const selectedETNId = selectedETNIdFromRegistry || selectedETNIdFromActions;
                 const selectedGoalMetric = goalMetricas?.find((item) => {
+                  if (selectedETNId) return item.idUsuarioErp === selectedETNId;
                   const byName = item.etnNome?.trim().toLowerCase() === etn?.trim().toLowerCase();
-                  const byId = Boolean(selectedETNIdFromActions && item.idUsuarioErp === selectedETNIdFromActions);
-                  return Boolean(byId || byName);
+                  return Boolean(byName);
                 });
 
                 const hasGoalsLoaded = Array.isArray(goalMetricas) && goalMetricas.length > 0;
@@ -901,7 +908,7 @@ export function ETNDetailModal({ etn, data, actions = [], onClose, goalMetricas 
                 if (!hasGoalsLoaded) {
                   return (
                     <div className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">
-                      Carregue os arquivos de Metas e Pedidos CRM.
+                      Cadastre metas manuais e carregue os pedidos CRM.
                     </div>
                   );
                 }

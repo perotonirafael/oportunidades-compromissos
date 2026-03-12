@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { X, Plus, Trash2, Save } from 'lucide-react';
 import {
   GOAL_RUBRICAS,
@@ -10,38 +10,65 @@ import {
   MonthKey,
   ProductFamily,
 } from '@/types/goals';
-
-interface EtnOption {
-  etnNome: string;
-  idUsuarioErp: string;
-}
+import { EtnRegistryItem } from '@/utils/etnRegistry';
 
 interface ManualGoalsModalProps {
   isOpen: boolean;
   goals: ManualGoal[];
-  etnOptions: EtnOption[];
+  etnRegistry: EtnRegistryItem[];
   onClose: () => void;
   onSave: (goals: ManualGoal[]) => Promise<void>;
 }
 
-type EditableGoal = ManualGoal & { error?: string };
+type EditableGoal = ManualGoal & { error?: string; selectedEtnId: string };
 
 const currentYear = new Date().getFullYear();
 
-const newRow = (): EditableGoal => ({
-  id: crypto.randomUUID(),
-  ano: currentYear,
-  etnNome: '',
-  idUsuarioErp: '',
-  produto: 'HCM Senior',
-  rubrica: 'Setup + Licenças',
-  mes: 'janeiro',
-  valor: 0,
+const createRow = (preset?: Partial<ManualGoal>): EditableGoal => ({
+  id: preset?.id || crypto.randomUUID(),
+  ano: preset?.ano || currentYear,
+  etnNome: preset?.etnNome || '',
+  idUsuarioErp: preset?.idUsuarioErp || '',
+  produto: preset?.produto || 'HCM Senior',
+  rubrica: preset?.rubrica || 'Setup + Licenças',
+  mes: preset?.mes || 'janeiro',
+  valor: preset?.valor || 0,
+  selectedEtnId: preset?.idUsuarioErp || '',
 });
 
-export default function ManualGoalsModal({ isOpen, goals, etnOptions, onClose, onSave }: ManualGoalsModalProps) {
-  const [rows, setRows] = useState<EditableGoal[]>(goals.length ? goals : [newRow()]);
+function dedupeGoals(rows: EditableGoal[]): ManualGoal[] {
+  const map = new Map<string, ManualGoal>();
+  rows.forEach((row) => {
+    const key = `${row.ano}-${row.idUsuarioErp}-${row.produto}-${row.rubrica}-${row.mes}`;
+    map.set(key, {
+      id: row.id,
+      ano: row.ano,
+      idUsuarioErp: row.idUsuarioErp,
+      etnNome: row.etnNome,
+      produto: row.produto,
+      rubrica: row.rubrica,
+      mes: row.mes,
+      valor: row.valor,
+    });
+  });
+  return Array.from(map.values());
+}
+
+export default function ManualGoalsModal({
+  isOpen,
+  goals,
+  etnRegistry,
+  onClose,
+  onSave,
+}: ManualGoalsModalProps) {
+  const [rows, setRows] = useState<EditableGoal[]>([createRow()]);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const nextRows = goals.length ? goals.map((goal) => createRow(goal)) : [createRow()];
+    setRows(nextRows);
+  }, [goals, isOpen]);
 
   const totals = useMemo(() => {
     const map = new Map<string, number>();
@@ -52,16 +79,21 @@ export default function ManualGoalsModal({ isOpen, goals, etnOptions, onClose, o
     return map;
   }, [rows]);
 
+  const hasRegistry = etnRegistry.length > 0;
+
   if (!isOpen) return null;
 
   const updateRow = <K extends keyof EditableGoal>(id: string, key: K, value: EditableGoal[K]) => {
     setRows((current) =>
       current.map((row) => {
         if (row.id !== id) return row;
-        const next = { ...row, [key]: value };
-        if (key === 'etnNome') {
-          const found = etnOptions.find((option) => option.etnNome === value);
-          if (found && !row.idUsuarioErp) next.idUsuarioErp = found.idUsuarioErp;
+        const next = { ...row, [key]: value, error: '' };
+        if (key === 'selectedEtnId') {
+          const selected = etnRegistry.find((item) => item.idUsuarioErp === value);
+          if (selected) {
+            next.idUsuarioErp = selected.idUsuarioErp;
+            next.etnNome = selected.etnNome;
+          }
         }
         return next;
       }),
@@ -69,16 +101,14 @@ export default function ManualGoalsModal({ isOpen, goals, etnOptions, onClose, o
   };
 
   const validate = (): boolean => {
-    const seen = new Set<string>();
     let valid = true;
     setRows((current) =>
       current.map((row) => {
-        const key = `${row.ano}-${row.idUsuarioErp}-${row.produto}-${row.rubrica}-${row.mes}`;
         let error = '';
-        if (!row.idUsuarioErp || !row.etnNome) error = 'ETN e Id Usuário ERP são obrigatórios';
-        else if (seen.has(key)) error = 'Duplicidade detectada (ano + id + produto + rubrica + mês)';
-        if (error) valid = false;
-        seen.add(key);
+        if (!row.selectedEtnId || !row.idUsuarioErp) {
+          error = 'Selecione um ETN válido para preencher o Id Usuário ERP.';
+          valid = false;
+        }
         return { ...row, error };
       }),
     );
@@ -89,7 +119,7 @@ export default function ManualGoalsModal({ isOpen, goals, etnOptions, onClose, o
     if (!validate()) return;
     setSaving(true);
     try {
-      await onSave(rows.map(({ error, ...rest }) => rest));
+      await onSave(dedupeGoals(rows));
       onClose();
     } finally {
       setSaving(false);
@@ -104,8 +134,18 @@ export default function ManualGoalsModal({ isOpen, goals, etnOptions, onClose, o
           <button onClick={onClose} className="rounded-lg border px-3 py-2"><X size={16} /></button>
         </div>
 
+        {!hasRegistry && (
+          <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+            Para lançar metas, carregue primeiro Oportunidades + Compromissos para obter ETNs reais do sistema.
+          </div>
+        )}
+
         <div className="mb-4 flex items-center gap-2">
-          <button onClick={() => setRows((r) => [...r, newRow()])} className="rounded-lg border px-3 py-2 text-sm flex items-center gap-1">
+          <button
+            onClick={() => setRows((current) => [...current, createRow()])}
+            className="rounded-lg border px-3 py-2 text-sm flex items-center gap-1"
+            disabled={!hasRegistry}
+          >
             <Plus size={14} /> Adicionar linha
           </button>
         </div>
@@ -114,54 +154,114 @@ export default function ManualGoalsModal({ isOpen, goals, etnOptions, onClose, o
           <table className="w-full text-xs">
             <thead className="bg-muted/40">
               <tr>
-                <th className="p-2">Ano</th><th className="p-2">ETN</th><th className="p-2">Id Usuário ERP</th><th className="p-2">Produto</th><th className="p-2">Rubrica</th><th className="p-2">Mês</th><th className="p-2">Valor</th><th className="p-2" />
+                <th className="p-2">Ano</th>
+                <th className="p-2">ETN</th>
+                <th className="p-2">Id Usuário ERP</th>
+                <th className="p-2">Produto</th>
+                <th className="p-2">Rubrica</th>
+                <th className="p-2">Mês</th>
+                <th className="p-2">Valor</th>
+                <th className="p-2" />
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id} className="border-t align-top">
-                  <td className="p-2"><input type="number" className="w-24 border rounded p-1" value={row.ano} onChange={(e) => updateRow(row.id, 'ano', Number(e.target.value || currentYear))} /></td>
                   <td className="p-2">
-                    <input list="etn-options" className="w-56 border rounded p-1" value={row.etnNome} onChange={(e) => updateRow(row.id, 'etnNome', e.target.value)} />
+                    <input
+                      type="number"
+                      className="w-24 border rounded p-1"
+                      value={row.ano}
+                      onChange={(e) => updateRow(row.id, 'ano', Number(e.target.value || currentYear))}
+                    />
                   </td>
-                  <td className="p-2"><input className="w-36 border rounded p-1" value={row.idUsuarioErp} onChange={(e) => updateRow(row.id, 'idUsuarioErp', e.target.value)} /></td>
                   <td className="p-2">
-                    <select className="border rounded p-1" value={row.produto} onChange={(e) => updateRow(row.id, 'produto', e.target.value as Exclude<ProductFamily, 'Total Gestão'>)}>
+                    <select
+                      className="w-56 border rounded p-1"
+                      value={row.selectedEtnId}
+                      onChange={(e) => updateRow(row.id, 'selectedEtnId', e.target.value)}
+                      disabled={!hasRegistry}
+                    >
+                      <option value="">Selecione</option>
+                      {etnRegistry.map((item) => (
+                        <option key={item.idUsuarioErp} value={item.idUsuarioErp}>
+                          {item.etnNome}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="p-2">
+                    <input className="w-36 border rounded p-1 bg-slate-50" value={row.idUsuarioErp} readOnly />
+                  </td>
+                  <td className="p-2">
+                    <select
+                      className="border rounded p-1"
+                      value={row.produto}
+                      onChange={(e) => updateRow(row.id, 'produto', e.target.value as Exclude<ProductFamily, 'Total Gestão'>)}
+                    >
                       {PRODUCT_FAMILIES.map((produto) => <option key={produto} value={produto}>{produto}</option>)}
                     </select>
                   </td>
                   <td className="p-2">
-                    <select className="border rounded p-1" value={row.rubrica} onChange={(e) => updateRow(row.id, 'rubrica', e.target.value as GoalRubrica)}>
+                    <select
+                      className="border rounded p-1"
+                      value={row.rubrica}
+                      onChange={(e) => updateRow(row.id, 'rubrica', e.target.value as GoalRubrica)}
+                    >
                       {GOAL_RUBRICAS.map((rubrica) => <option key={rubrica} value={rubrica}>{rubrica}</option>)}
                     </select>
                   </td>
                   <td className="p-2">
-                    <select className="border rounded p-1" value={row.mes} onChange={(e) => updateRow(row.id, 'mes', e.target.value as MonthKey)}>
+                    <select
+                      className="border rounded p-1"
+                      value={row.mes}
+                      onChange={(e) => updateRow(row.id, 'mes', e.target.value as MonthKey)}
+                    >
                       {MONTH_KEYS.map((mes) => <option key={mes} value={mes}>{MONTH_LABELS[mes]}</option>)}
                     </select>
                   </td>
-                  <td className="p-2"><input type="number" step="0.01" className="w-32 border rounded p-1" value={row.valor} onChange={(e) => updateRow(row.id, 'valor', Number(e.target.value || 0))} /></td>
-                  <td className="p-2"><button onClick={() => setRows((r) => r.filter((item) => item.id !== row.id))}><Trash2 size={14} /></button></td>
-                  {row.error ? <td className="p-2 text-red-600" colSpan={8}>{row.error}</td> : null}
+                  <td className="p-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="w-32 border rounded p-1"
+                      value={row.valor}
+                      onChange={(e) => updateRow(row.id, 'valor', Number(e.target.value || 0))}
+                    />
+                  </td>
+                  <td className="p-2">
+                    <button onClick={() => setRows((current) => current.filter((item) => item.id !== row.id))}>
+                      <Trash2 size={14} />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <datalist id="etn-options">
-            {etnOptions.map((option) => <option key={`${option.idUsuarioErp}-${option.etnNome}`} value={option.etnNome} />)}
-          </datalist>
         </div>
+
+        {rows.some((row) => row.error) && (
+          <div className="mt-2 text-sm text-red-600">
+            {rows.find((row) => row.error)?.error}
+          </div>
+        )}
 
         <div className="mt-4 rounded-xl border p-3 text-sm">
           <h3 className="font-semibold mb-2">Totais anuais por combinação</h3>
           {Array.from(totals.entries()).map(([key, value]) => (
-            <div key={key}>{key}: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value)}</div>
+            <div key={key}>
+              {key}: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value)}
+            </div>
           ))}
         </div>
 
         <div className="mt-6 flex justify-end gap-2">
           <button className="px-4 py-2 rounded-lg border" onClick={onClose}>Cancelar</button>
-          <button className="px-4 py-2 rounded-lg bg-emerald-600 text-white flex items-center gap-1" onClick={handleSave} disabled={saving}>
+          <button
+            className="px-4 py-2 rounded-lg bg-emerald-600 text-white flex items-center gap-1"
+            onClick={handleSave}
+            disabled={saving || !hasRegistry}
+          >
             <Save size={14} /> {saving ? 'Salvando...' : 'Salvar'}
           </button>
         </div>
